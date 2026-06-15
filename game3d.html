@@ -167,6 +167,7 @@
         <div id="coord-x">X: 0</div>
         <div id="coord-y">Y: 0</div>
         <div id="coord-z">Z: 0</div>
+        <div id="terrain-display">地形: 平原</div>
     </div>
 
     <!-- 自动建造 UI -->
@@ -194,14 +195,21 @@
             </div>
             <div style="display: flex; gap: 40px; justify-content: center; margin-bottom: 20px;">
                 <div style="display: flex; flex-direction: column; gap: 10px;">
-                    <select id="terrain-select" onchange="syncTerrainSelects(this.value)" style="padding: 15px; font-size: 20px; border-radius: 8px; border: 2px solid #4CAF50; background: #333; color: white; cursor: pointer; outline: none;">
-                        <option value="plains">地形: 平原 (Plains)</option>
-                        <option value="desert">地形: 沙漠 (Desert)</option>
-                        <option value="moon">地形: 月球 (Moon)</option>
-                        <option value="mountains">地形: 高山 (Mountains)</option>
-                        <option value="jungle">地形: 丛林 (Jungle)</option>
-                    </select>
-                    <button onclick="startNewGame(false)" style="padding: 20px 50px; font-size: 26px; cursor: pointer; background-color: #4CAF50; border: none; border-radius: 8px; color: white; font-weight: bold; width: 320px; box-shadow: 0 6px 10px rgba(0,0,0,0.4); transition: transform 0.1s;">开始单人游戏</button>
+	                    <select id="terrain-select" onchange="setTerrainChoice(this.value)" style="padding: 15px; font-size: 20px; border-radius: 8px; border: 2px solid #4CAF50; background: #333; color: white; cursor: pointer; outline: none;">
+	                        <option value="plains">地形: 平原 (Plains)</option>
+	                        <option value="desert">地形: 沙漠 (Desert)</option>
+	                        <option value="moon">地形: 月球 (Moon)</option>
+	                        <option value="mountains">地形: 高山 (Mountains)</option>
+	                        <option value="jungle">地形: 丛林 (Jungle)</option>
+	                    </select>
+                    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; width: 320px;">
+                        <button class="terrain-btn" data-terrain="plains" onclick="chooseTerrain('plains')" style="padding: 10px 4px; cursor: pointer; background: #4CAF50; color: white; border: 2px solid #fff; border-radius: 5px;">平原</button>
+                        <button class="terrain-btn" data-terrain="desert" onclick="chooseTerrain('desert')" style="padding: 10px 4px; cursor: pointer; background: #333; color: white; border: 2px solid #777; border-radius: 5px;">沙漠</button>
+                        <button class="terrain-btn" data-terrain="moon" onclick="chooseTerrain('moon')" style="padding: 10px 4px; cursor: pointer; background: #333; color: white; border: 2px solid #777; border-radius: 5px;">月球</button>
+                        <button class="terrain-btn" data-terrain="mountains" onclick="chooseTerrain('mountains')" style="padding: 10px 4px; cursor: pointer; background: #333; color: white; border: 2px solid #777; border-radius: 5px;">高山</button>
+                        <button class="terrain-btn" data-terrain="jungle" onclick="chooseTerrain('jungle')" style="padding: 10px 4px; cursor: pointer; background: #333; color: white; border: 2px solid #777; border-radius: 5px;">丛林</button>
+                    </div>
+	                    <button onclick="startGameFromMenu()" style="padding: 20px 50px; font-size: 26px; cursor: pointer; background-color: #4CAF50; border: none; border-radius: 8px; color: white; font-weight: bold; width: 320px; box-shadow: 0 6px 10px rgba(0,0,0,0.4); transition: transform 0.1s;">开始单人游戏</button>
                 </div>
                 <button onclick="showMultiplayerMenu()" style="padding: 20px 50px; font-size: 26px; cursor: pointer; background-color: #FF9800; border: none; border-radius: 8px; color: white; font-weight: bold; width: 320px; box-shadow: 0 6px 10px rgba(0,0,0,0.4); transition: transform 0.1s; height: 100px;">联机游戏</button>
             </div>
@@ -231,14 +239,21 @@
             <h2 style="margin-top: 0;">游戏暂停</h2>
             <p style="margin-bottom: 30px; font-size: 16px;">是否下载并保存当前世界？</p>
             <button onclick="downloadSave()" style="margin: 10px auto; padding: 12px; width: 90%; font-size: 18px; cursor: pointer; background-color: #FF9800; border: none; border-radius: 5px; color: white; font-weight: bold; display: block;">是否下载 (保存存档)</button>
-            <select id="pause-terrain-select" onchange="syncTerrainSelects(this.value)" style="margin: 10px auto; padding: 12px; width: 90%; font-size: 18px; border-radius: 5px; border: 2px solid #4CAF50; background: #333; color: white; cursor: pointer; display: block;">
-                <option value="plains">地形: 平原 (Plains)</option>
-                <option value="desert">地形: 沙漠 (Desert)</option>
-                <option value="moon">地形: 月球 (Moon)</option>
-                <option value="mountains">地形: 高山 (Mountains)</option>
-                <option value="jungle">地形: 丛林 (Jungle)</option>
-            </select>
-            <button onclick="startNewGame(true)" style="margin: 10px auto; padding: 12px; width: 90%; font-size: 18px; cursor: pointer; background-color: #f44336; border: none; border-radius: 5px; color: white; font-weight: bold; display: block;">按所选地形重新开始</button>
+	            <select id="pause-terrain-select" onchange="setTerrainChoice(this.value)" style="margin: 10px auto; padding: 12px; width: 90%; font-size: 18px; border-radius: 5px; border: 2px solid #4CAF50; background: #333; color: white; cursor: pointer; display: block;">
+	                <option value="plains">地形: 平原 (Plains)</option>
+	                <option value="desert">地形: 沙漠 (Desert)</option>
+	                <option value="moon">地形: 月球 (Moon)</option>
+	                <option value="mountains">地形: 高山 (Mountains)</option>
+	                <option value="jungle">地形: 丛林 (Jungle)</option>
+	            </select>
+            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; width: 90%; margin: 8px auto;">
+                <button class="terrain-btn" data-terrain="plains" onclick="switchTerrainNow('plains')" style="padding: 8px 2px; cursor: pointer; background: #4CAF50; color: white; border: 2px solid #fff; border-radius: 5px;">平原</button>
+                <button class="terrain-btn" data-terrain="desert" onclick="switchTerrainNow('desert')" style="padding: 8px 2px; cursor: pointer; background: #333; color: white; border: 2px solid #777; border-radius: 5px;">沙漠</button>
+                <button class="terrain-btn" data-terrain="moon" onclick="switchTerrainNow('moon')" style="padding: 8px 2px; cursor: pointer; background: #333; color: white; border: 2px solid #777; border-radius: 5px;">月球</button>
+                <button class="terrain-btn" data-terrain="mountains" onclick="switchTerrainNow('mountains')" style="padding: 8px 2px; cursor: pointer; background: #333; color: white; border: 2px solid #777; border-radius: 5px;">高山</button>
+                <button class="terrain-btn" data-terrain="jungle" onclick="switchTerrainNow('jungle')" style="padding: 8px 2px; cursor: pointer; background: #333; color: white; border: 2px solid #777; border-radius: 5px;">丛林</button>
+            </div>
+	            <button onclick="restartGameWithTerrain()" style="margin: 10px auto; padding: 12px; width: 90%; font-size: 18px; cursor: pointer; background-color: #f44336; border: none; border-radius: 5px; color: white; font-weight: bold; display: block;">按所选地形重新开始</button>
             <button onclick="resumeGame()" style="margin: 10px auto; padding: 12px; width: 90%; font-size: 18px; cursor: pointer; background-color: #4CAF50; border: none; border-radius: 5px; color: white; font-weight: bold; display: block;">继续游戏</button>
         </div>
     </div>
@@ -1079,21 +1094,33 @@
             };
         };
 
-        window.startNewGame = function(forceReset) {
-            const nextTerrain = readTerrainSelection();
-            const terrainChanged = nextTerrain !== selectedTerrain;
+        function getTerrainFromSelect(selectId) {
+            const el = document.getElementById(selectId);
+            return (el && el.value) ? el.value : (terrainChoice || selectedTerrain || 'plains');
+        }
+
+        window.startGameFromMenu = function() {
+            setTerrainChoice(getTerrainFromSelect('terrain-select'));
+            window.startNewGame(true, terrainChoice);
+        };
+
+        window.restartGameWithTerrain = function() {
+            setTerrainChoice(getTerrainFromSelect('pause-terrain-select'));
+            window.startNewGame(true, terrainChoice);
+        };
+
+        window.startNewGame = function(forceReset, terrainOverride) {
+            const nextTerrain = terrainOverride || terrainChoice || readTerrainSelection();
             selectedTerrain = nextTerrain;
-            syncTerrainSelects(selectedTerrain);
+            setTerrainChoice(nextTerrain);
 
             window.initAudio(); // Initialize audio explicitly upon user button click
             // 用户要求：开始游戏后立刻关闭主界面的 BGM
             window.stopBGM(); 
 	            
-            if (forceReset || !isGameStarted || terrainChanged) {
+            if (forceReset || !isGameStarted) {
                 window.resetWorld();
-                if (terrainChanged && isGameStarted) {
-                    showToast("已切换为" + getTerrainName(selectedTerrain));
-                }
+                showToast("当前地形：" + getTerrainName(selectedTerrain));
             }
             isGameStarted = true;
             controls.lock();
@@ -1115,6 +1142,7 @@
                 modifiedColumns: Array.from(modifiedColumns),
                 columnMinY: Array.from(columnMinY.entries()),
                 chunkMaxY: Array.from(chunkMaxY.entries()),
+                chunkScanYRanges: Array.from(chunkScanYRanges.entries()),
                 dayTime: dayTime,
                 oxygen: oxygen,
                 playerInventory: playerInventory,
@@ -1155,6 +1183,7 @@
                     modifiedColumns.clear();
                     columnMinY.clear();
                     chunkMaxY.clear();
+                    chunkScanYRanges.clear();
                     
                     // 清理实体
                     zombies.forEach(z => scene.remove(z.mesh)); zombies = [];
@@ -1177,7 +1206,7 @@
                     // 恢复数据
                     seed = data.seed;
                     selectedTerrain = data.selectedTerrain || selectedTerrain || 'plains';
-                    syncTerrainSelects(selectedTerrain);
+                    setTerrainChoice(selectedTerrain);
                     camera.position.set(data.camera.x, data.camera.y, data.camera.z);
                     if (data.camera.rx !== undefined) {
                         camera.rotation.set(data.camera.rx, data.camera.ry, data.camera.rz);
@@ -1199,7 +1228,7 @@
                     data.worldMap.forEach(([k, v]) => worldMap.set(k, v));
                     if (data.modifiedColumns) data.modifiedColumns.forEach(v => modifiedColumns.add(v));
                     if (data.columnMinY) data.columnMinY.forEach(([k, v]) => columnMinY.set(k, v));
-                    if (data.chunkMaxY) {
+	                    if (data.chunkMaxY) {
                         data.chunkMaxY.forEach(([k, v]) => chunkMaxY.set(k, v));
                     } else {
                         // 如果是旧版本存档，没有保存 chunkMaxY，则必须遍历所有世界方块重新计算！
@@ -1217,7 +1246,10 @@
                                     const currentMax = chunkMaxY.get(chunkKey) || -999;
                                     if (y > currentMax) {
                                         chunkMaxY.set(chunkKey, y);
-                                    }
+	                    }
+                    if (data.chunkScanYRanges) {
+                        data.chunkScanYRanges.forEach(([k, v]) => chunkScanYRanges.set(k, v));
+                    }
                                 }
                             }
                         });
@@ -1848,12 +1880,15 @@
         const RENDER_DISTANCE = 5; // 半径 5 个区块（80格），覆盖雾效可见范围并减少走路加载卡顿
         const CHUNK_BUILD_INTERVAL_MS = 35;
         const chunkMaxY = new Map(); 
+        const chunkScanYRanges = new Map();
         const modifiedColumns = new Set(); // 记录被玩家挖过的列，用于极限性能优化
         const columnMinY = new Map(); // 记录每列被修改过的最深位置，用于无限向下挖掘的渲染
         const TNT_ID = 21;
         const NUKE_ID = 22;
         const SCANNER_ID = 41;
-        const SCANNER_FILL_DEPTH = 160;
+        const SCANNER_SCAN_SIZE = 200;
+        const SCANNER_SCAN_RADIUS = Math.floor(SCANNER_SCAN_SIZE / 2);
+        const SCANNER_FILL_DEPTH = SCANNER_SCAN_SIZE;
 
         let seed = Math.random() * 1000;
         function hash(x, z) {
@@ -1883,6 +1918,7 @@
         
         const heightCache = new Map(); // 添加高度缓存，极大提升加载速度
         let selectedTerrain = 'plains';
+        let terrainChoice = 'plains';
 
         const TERRAIN_NAMES = {
             plains: '平原',
@@ -1899,18 +1935,44 @@
         function readTerrainSelection() {
             const pauseSelect = document.getElementById('pause-terrain-select');
             const startSelect = document.getElementById('terrain-select');
-            if (pauseSelect && pauseSelect.value) return pauseSelect.value;
             if (startSelect && startSelect.value) return startSelect.value;
+            if (pauseSelect && pauseSelect.value) return pauseSelect.value;
+            if (terrainChoice) return terrainChoice;
             return selectedTerrain || 'plains';
         }
 
-        function syncTerrainSelects(value) {
-            selectedTerrain = value || selectedTerrain || 'plains';
+        function setTerrainChoice(value) {
+            terrainChoice = value || terrainChoice || selectedTerrain || 'plains';
             const startSelect = document.getElementById('terrain-select');
             const pauseSelect = document.getElementById('pause-terrain-select');
-            if (startSelect) startSelect.value = selectedTerrain;
-            if (pauseSelect) pauseSelect.value = selectedTerrain;
+            if (startSelect) startSelect.value = terrainChoice;
+            if (pauseSelect) pauseSelect.value = terrainChoice;
+            document.querySelectorAll('.terrain-btn').forEach(btn => {
+                const active = btn.dataset.terrain === terrainChoice;
+                btn.style.background = active ? '#4CAF50' : '#333';
+                btn.style.borderColor = active ? '#fff' : '#777';
+            });
         }
+        window.setTerrainChoice = setTerrainChoice;
+
+        window.chooseTerrain = function(value) {
+            setTerrainChoice(value);
+            showToast("已选择地形：" + getTerrainName(terrainChoice));
+        };
+
+        window.switchTerrainNow = function(value) {
+            setTerrainChoice(value);
+            window.startNewGame(true, terrainChoice);
+        };
+
+        function bindTerrainSelects() {
+            const startSelect = document.getElementById('terrain-select');
+            const pauseSelect = document.getElementById('pause-terrain-select');
+            if (startSelect) startSelect.onchange = () => setTerrainChoice(startSelect.value);
+            if (pauseSelect) pauseSelect.onchange = () => setTerrainChoice(pauseSelect.value);
+            setTerrainChoice(terrainChoice);
+        }
+        window.bindTerrainSelects = bindTerrainSelects;
 
         function getSurfaceHeight(x, z) {
             const key = `${x},${z}`;
@@ -1920,18 +1982,19 @@
             if (selectedTerrain === 'plains') {
                 h = 10 + Math.sin(x * 0.05) * 3 + Math.cos(z * 0.05) * 3;
             } else if (selectedTerrain === 'desert') {
-                h = 8 + Math.sin(x * 0.02) * 2 + Math.cos(z * 0.02) * 2;
+                h = 7 + Math.sin(x * 0.018) * 1.2 + Math.cos(z * 0.018) * 1.2;
             } else if (selectedTerrain === 'moon') {
                 let crater = Math.sin(x * 0.1) * Math.cos(z * 0.1) * 5;
-                h = 10 + crater + (Math.random() * 2 - 1);
+                h = 10 + crater + (hash(x * 4.17, z * 6.31) - 0.5) * 2;
             } else if (selectedTerrain === 'mountains') {
                 // 原有的高山地形公式
-                h += Math.sin(x * 0.03) * 12;
-                h += Math.cos(z * 0.02) * 15;
-                h += Math.sin((x + z) * 0.015) * 10;
-                h += Math.cos((x - z) * 0.05) * 5;
+                h = 18;
+                h += Math.sin(x * 0.03) * 18;
+                h += Math.cos(z * 0.02) * 22;
+                h += Math.sin((x + z) * 0.015) * 14;
+                h += Math.cos((x - z) * 0.05) * 8;
             } else if (selectedTerrain === 'jungle') {
-                h = 12 + Math.sin(x * 0.04) * 4 + Math.cos(z * 0.04) * 4;
+                h = 13 + Math.sin(x * 0.04) * 5 + Math.cos(z * 0.04) * 5;
             }
             
             h = Math.floor(h);
@@ -2120,6 +2183,48 @@
             }
         }
 
+        function scanVolumeAround(x, y, z) {
+            const minChunkX = Math.floor((x - SCANNER_SCAN_RADIUS) / CHUNK_SIZE);
+            const maxChunkX = Math.floor((x + SCANNER_SCAN_RADIUS) / CHUNK_SIZE);
+            const minChunkZ = Math.floor((z - SCANNER_SCAN_RADIUS) / CHUNK_SIZE);
+            const maxChunkZ = Math.floor((z + SCANNER_SCAN_RADIUS) / CHUNK_SIZE);
+            const centerChunkX = Math.floor(x / CHUNK_SIZE);
+            const centerChunkZ = Math.floor(z / CHUNK_SIZE);
+
+            for (let cx = minChunkX; cx <= maxChunkX; cx++) {
+                for (let cz = minChunkZ; cz <= maxChunkZ; cz++) {
+                    const key = `${cx},${cz}`;
+                    const dist = Math.max(Math.abs(cx - centerChunkX), Math.abs(cz - centerChunkZ));
+                    if (dist <= 1 && !chunkMeshes.has(key)) {
+                        generateHouseData(cx, cz);
+                        generateTrees(cx, cz);
+                        buildChunkMesh(cx, cz);
+                    } else if (!chunkMeshes.has(key) && !chunkQueue.some(c => c.x === cx && c.z === cz)) {
+                        chunkQueue.push({ x: cx, z: cz, priority: dist });
+                    }
+                }
+            }
+
+            const bottomY = y - SCANNER_SCAN_RADIUS;
+            const topY = y + SCANNER_SCAN_RADIUS;
+            const touchedChunks = new Set();
+            for (let cx = minChunkX; cx <= maxChunkX; cx++) {
+                for (let cz = minChunkZ; cz <= maxChunkZ; cz++) {
+                    const key = `${cx},${cz}`;
+                    chunkMaxY.set(key, Math.max(chunkMaxY.get(key) || -999, topY));
+                    const oldRange = chunkScanYRanges.get(key);
+                    chunkScanYRanges.set(key, {
+                        minY: oldRange ? Math.min(oldRange.minY, bottomY) : bottomY,
+                        maxY: oldRange ? Math.max(oldRange.maxY, topY) : topY
+                    });
+                    touchedChunks.add(key);
+                }
+            }
+
+            showToast("扫描仪已预扫 200x200x200 区域");
+            return touchedChunks;
+        }
+
         function mineBlock(hit, useScanner) {
             const targetType = getBlock(hit.x, hit.y, hit.z);
             if (targetType === 0) return;
@@ -2152,7 +2257,9 @@
 
             if (useScanner) {
                 fillScannedColumn(hit.x, hit.y, hit.z, targetType, dirtyChunks);
-                showToast("扫描仪已补充下方方块柱");
+                for (let key of scanVolumeAround(hit.x, hit.y, hit.z)) {
+                    dirtyChunks.add(key);
+                }
             }
 
             addDirtyChunksToQueue(dirtyChunks);
@@ -2271,7 +2378,12 @@
                 }
             }
 
-            const viewTop = Math.floor(camera.position.y + 120); // 增加上方视野，防止向上看时切断
+            const scannedRange = chunkScanYRanges.get(key);
+            if (scannedRange) {
+                top = Math.max(top, scannedRange.maxY);
+            }
+
+	            const viewTop = Math.floor(camera.position.y + 120); // 增加上方视野，防止向上看时切断
             const viewBottom = Math.floor(camera.position.y - 180); // 摄像机往下 180 格
             // 如果玩家挖得很深，依然要保证最高点能够渲染到表面的建筑或树木，因此不能直接被 viewTop 截断得太死
             // 为了防止在深坑里看不到地面的树和房子，当 yStart 被截断时，依然保留地表那一层的渲染
@@ -2281,7 +2393,10 @@
                 for (let z = startZ; z < startZ + CHUNK_SIZE; z++) {
                     const h = getSurfaceHeight(x, z);
                     
-                    let scanBottom = viewBottom;
+	                    let scanBottom = viewBottom;
+                    if (scannedRange) {
+                        scanBottom = Math.min(scanBottom, scannedRange.minY);
+                    }
                     const colKey = `${x},${z}`;
                     
                     // 【终极无限向下挖掘优化】
@@ -2329,9 +2444,13 @@
                         } else {
                             scanBottom = localMinH - 2;
                         }
+	                    }
+	                    
+                    if (scannedRange) {
+                        scanBottom = Math.min(scanBottom, scannedRange.minY);
                     }
-                    
-                    // 从最高点一直往下检查到扫描底线
+
+	                    // 从最高点一直往下检查到扫描底线
                     for (let y = yStart; y >= scanBottom; y--) {
                         // 距离优化：如果这个方块距离玩家垂直距离实在太远（比如相差 300 层以上），为了性能可以稍微跳过，
                         // 但对于 100 多层的深渊，必须完整渲染保证上下相连。
@@ -2509,15 +2628,34 @@
         let lastChunkZ = -999;
         const chunkQueue = []; // 异步区块生成队列
         let lastChunkBuildTime = 0;
+        const IMMEDIATE_CHUNK_RADIUS = 1;
+
+        function buildChunkIfMissing(cx, cz) {
+            const key = `${cx},${cz}`;
+            if (chunkMeshes.has(key)) return false;
+            generateHouseData(cx, cz);
+            generateTrees(cx, cz);
+            buildChunkMesh(cx, cz);
+            return true;
+        }
+
+        function ensureImmediateChunks(cx, cz) {
+            for (let dx = -IMMEDIATE_CHUNK_RADIUS; dx <= IMMEDIATE_CHUNK_RADIUS; dx++) {
+                for (let dz = -IMMEDIATE_CHUNK_RADIUS; dz <= IMMEDIATE_CHUNK_RADIUS; dz++) {
+                    buildChunkIfMissing(cx + dx, cz + dz);
+                }
+            }
+        }
 
         function updateChunks(playerPos) {
             const cx = Math.floor(playerPos.x / CHUNK_SIZE);
             const cz = Math.floor(playerPos.z / CHUNK_SIZE);
-            
+	            
             if (cx !== lastChunkX || cz !== lastChunkZ) {
                 lastChunkX = cx;
                 lastChunkZ = cz;
-                
+                ensureImmediateChunks(cx, cz);
+	                
                 for (let x = cx - RENDER_DISTANCE; x <= cx + RENDER_DISTANCE; x++) {
                     for (let z = cz - RENDER_DISTANCE; z <= cz + RENDER_DISTANCE; z++) {
                         if (!chunkMeshes.has(`${x},${z}`) && !chunkQueue.some(c => c.x === x && c.z === z)) {
@@ -2556,12 +2694,13 @@
         });
         
         controls.addEventListener('unlock', () => {
+            holdingSpace = false;
             let ui1 = document.getElementById('autobuild-ui');
             let ui2 = document.getElementById('trade-ui');
             
 	            if (!isInventoryOpen && (ui1 && ui1.style.display === 'none') && (ui2 && ui2.style.display === 'none')) {
                 blocker.style.display = 'flex';
-                syncTerrainSelects(selectedTerrain);
+                setTerrainChoice(selectedTerrain);
                 document.getElementById('start-menu').style.display = 'none';
                 document.getElementById('pause-menu').style.display = 'block';
             }
@@ -2573,7 +2712,7 @@
         // updateChunks(camera.position);
 
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
-        let holdingSpace = false; // 用于一直往上飞
+        let holdingSpace = false; // 跳跃/水中上浮
         const velocity = new THREE.Vector3();
         const direction = new THREE.Vector3();
         const MAX_PLAYER_STEP = 1 / 45;
@@ -2583,31 +2722,15 @@
         const PLAYER_HEIGHT = 1.6;
         const PLAYER_RADIUS = 0.2; 
 
-        // 双击 E 键进入第三人称相关变量
-        let lastEPressTime = 0;
+        // 第三人称模型保留给其他功能，但不再用双击 E 切换，避免相机和玩家坐标分离。
         let isThirdPerson = false;
         let localPlayerModel = null;
 
         document.addEventListener('keydown', (e) => {
             if (e.code === 'KeyE') {
-                const now = Date.now();
-                if (now - lastEPressTime < 400) {
-                    // 双击 E，切换第三人称视角
-                    isThirdPerson = !isThirdPerson;
-                    if (isThirdPerson) {
-                        if (!localPlayerModel) localPlayerModel = createRemotePlayer();
-                        scene.add(localPlayerModel);
-                        heldItemGroup.visible = false; // 第三人称隐藏手持UI
-                    } else {
-                        if (localPlayerModel) scene.remove(localPlayerModel);
-                        camera.position.copy(controls.getObject().position); // 重置相机
-                        heldItemGroup.visible = true;
-                    }
-                    lastEPressTime = 0; // 重置防止三连击
-                    return; // 切换视角时不打开背包
-                }
-                lastEPressTime = now;
-
+                isThirdPerson = false;
+                if (localPlayerModel) scene.remove(localPlayerModel);
+                heldItemGroup.visible = true;
                 if (ridingMinecart) {
                     ridingMinecart.isRiding = false;
                     ridingMinecart = null;
@@ -2642,7 +2765,7 @@
                 case 'KeyS': moveBackward = true; break;
                 case 'KeyA': moveLeft = true; break;
                 case 'KeyD': moveRight = true; break;
-                case 'Space': holdingSpace = true; break; // 按下空格准备起飞
+                case 'Space': holdingSpace = true; break; // 按下空格跳跃，水里是上浮
                 case 'Digit1': selectSlot(1); break;
                 case 'Digit2': selectSlot(2); break;
                 case 'Digit3': selectSlot(3); break;
@@ -2666,7 +2789,7 @@
                 case 'KeyS': moveBackward = false; break;
                 case 'KeyA': moveLeft = false; break;
                 case 'KeyD': moveRight = false; break;
-                case 'Space': holdingSpace = false; break; // 松开空格停止飞行
+                case 'Space': holdingSpace = false; break; // 松开空格停止上浮
             }
         });
         
@@ -2674,7 +2797,7 @@
         document.getElementById('start-menu').style.display = 'block';
         document.getElementById('pause-menu').style.display = 'none';
         inventoryUI.style.display = 'none';
-        syncTerrainSelects(selectedTerrain);
+        bindTerrainSelects();
 
         // 尝试在页面加载时播放主菜单 BGM（注意：浏览器可能会拦截自动播放，通常需要用户点击屏幕才会真正出声）
         // 为了确保能听到，我们给 document 加个点击事件，一旦用户点击任何地方（包括页面空白处），如果 BGM 没在播放就播
@@ -2713,6 +2836,7 @@
             modifiedColumns.clear();
             columnMinY.clear();
             chunkMaxY.clear();
+            chunkScanYRanges.clear();
             
             // 清理实体
             zombies.forEach(z => scene.remove(z.mesh)); zombies = [];
@@ -4347,6 +4471,7 @@
             document.getElementById('coord-x').innerText = `X: ${Math.round(camera.position.x)}`;
             document.getElementById('coord-y').innerText = `Y (深度): ${Math.round(camera.position.y)}`;
             document.getElementById('coord-z').innerText = `Z: ${Math.round(camera.position.z)}`;
+            document.getElementById('terrain-display').innerText = `地形: ${getTerrainName(selectedTerrain)}`;
 
             // 第三人称摄像机跟随逻辑
             if (isThirdPerson && localPlayerModel) {
@@ -4511,11 +4636,7 @@
                     // 每次渲染 1 个区块
                     const c = chunkQueue.shift();
                     if (Math.abs(c.x - lastChunkX) <= RENDER_DISTANCE && Math.abs(c.z - lastChunkZ) <= RENDER_DISTANCE) {
-                        if (!chunkMeshes.has(`${c.x},${c.z}`)) {
-                            generateHouseData(c.x, c.z);
-                            generateTrees(c.x, c.z);
-                            buildChunkMesh(c.x, c.z);
-                        }
+                        buildChunkIfMissing(c.x, c.z);
                     }
                     lastChunkBuildTime = performance.now();
                 }
@@ -4527,6 +4648,7 @@
                 let bz = Math.round(camera.position.z);
                 let onLadder = (getBlock(bx, by, bz) === 7 || getBlock(bx, Math.round(camera.position.y - PLAYER_HEIGHT), bz) === 7);
                 let inWaterPhys = (getBlock(bx, by, bz) === 24 || getBlock(bx, Math.round(camera.position.y - PLAYER_HEIGHT), bz) === 24);
+                let onGroundPhys = isSolid(bx, Math.round(camera.position.y - PLAYER_HEIGHT - 0.1), bz);
 
                 // --- 物理引擎 ---
                 if (inWaterPhys) {
@@ -4547,8 +4669,8 @@
                     velocity.y -= 5.0 * playerDelta; // 水中下沉慢
                     if (holdingSpace) velocity.y = 4; // 水中游泳上升
                 } else if (holdingSpace) {
-                    // 【创造模式一直往上飞！】
-                    velocity.y = 10; 
+                    if (onGroundPhys) velocity.y = 8; // 正常跳跃，只跳一下，不再一直飞
+                    holdingSpace = false;
                 } else {
                     velocity.y -= 25.0 * playerDelta; // 正常重力
                 }
