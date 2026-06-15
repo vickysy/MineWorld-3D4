@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D Web MC - 生存创造版</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #87CEEB;
+        }
+        canvas {
+            display: block;
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: sans-serif;
+            text-shadow: 1px 1px 2px black;
+            pointer-events: none;
+            z-index: 10;
+        }
+        #inventory {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            font-family: sans-serif;
+            text-align: center;
+            border: 4px solid #555;
+            z-index: 20;
+        }
+        #inventory h3 {
+            margin-top: 0;
+        }
+        .slot-container {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        .slot {
+            width: 60px;
+            height: 60px;
+            background-color: #333;
+            border: 2px solid #777;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .slot.selected {
+            border-color: #FFEB3B;
+            background-color: #555;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h2>2D 迷你世界 (MC)</h2>
+        <p>操作说明：</p>
+        <p>- <b>← / → 或 A / D</b>: 左右移动</p>
+        <p>- <b>↑ 或 W (长按)</b>: 连续往上跳 / 飞行</p>
+        <p>- <b>鼠标左键点击</b>: 挖空方块 / 攻击僵尸</p>
+        <p>- <b>空格键 (Space)</b>: 在鼠标位置放置选中物品</p>
+        <p>- <b>E 键</b>: 打开/关闭 菜单栏</p>
+        <p>- <b>数字键 1-6</b>: 快速切换物品</p>
+    </div>
+
+    <div id="inventory">
+        <h3>物资菜单</h3>
+        <div class="slot-container">
+            <div class="slot selected" id="slot-1">1. 镐子</div>
+            <div class="slot" id="slot-2">2. 宝剑</div>
+            <div class="slot" id="slot-3">3. 泥土</div>
+            <div class="slot" id="slot-4">4. 玻璃</div>
+            <div class="slot" id="slot-5">5. 铁矿</div>
+            <div class="slot" id="slot-6">6. 门窗</div>
+        </div>
+        <p>按 1-6 切换，按 E 键关闭</p>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const inventoryUI = document.getElementById('inventory');
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // 游戏常量
+        const TILE_SIZE = 40;
+        const GRAVITY = 0.6;
+        const JUMP_FORCE = -10;
+        const MOVE_SPEED = 5;
+        const MAX_FALL_SPEED = 15;
+
+        // 物品与方块 ID 映射
+        // 1: 草地(生成用), 2: 泥土, 3: 石头
+        // 4: 玻璃, 5: 铁矿, 6: 门窗
+        let selectedItem = 1; // 1:镐子, 2:宝剑, 3:泥土, 4:玻璃, 5:铁矿, 6:门窗
+        let inventoryOpen = false;
+
+        // 玩家状态
+        const player = {
+            x: 0,
+            y: 0,
+            vx: 0,
+            vy: 0,
+            width: 24,
+            height: 48,
+            grounded: false,
+            facingRight: true
+        };
+
+        // 僵尸数组
+        let zombies = [];
+
+        // 地图存储
+        const world = new Map();
+
+        // --- 随机地形生成算法 (FBM Noise) ---
+        let noiseSeed = Math.random() * 10000;
+        function hash(x) {
+            let val = Math.sin(x * 12.9898 + noiseSeed) * 43758.5453;
+            return val - Math.floor(val);
+        }
+        function noise(x) {
+            const i = Math.floor(x);
+            const f = x - i;
+            const u = f * f * (3.0 - 2.0 * f);
+            return hash(i) * (1 - u) + hash(i + 1) * u;
+        }
+        function fbm(x) {
+            let v = 0;
+            let a = 0.5;
+            let shift = 100.0;
+            for (let i = 0; i < 5; i++) {
+                v += a * noise(x);
+                x = x * 2.0 + shift;
+                a *= 0.5;
+            }
+            return v;
+        }
+        
+        function getSurfaceHeight(x) {
+            // 结合宏观大山脉和微观小起伏，生成随意多变的地形
+            let macro = fbm(x * 0.01) * 60; // 大落差
+            let detail = fbm(x * 0.1) * 10; // 小起伏
+            return Math.floor(macro + detail) + 10;
+        }
+
+        // 获取特定坐标的方块
+        function getBlock(x, y) {
+            const key = `${x},${y}`;
+            if (world.has(key)) {
+                return world.get(key);
+            }
+            
+            const surfaceY = getSurfaceHeight(x);
+            if (y > surfaceY) {
+                if (y === surfaceY + 1) return 1; // 草地
+                if (y <= surfaceY + 4) return 2;  // 泥土
+                
+                // 深处随机生成一点铁矿
+                if (Math.random() < 0.05 && y > surfaceY + 10) return 5;
+                
+                return 3; // 石头
+            }
+            return 0; // 空气
+        }
+
+        function setBlock(x, y, type) {
+            world.set(`${x},${y}`, type);
+        }
+
+        // 死亡与复活机制
+        function dieAndRespawn() {
+            player.x = 0;
+            player.y = (getSurfaceHeight(0) - 5) * TILE_SIZE;
+            player.vx = 0;
+            player.vy = 0;
+            zombies = []; // 清空僵尸，防止无限死亡
+        }
+
+        // 初始化玩家位置
+        dieAndRespawn();
+
+        // 摄像机
+        const camera = { x: 0, y: 0 };
+
+        // 输入处理
+        const keys = {};
+        window.addEventListener('keydown', e => {
+            keys[e.code] = true;
+            
+            // 空格放置物品
+            if (e.code === 'Space') {
+                placeBlockAtMouse();
+            }
+            
+            // 菜单切换
+            if (e.code === 'KeyE') {
+                inventoryOpen = !inventoryOpen;
+                inventoryUI.style.display = inventoryOpen ? 'block' : 'none';
+            }
+            
+            // 快捷键切换物品
+            if (e.key >= '1' && e.key <= '6') {
+                selectItem(parseInt(e.key));
+            }
+        });
+        window.addEventListener('keyup', e => keys[e.code] = false);
+
+        function selectItem(id) {
+            selectedItem = id;
+            for(let i=1; i<=6; i++) {
+                document.getElementById(`slot-${i}`).classList.remove('selected');
+            }
+            document.getElementById(`slot-${id}`).classList.add('selected');
+        }
+
+        // 鼠标位置追踪
+        const mousePos = { x: 0, y: 0 };
+        canvas.addEventListener('mousemove', e => {
+            const rect = canvas.getBoundingClientRect();
+            mousePos.x = e.clientX - rect.left;
+            mousePos.y = e.clientY - rect.top;
+        });
+
+        // 放置方块
+        function placeBlockAtMouse() {
+            if (inventoryOpen) return; // 菜单打开时不能操作游戏
+            // 如果手里拿的是镐子或宝剑，不能放置
+            if (selectedItem === 1 || selectedItem === 2) return;
+
+            const worldX = mousePos.x + camera.x;
+            const worldY = mousePos.y + camera.y;
+            const tileX = Math.floor(worldX / TILE_SIZE);
+            const tileY = Math.floor(worldY / TILE_SIZE);
+            
+            const playerLeftCol = Math.floor(player.x / TILE_SIZE);
+            const playerRightCol = Math.floor((player.x + player.width) / TILE_SIZE);
+            const playerTopRow = Math.floor(player.y / TILE_SIZE);
+            const playerBottomRow = Math.floor((player.y + player.height) / TILE_SIZE);
+            
+            const inPlayer = tileX >= playerLeftCol && tileX <= playerRightCol &&
+                             tileY >= playerTopRow && tileY <= playerBottomRow;
+            
+            // 修改为只要不是空气就可以覆盖（或者只能放在空气里），之前是 === 0 才能放
+            // 确保我们能够替换背景或者放到空白处
+            if (!inPlayer && getBlock(tileX, tileY) === 0) {
+                // 3:泥土对应block 2, 4:玻璃(4), 5:铁矿(5), 6:门窗(6)
+                let blockId = 2; // 默认泥土
+                if (selectedItem === 3) blockId = 2; // 泥土
+                else if (selectedItem === 4) blockId = 4; // 玻璃
+                else if (selectedItem === 5) blockId = 5; // 铁矿
+                else if (selectedItem === 6) blockId = 6; // 门窗
+                setBlock(tileX, tileY, blockId); 
+            }
+        }
+
+        // 鼠标左键：攻击僵尸或挖矿
+        canvas.addEventListener('mousedown', e => {
+            if (inventoryOpen) return; // 菜单打开时不能操作游戏
+
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            const worldX = mouseX + camera.x;
+            const worldY = mouseY + camera.y;
+            
+            if (e.button === 0) {
+                // 先判断是否点中僵尸
+                let hitZombie = false;
+                for (let i = zombies.length - 1; i >= 0; i--) {
+                    let z = zombies[i];
+                    if (worldX > z.x && worldX < z.x + z.width &&
+                        worldY > z.y && worldY < z.y + z.height) {
+                        zombies.splice(i, 1); // 僵尸死亡
+                        hitZombie = true;
+                        break;
+                    }
+                }
+
+                // 如果没点中僵尸，则挖方块
+                if (!hitZombie) {
+                    const tileX = Math.floor(worldX / TILE_SIZE);
+                    const tileY = Math.floor(worldY / TILE_SIZE);
+                    setBlock(tileX, tileY, 0);
+                }
+            }
+        });
+        
+        canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+        // 生成僵尸
+        setInterval(() => {
+            if (zombies.length < 15) {
+                let dir = Math.random() > 0.5 ? 1 : -1;
+                let zx = player.x + dir * (Math.random() * 400 + 400); // 在屏幕外生成
+                let zy = (getSurfaceHeight(Math.floor(zx / TILE_SIZE)) - 2) * TILE_SIZE;
+                zombies.push({
+                    x: zx, y: zy, vx: 0, vy: 0, width: 24, height: 48, grounded: false
+                });
+            }
+        }, 2000);
+
+        // 物理与碰撞检测
+        function handleCollisions(entity, isHorizontal) {
+            const leftCol = Math.floor((entity.x + 0.1) / TILE_SIZE);
+            const rightCol = Math.floor((entity.x + entity.width - 0.1) / TILE_SIZE);
+            const topRow = Math.floor((entity.y + 0.1) / TILE_SIZE);
+            const bottomRow = Math.floor((entity.y + entity.height - 0.1) / TILE_SIZE);
+
+            for (let c = leftCol; c <= rightCol; c++) {
+                for (let r = topRow; r <= bottomRow; r++) {
+                    let block = getBlock(c, r);
+                    if (block !== 0 && block !== 6) { // 碰到实体方块 (门窗6假设可以穿过，或者作为实体。这里假设门窗暂不阻挡)
+                        if (isHorizontal) {
+                            if (entity.vx > 0) {
+                                entity.x = c * TILE_SIZE - entity.width;
+                            } else if (entity.vx < 0) {
+                                entity.x = (c + 1) * TILE_SIZE;
+                            }
+                            entity.vx = 0;
+                        } else {
+                            if (entity.vy > 0) {
+                                entity.y = r * TILE_SIZE - entity.height;
+                                entity.grounded = true;
+                            } else if (entity.vy < 0) {
+                                entity.y = (r + 1) * TILE_SIZE;
+                            }
+                            entity.vy = 0;
+                        }
+                    }
+                }
+            }
+        }
+
+        function update() {
+            if (inventoryOpen) return;
+
+            // --- 玩家更新 ---
+            if (keys['ArrowLeft'] || keys['KeyA']) {
+                player.vx = -MOVE_SPEED;
+                player.facingRight = false;
+            } else if (keys['ArrowRight'] || keys['KeyD']) {
+                player.vx = MOVE_SPEED;
+                player.facingRight = true;
+            } else {
+                player.vx = 0;
+            }
+
+            player.x += player.vx;
+            handleCollisions(player, true);
+
+            player.vy += GRAVITY;
+            if (player.vy > MAX_FALL_SPEED) player.vy = MAX_FALL_SPEED;
+            
+            if (keys['ArrowUp'] || keys['KeyW']) {
+                player.vy = JUMP_FORCE;
+            }
+
+            player.y += player.vy;
+            player.grounded = false; 
+            handleCollisions(player, false);
+
+            // --- 僵尸更新 ---
+            for (let i = zombies.length - 1; i >= 0; i--) {
+
+                z.vx = dx > 0 ? 0.8 : (dx < 0 ? -0.8 : 0);
+                
+                z.x += z.vx;
+                
+                // 简单AI: 撞墙时尝试跳跃
+                let forwardCol = Math.floor((z.x + (z.vx > 0 ? z.width + 5 : -5)) / TILE_SIZE);
+                let footRow = Math.floor((z.y + z.height - 5) / TILE_SIZE);
+                if (getBlock(forwardCol, footRow) !== 0 && z.grounded) {
+                    z.vy = -8;
+                    z.grounded = false;
+                }
+
+                handleCollisions(z, true);
+
+                z.vy += GRAVITY;
+                if (z.vy > MAX_FALL_SPEED) z.vy = MAX_FALL_SPEED;
+                
+                z.y += z.vy;
+                z.grounded = false;
+                handleCollisions(z, false);
+
+                // 僵尸碰到玩家 -> 玩家死亡
+                if (z.x < player.x + player.width && z.x + z.width > player.x &&
+                    z.y < player.y + player.height && z.y + z.height > player.y) {
+                    dieAndRespawn();
+                }
+            }
+        }
+
+        function draw() {
+            camera.x = player.x + player.width / 2 - canvas.width / 2;
+            camera.y = player.y + player.height / 2 - canvas.height / 2;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.translate(-camera.x, -camera.y);
+
+            const startCol = Math.floor(camera.x / TILE_SIZE) - 1;
+            const endCol = startCol + Math.ceil(canvas.width / TILE_SIZE) + 2;
+            const startRow = Math.floor(camera.y / TILE_SIZE) - 1;
+            const endRow = startRow + Math.ceil(canvas.height / TILE_SIZE) + 2;
+
+            // 绘制地形
+            for (let c = startCol; c <= endCol; c++) {
+                for (let r = startRow; r <= endRow; r++) {
+                    const block = getBlock(c, r);
+                    if (block !== 0) {
+                        ctx.lineWidth = 1;
+                        ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+                        
+                        if (block === 1) { // 草地
+                            ctx.fillStyle = '#4CAF50';
+                            ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE + 1, TILE_SIZE + 1);
+                            ctx.strokeRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                        } else if (block === 2) { // 泥土
+                            ctx.fillStyle = '#795548';
+                            ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE + 1, TILE_SIZE + 1);
+                            ctx.strokeRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                        } else if (block === 3) { // 石头
+                            ctx.fillStyle = '#9E9E9E';
+                            ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE + 1, TILE_SIZE + 1);
+                            ctx.strokeRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                        } else if (block === 4) { // 玻璃 (透明，黑边)
+                            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+                            ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                            ctx.strokeStyle = 'black';
+                            ctx.lineWidth = 4;
+                            ctx.strokeRect(c * TILE_SIZE + 2, r * TILE_SIZE + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        } else if (block === 5) { // 铁矿 (带斑点)
+                            ctx.fillStyle = '#9E9E9E';
+                            ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE + 1, TILE_SIZE + 1);
+                            ctx.fillStyle = '#E0E0E0'; // 铁色斑点
+                            ctx.fillRect(c * TILE_SIZE + 8, r * TILE_SIZE + 8, 8, 8);
+                            ctx.fillRect(c * TILE_SIZE + 24, r * TILE_SIZE + 20, 6, 6);
+                            ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+                            ctx.lineWidth = 1;
+                            ctx.strokeRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                        } else if (block === 6) { // 门窗
+                            ctx.fillStyle = '#8D6E63'; // 木色
+                            ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                            ctx.fillStyle = '#81D4FA'; // 窗户蓝
+                            ctx.fillRect(c * TILE_SIZE + 10, r * TILE_SIZE + 10, 20, 20);
+                        }
+                    }
+                }
+            }
+
+            // 绘制僵尸
+            for (let z of zombies) {
+                ctx.fillStyle = '#4CAF50'; // 僵尸绿
+                ctx.fillRect(z.x, z.y, z.width, z.height);
+                
+                // 僵尸手臂 (向前伸)
+                ctx.fillStyle = '#388E3C';
+                ctx.fillRect(z.x + (z.vx >= 0 ? z.width : -12), z.y + 15, 12, 6);
+
+                // 僵尸眼睛
+                ctx.fillStyle = 'black';
+                let eyeX = z.vx >= 0 ? z.width - 6 : 2;
+                ctx.fillRect(z.x + eyeX, z.y + 8, 4, 4);
+            }
+
+            // 绘制玩家
+            ctx.fillStyle = '#FF5722'; 
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+            
+            // 绘制眼睛
+            ctx.fillStyle = 'white';
+            let eyeOffsetX = player.facingRight ? player.width - 8 : 4;
+            ctx.fillRect(player.x + eyeOffsetX, player.y + 8, 6, 6);
+            ctx.fillStyle = 'black';
+            ctx.fillRect(player.x + eyeOffsetX + (player.facingRight ? 2 : -2), player.y + 10, 2, 2);
+
+            // --- 绘制玩家的两只手和拿着的工具 ---
+            ctx.fillStyle = '#FFCCBC'; // 皮肤颜色
+            let leftHandX = player.x - 4;
+            let rightHandX = player.x + player.width - 4;
+            let handY = player.y + 20;
+            
+            ctx.fillRect(leftHandX, handY, 8, 8); // 左手
+            ctx.fillRect(rightHandX, handY, 8, 8); // 右手
+
+            // 当前手持物品位置 (根据朝向决定哪只手拿)
+            let toolX = player.facingRight ? rightHandX : leftHandX;
+            
+            if (selectedItem === 1) { // 拿镐子
+                ctx.fillStyle = '#795548'; // 木柄
+                ctx.fillRect(toolX + 2, handY - 10, 4, 20);
+                ctx.fillStyle = '#9E9E9E'; // 铁头
+                ctx.fillRect(toolX - 6, handY - 10, 20, 6);
+            } else if (selectedItem === 2) { // 拿宝剑
+                ctx.fillStyle = '#795548'; // 剑柄
+                ctx.fillRect(toolX + 2, handY, 4, 10);
+                ctx.fillStyle = '#03A9F4'; // 钻石剑身
+                ctx.fillRect(toolX + 2, handY - 20, 4, 20);
+                ctx.fillStyle = '#1565C0'; // 护手
+                ctx.fillRect(toolX - 2, handY, 12, 4);
+            } else if (selectedItem === 3) { // 拿泥土
+                ctx.fillStyle = '#795548';
+                ctx.fillRect(toolX, handY - 10, 15, 15);
+            } else if (selectedItem === 4) { // 拿玻璃
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+                ctx.fillRect(toolX, handY - 10, 15, 15);
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(toolX, handY - 10, 15, 15);
+            } else if (selectedItem === 5) { // 拿铁矿
+                ctx.fillStyle = '#9E9E9E';
+                ctx.fillRect(toolX, handY - 10, 15, 15);
+                ctx.fillStyle = '#E0E0E0';
+                ctx.fillRect(toolX + 5, handY - 5, 5, 5);
+            } else if (selectedItem === 6) { // 拿门窗
+                ctx.fillStyle = '#8D6E63';
+                ctx.fillRect(toolX, handY - 10, 15, 15);
+                ctx.fillStyle = '#81D4FA';
+                ctx.fillRect(toolX + 4, handY - 6, 7, 7);
+            }
+
+            ctx.restore();
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>
