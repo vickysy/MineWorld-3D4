@@ -1484,27 +1484,38 @@
             } else if (type === 'zombie' || type === 'zombie_hurt' || type === 'zombie_death') {
                 const isHurt = type === 'zombie_hurt';
                 const isDeath = type === 'zombie_death';
-                const duration = isDeath ? 0.9 : (isHurt ? 0.32 : 0.75);
-                const base = isDeath ? 58 : (isHurt ? 95 : 72 + Math.random() * 18);
+                const duration = isDeath ? 1.15 : (isHurt ? 0.45 : 1.05);
+                const base = isDeath ? 64 : (isHurt ? 120 : 82 + Math.random() * 20);
 
                 const growl = audioCtx.createOscillator();
                 growl.type = 'sawtooth';
                 growl.frequency.setValueAtTime(base, now);
-                growl.frequency.exponentialRampToValueAtTime(isDeath ? 34 : base * 0.72, now + duration);
+                growl.frequency.linearRampToValueAtTime(isDeath ? 45 : base * 0.66, now + duration);
 
-                const throat = audioCtx.createOscillator();
-                throat.type = 'square';
-                throat.frequency.setValueAtTime(base * 0.5, now);
-                throat.frequency.exponentialRampToValueAtTime(isDeath ? 24 : base * 0.38, now + duration);
+                const moan = audioCtx.createOscillator();
+                moan.type = 'triangle';
+                moan.frequency.setValueAtTime(base * 1.45, now);
+                moan.frequency.linearRampToValueAtTime(isDeath ? 70 : base * 0.92, now + duration);
+
+                const wobble = audioCtx.createOscillator();
+                wobble.type = 'sine';
+                wobble.frequency.setValueAtTime(5.5 + Math.random() * 2, now);
+
+                const wobbleGain = audioCtx.createGain();
+                wobbleGain.gain.setValueAtTime(isHurt ? 7 : 12, now);
+                wobble.connect(wobbleGain);
+                wobbleGain.connect(growl.frequency);
+                wobbleGain.connect(moan.frequency);
 
                 const filter = audioCtx.createBiquadFilter();
                 filter.type = 'lowpass';
-                filter.frequency.setValueAtTime(isHurt ? 420 : 260, now);
-                filter.Q.setValueAtTime(8, now);
+                filter.frequency.setValueAtTime(isHurt ? 700 : 520, now);
+                filter.frequency.linearRampToValueAtTime(isDeath ? 260 : 360, now + duration);
+                filter.Q.setValueAtTime(4.5, now);
 
                 const gain = audioCtx.createGain();
                 gain.gain.setValueAtTime(0.001, now);
-                gain.gain.linearRampToValueAtTime(isHurt ? 0.8 : 0.55, now + 0.04);
+                gain.gain.linearRampToValueAtTime(isHurt ? 0.65 : 0.48, now + 0.08);
                 gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
 
                 const noiseBuf = audioCtx.createBuffer(1, audioCtx.sampleRate * duration, audioCtx.sampleRate);
@@ -1516,23 +1527,25 @@
                 noise.buffer = noiseBuf;
                 const noiseFilter = audioCtx.createBiquadFilter();
                 noiseFilter.type = 'bandpass';
-                noiseFilter.frequency.setValueAtTime(isHurt ? 320 : 180, now);
-                noiseFilter.Q.setValueAtTime(2.2, now);
+                noiseFilter.frequency.setValueAtTime(isHurt ? 620 : 420, now);
+                noiseFilter.Q.setValueAtTime(1.4, now);
                 const noiseGain = audioCtx.createGain();
-                noiseGain.gain.setValueAtTime(isHurt ? 0.28 : 0.18, now);
+                noiseGain.gain.setValueAtTime(isHurt ? 0.18 : 0.12, now);
                 noiseGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
 
                 growl.connect(filter);
-                throat.connect(filter);
+                moan.connect(filter);
                 filter.connect(gain);
                 gain.connect(audioCtx.destination);
                 noise.connect(noiseFilter).connect(noiseGain).connect(audioCtx.destination);
 
                 growl.start(now);
-                throat.start(now);
+                moan.start(now);
+                wobble.start(now);
                 noise.start(now);
                 growl.stop(now + duration);
-                throat.stop(now + duration);
+                moan.stop(now + duration);
+                wobble.stop(now + duration);
             }
         }
 
@@ -1865,6 +1878,45 @@
             if (hunger > maxHunger) hunger = maxHunger;
             resetFoodTimers();
             updateHUD();
+        }
+
+        let lastBedRightClickTime = 0;
+        let lastBedRightClickKey = '';
+
+        function isNightTime() {
+            return Math.sin(dayTime) <= 0;
+        }
+
+        function sleepUntilMorning() {
+            dayTime = Math.PI / 2;
+            oxygen = 20;
+            hungerTimer = 0;
+            starvationTimer = 0;
+            for (let z of zombies) scene.remove(z.mesh);
+            zombies = [];
+            for (let c of creepers) scene.remove(c.mesh);
+            creepers = [];
+            showToast("睡了一觉，天亮了");
+            playSound('place');
+        }
+
+        function handleBedRightClick(hit) {
+            const key = `${hit.x},${hit.y},${hit.z}`;
+            const nowMs = performance.now();
+            if (lastBedRightClickKey === key && nowMs - lastBedRightClickTime <= 1000) {
+                lastBedRightClickTime = 0;
+                lastBedRightClickKey = '';
+                if (!isNightTime()) {
+                    showToast("现在是白天，还不用睡觉");
+                    return true;
+                }
+                sleepUntilMorning();
+                return true;
+            }
+            lastBedRightClickTime = nowMs;
+            lastBedRightClickKey = key;
+            showToast("再右键点一次床就睡觉");
+            return true;
         }
 
         function resetFoodTimers() {
@@ -3220,6 +3272,24 @@
             return false;
         }
 
+        function hasClearLineBetween(a, b) {
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const dz = b.z - a.z;
+            const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            if (dist <= 0) return true;
+            const steps = Math.max(1, Math.ceil(dist / 0.18));
+            for (let i = 1; i < steps; i++) {
+                const t = i / steps;
+                const x = Math.round(a.x + dx * t);
+                const y = Math.round(a.y + dy * t);
+                const z = Math.round(a.z + dz * t);
+                const block = getBlock(x, y, z);
+                if (block !== 0 && block !== 24 && block !== 25 && block !== 42) return false;
+            }
+            return true;
+        }
+
         function damageMob(entity, amount) {
             if (!entity || entity.dying) return;
             entity.hp = (entity.hp || 1) - amount;
@@ -3413,7 +3483,10 @@
                 }
 
                 // 碰到玩家造成伤害
-	                if (z.mesh.position.distanceTo(camera.position) < 1.5) {
+	                if (z.mesh.position.distanceTo(camera.position) < 1.5 && hasClearLineBetween(
+                    new THREE.Vector3(z.mesh.position.x, z.mesh.position.y + 0.9, z.mesh.position.z),
+                    new THREE.Vector3(camera.position.x, camera.position.y - 0.4, camera.position.z)
+                )) {
                     z.vx = 0;
                     z.vz = 0;
                     takeDamage(1 * delta); // 碰到时持续掉血
@@ -4070,6 +4143,11 @@
                     }
                     if (isToolItem(matId)) {
                         showToast("工具不能放置，请选择方块");
+                        return;
+                    }
+
+                    if (targetType === 14 || targetType === 15) {
+                        handleBedRightClick(hit);
                         return;
                     }
                     
