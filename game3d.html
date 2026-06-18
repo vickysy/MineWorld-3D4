@@ -2468,6 +2468,12 @@
         const SCANNER_SCAN_SIZE = 200;
         const SCANNER_SCAN_RADIUS = Math.floor(SCANNER_SCAN_SIZE / 2);
         const SCANNER_FILL_DEPTH = SCANNER_SCAN_SIZE;
+        const SEA_LEVEL = 8;
+        const WATER_FLOW_PER_FRAME = 8;
+        const WATER_FLOW_DRAIN_EVERY = 6;
+        const waterFlowQueue = [];
+        const queuedWaterFlow = new Set();
+        let waterFlowCount = 0;
 
         let seed = Math.random() * 1000;
         function hash(x, z) {
@@ -2601,16 +2607,14 @@
             if (worldMap.has(key)) return worldMap.get(key);
 
             const h = getSurfaceHeight(x, z);
-            const seaLevel = 8;
-
             if (y > h) {
-                if (selectedTerrain !== 'moon' && y <= seaLevel) {
-                    if (y < seaLevel && Math.abs(hash(x * 3.14, z * 2.71)) < 0.1) {
+                if (selectedTerrain !== 'moon' && y <= SEA_LEVEL) {
+                    if (y < SEA_LEVEL && Math.abs(hash(x * 3.14, z * 2.71)) < 0.1) {
                         return 25; // 海带
                     }
                     return 24; // 水
                 }
-                if (selectedTerrain !== 'moon' && selectedTerrain !== 'desert' && y === h + 1 && h > seaLevel + 1 && hash3(x, y, z, 91.4) < 0.12) {
+                if (selectedTerrain !== 'moon' && selectedTerrain !== 'desert' && y === h + 1 && h > SEA_LEVEL + 1 && hash3(x, y, z, 91.4) < 0.12) {
                     return 42; // 小草
                 }
                 return 0; // 空气
@@ -2622,7 +2626,7 @@
             }
 
             if (selectedTerrain === 'desert') {
-                if (h <= seaLevel + 1) {
+                if (h <= SEA_LEVEL + 1) {
                     if (y > h - 3) return 23; // 绿洲/水坑附近的沙层
                     return getOreBlock(x, y, z, h) || 3;
                 }
@@ -2631,7 +2635,7 @@
                 return getOreBlock(x, y, z, h) || 3;
             }
 
-            if (h <= seaLevel + 1) {
+            if (h <= SEA_LEVEL + 1) {
                 if (y > h - 3) return 23; // 沙滩和海底沙子
                 return getOreBlock(x, y, z, h) || 3;
             }
@@ -2737,6 +2741,78 @@
             }
         }
 
+        function isWaterBlock(type) {
+            return type === 24;
+        }
+
+        function waterFlowKey(x, y, z) {
+            return `${x},${y},${z}`;
+        }
+
+        function enqueueWaterFlow(x, y, z) {
+            if (selectedTerrain === 'moon') return;
+            if (y > SEA_LEVEL + 3) return;
+            const key = waterFlowKey(x, y, z);
+            if (queuedWaterFlow.has(key)) return;
+            queuedWaterFlow.add(key);
+            waterFlowQueue.push({ x, y, z });
+        }
+
+        function hasNeighborWater(x, y, z) {
+            const offsets = [[1,0,0], [-1,0,0], [0,0,1], [0,0,-1], [0,1,0]];
+            for (let off of offsets) {
+                if (isWaterBlock(getBlock(x + off[0], y + off[1], z + off[2]))) return true;
+            }
+            return false;
+        }
+
+        function drainNearbyWaterSurface(x, y, z, dirtyChunks) {
+            waterFlowCount++;
+            if (waterFlowCount % WATER_FLOW_DRAIN_EVERY !== 0) return;
+            const maxRadius = 7;
+            for (let r = 0; r <= maxRadius; r++) {
+                for (let dx = -r; dx <= r; dx++) {
+                    for (let dz = -r; dz <= r; dz++) {
+                        if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+                        const sx = x + dx;
+                        const sz = z + dz;
+                        if (getBlock(sx, SEA_LEVEL, sz) === 24) {
+                            setBlockNoRebuild(sx, SEA_LEVEL, sz, 0, dirtyChunks);
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
+        function spreadWaterFrom(x, y, z) {
+            enqueueWaterFlow(x + 1, y, z);
+            enqueueWaterFlow(x - 1, y, z);
+            enqueueWaterFlow(x, y, z + 1);
+            enqueueWaterFlow(x, y, z - 1);
+            enqueueWaterFlow(x, y - 1, z);
+        }
+
+        function processWaterFlowQueue() {
+            if (waterFlowQueue.length === 0) return;
+            const dirtyChunks = new Set();
+            let processed = 0;
+            while (waterFlowQueue.length > 0 && processed < WATER_FLOW_PER_FRAME) {
+                const p = waterFlowQueue.shift();
+                queuedWaterFlow.delete(waterFlowKey(p.x, p.y, p.z));
+                processed++;
+
+                const current = getBlock(p.x, p.y, p.z);
+                if (current !== 0 && current !== 42) continue;
+                if (!hasNeighborWater(p.x, p.y, p.z)) continue;
+
+                setBlockNoRebuild(p.x, p.y, p.z, 24, dirtyChunks);
+                drainNearbyWaterSurface(p.x, p.y, p.z, dirtyChunks);
+                spreadWaterFrom(p.x, p.y, p.z);
+            }
+            addDirtyChunksToQueue(dirtyChunks);
+        }
+
         function getDroppedItemForBlock(blockType) {
             if (blockType === 42) return 0;
             if (blockType === 9 || blockType === 10 || blockType === 11) return 8;
@@ -2814,6 +2890,7 @@
             setBlockNoRebuild(hit.x, hit.y, hit.z, 0, dirtyChunks);
             spawnBlockBreakParticles(hit.x, hit.y, hit.z, targetType);
             spawnDroppedItem(hit.x, hit.y, hit.z, minedItem);
+            enqueueWaterFlow(hit.x, hit.y, hit.z);
 
             if (targetType === 8 || targetType === 10) setBlockNoRebuild(hit.x, hit.y + 1, hit.z, 0, dirtyChunks);
             if (targetType === 9 || targetType === 11) setBlockNoRebuild(hit.x, hit.y - 1, hit.z, 0, dirtyChunks);
@@ -3848,12 +3925,57 @@
             villagers.push({ mesh: group, vx: 0, vy: 0, vz: 0, timer: 0, onGround: false, walkTime: 0, hp: 4, hurtTimer: 0, dying: false, deathTimer: 0 });
         }
 
+        function isAnimalSpawnSafe(x, y, z) {
+            const bx = Math.round(x);
+            const by = Math.round(y);
+            const bz = Math.round(z);
+            const feet = getBlock(bx, by, bz);
+            const body = getBlock(bx, by + 1, bz);
+            const below = getBlock(bx, by - 1, bz);
+            return below !== 0 && below !== 24 && below !== 25 && below !== 42
+                && (feet === 0 || feet === 42)
+                && body === 0;
+        }
+
+        function findSafeAnimalSpot(x, z) {
+            for (let r = 0; r <= 8; r++) {
+                for (let dx = -r; dx <= r; dx++) {
+                    for (let dz = -r; dz <= r; dz++) {
+                        if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+                        const sx = Math.round(x + dx);
+                        const sz = Math.round(z + dz);
+                        const sy = getSurfaceHeight(sx, sz) + 1;
+                        if (isAnimalSpawnSafe(sx, sy, sz)) return { x: sx, y: sy, z: sz };
+                    }
+                }
+            }
+            return null;
+        }
+
         function spawnAnimal(type, x, y, z) {
+            const safeSpot = isAnimalSpawnSafe(x, y, z) ? { x, y, z } : findSafeAnimalSpot(x, z);
+            if (!safeSpot) return false;
             const mesh = createAnimalModel(type);
-            mesh.position.set(x, y, z);
+            mesh.position.set(safeSpot.x, safeSpot.y, safeSpot.z);
             scene.add(mesh);
             const hp = type === 'cow' ? 3 : (type === 'sheep' ? 2 : 2);
             animals.push({ mesh, type, vx: 0, vy: 0, vz: 0, timer: 0, onGround: false, hp, hurtTimer: 0, dying: false, deathTimer: 0, walkTime: 0, droppedMeat: false });
+            return true;
+        }
+
+        function animalWouldEnterWater(x, y, z) {
+            const bx = Math.round(x);
+            const by = Math.round(y);
+            const bz = Math.round(z);
+            return getBlock(bx, by, bz) === 24 || getBlock(bx, by - 1, bz) === 24;
+        }
+
+        function chooseAnimalDirection(a) {
+            a.timer = 1.5 + Math.random() * 3.5;
+            const angle = Math.random() * Math.PI * 2;
+            const speed = a.type === 'cow' ? 0.45 : (a.type === 'sheep' ? 0.6 : 0.65);
+            a.vx = Math.cos(angle) * speed;
+            a.vz = Math.sin(angle) * speed;
         }
 
         function spawnVillager() {
@@ -4004,24 +4126,22 @@
 
                 a.timer -= delta;
                 if (a.timer <= 0) {
-                    a.timer = 2 + Math.random() * 4;
-                    let angle = Math.random() * Math.PI * 2;
-                    let speed = a.type === 'cow' ? 0.5 : 1.2;
-                    a.vx = Math.cos(angle) * speed;
-                    a.vz = Math.sin(angle) * speed;
+                    chooseAnimalDirection(a);
                 }
                 a.vy -= 25.0 * delta;
-	                
-                a.mesh.position.x += a.vx * delta;
-                if (entityHitsWallAt(a.mesh.position, 0.85, 0.38)) {
-                    a.mesh.position.x -= a.vx * delta;
-                    if (a.onGround) a.vy = 6;
-                }
-	                
-                a.mesh.position.z += a.vz * delta;
-                if (entityHitsWallAt(a.mesh.position, 0.85, 0.38)) {
-                    a.mesh.position.z -= a.vz * delta;
-                    if (a.onGround) a.vy = 6;
+
+                const nextX = a.mesh.position.x + a.vx * delta;
+                const nextZ = a.mesh.position.z + a.vz * delta;
+                const oldX = a.mesh.position.x;
+                const oldZ = a.mesh.position.z;
+                a.mesh.position.x = nextX;
+                a.mesh.position.z = nextZ;
+                if (entityHitsWallAt(a.mesh.position, 0.85, 0.38) || animalWouldEnterWater(a.mesh.position.x, a.mesh.position.y, a.mesh.position.z)) {
+                    a.mesh.position.x = oldX;
+                    a.mesh.position.z = oldZ;
+                    a.vx = 0;
+                    a.vz = 0;
+                    a.timer = 0.15;
                 }
                 
                 a.mesh.position.y += a.vy * delta;
@@ -5422,6 +5542,7 @@
                 updateChunks(camera.position);
 
                 // 异步处理区块生成与重建，防止主线程卡死导致“鼠标一粘就失灵”
+                processWaterFlowQueue();
                 processRebuildQueue();
                 
                 if (chunkQueue.length > 0 && performance.now() - lastChunkBuildTime >= CHUNK_BUILD_INTERVAL_MS) {
