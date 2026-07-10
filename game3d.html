@@ -173,6 +173,7 @@
         <div id="coord-y">Y: 0</div>
         <div id="coord-z">Z: 0</div>
         <div id="terrain-display">Terrain: Plains</div>
+        <div id="mode-display">Mode: Survival</div>
     </div>
 
     <!-- Auto build UI -->
@@ -213,6 +214,14 @@
                         <button class="terrain-btn" data-terrain="moon" onclick="chooseTerrain('moon')" style="padding: 10px 4px; cursor: pointer; background: #333; color: white; border: 2px solid #777; border-radius: 5px;">Moon</button>
                         <button class="terrain-btn" data-terrain="mountains" onclick="chooseTerrain('mountains')" style="padding: 10px 4px; cursor: pointer; background: #333; color: white; border: 2px solid #777; border-radius: 5px;">Mountains</button>
                         <button class="terrain-btn" data-terrain="jungle" onclick="chooseTerrain('jungle')" style="padding: 10px 4px; cursor: pointer; background: #333; color: white; border: 2px solid #777; border-radius: 5px;">Jungle</button>
+                    </div>
+                    <select id="mode-select" onchange="setGameMode(this.value)" style="padding: 15px; font-size: 20px; border-radius: 8px; border: 2px solid #2196F3; background: #333; color: white; cursor: pointer; outline: none;">
+                        <option value="survival">Mode: Survival</option>
+                        <option value="creative">Mode: Creative</option>
+                    </select>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; width: 320px;">
+                        <button class="mode-btn" data-mode="survival" onclick="chooseGameMode('survival')" style="padding: 10px 4px; cursor: pointer; background: #2196F3; color: white; border: 2px solid #fff; border-radius: 5px;">Survival</button>
+                        <button class="mode-btn" data-mode="creative" onclick="chooseGameMode('creative')" style="padding: 10px 4px; cursor: pointer; background: #333; color: white; border: 2px solid #777; border-radius: 5px;">Creative</button>
                     </div>
 	                    <button onclick="startGameFromMenu()" style="padding: 20px 50px; font-size: 26px; cursor: pointer; background-color: #4CAF50; border: none; border-radius: 8px; color: white; font-weight: bold; width: 320px; box-shadow: 0 6px 10px rgba(0,0,0,0.4); transition: transform 0.1s;">Start Game</button>
                 </div>
@@ -940,6 +949,7 @@
         }
 
         let isGameStarted = false;
+        let gameMode = 'survival';
         let bgmOscillators = [];
         let bgmGainNode = null;
 
@@ -1347,8 +1357,31 @@
             return (el && el.value) ? el.value : (terrainChoice || selectedTerrain || 'plains');
         }
 
+        function setGameModeChoice(mode) {
+            gameMode = mode === 'creative' ? 'creative' : 'survival';
+            const modeSelect = document.getElementById('mode-select');
+            if (modeSelect) modeSelect.value = gameMode;
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                const active = btn.dataset.mode === gameMode;
+                btn.style.background = active ? (gameMode === 'creative' ? '#9C27B0' : '#2196F3') : '#333';
+                btn.style.borderColor = active ? '#fff' : '#777';
+            });
+            updateHotbarUI();
+            updateInventoryCounts();
+            updateHUD();
+        }
+
+        window.setGameMode = function(mode) {
+            setGameModeChoice(mode);
+        };
+
+        window.chooseGameMode = function(mode) {
+            setGameModeChoice(mode);
+        };
+
         window.startGameFromMenu = function() {
             setTerrainChoice(getTerrainFromSelect('terrain-select'));
+            setGameModeChoice(document.getElementById('mode-select')?.value || gameMode);
             window.startNewGame(true, terrainChoice);
         };
 
@@ -1396,7 +1429,8 @@
                 playerInventory: playerInventory,
                 worldSpawnPoint: worldSpawnPoint,
                 homeSpawnPoint: homeSpawnPoint,
-                selectedTerrain: selectedTerrain
+                selectedTerrain: selectedTerrain,
+                gameMode: gameMode
             };
             const blob = new Blob([JSON.stringify(saveData)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
@@ -1455,6 +1489,7 @@
                     seed = data.seed;
                     selectedTerrain = data.selectedTerrain || selectedTerrain || 'plains';
                     setTerrainChoice(selectedTerrain);
+                    setGameModeChoice(data.gameMode || 'survival');
                     camera.position.set(data.camera.x, data.camera.y, data.camera.z);
                     if (data.camera.rx !== undefined) {
                         camera.rotation.set(data.camera.rx, data.camera.ry, data.camera.rz);
@@ -1909,6 +1944,21 @@
             return TOOL_ITEMS.includes(id);
         }
 
+        function isCreativeMode() {
+            return gameMode === 'creative';
+        }
+
+        function hasInventoryItem(id) {
+            return isCreativeMode() || isToolItem(id) || (playerInventory[id] || 0) > 0;
+        }
+
+        function consumeInventoryItem(id, amount = 1) {
+            if (isCreativeMode() || isToolItem(id)) return true;
+            if ((playerInventory[id] || 0) < amount) return false;
+            playerInventory[id] -= amount;
+            return true;
+        }
+
         // --- 合成系统 ---
         let craftingGrid = [0, 0, 0, 0];
         let craftingOutput = { id: 0, count: 0 };
@@ -2000,12 +2050,11 @@
         window.craftSlotClick = function(index) {
             if (craftingGrid[index] !== 0) {
                 let id = craftingGrid[index];
-                playerInventory[id] = (playerInventory[id] || 0) + 1;
+                if (!isCreativeMode()) playerInventory[id] = (playerInventory[id] || 0) + 1;
                 craftingGrid[index] = 0;
             } else if (currentBlock && currentBlock !== 0) {
-                let isTool = isToolItem(currentBlock);
-                if (isTool || (playerInventory[currentBlock] || 0) > 0) {
-                    if (!isTool) playerInventory[currentBlock]--;
+                if (hasInventoryItem(currentBlock)) {
+                    consumeInventoryItem(currentBlock);
                     craftingGrid[index] = currentBlock;
                 }
             }
@@ -2056,7 +2105,7 @@
                     let qty = document.createElement('div');
                     qty.className = 'inv-qty';
                     qty.style = 'position: absolute; bottom: 2px; right: 2px; font-size: 10px; text-shadow: 1px 1px 0 #000;';
-                    if (isTool) {
+                    if (isCreativeMode() || isTool) {
                         qty.innerText = '∞';
                         qty.style.color = '#00FF00';
                     } else {
@@ -2083,7 +2132,7 @@
                 let matId = mapping[id];
                 let qtyEl = document.getElementById('hotbar-qty-' + id);
                 if (qtyEl) {
-                    if (isToolItem(matId)) {
+                    if (isCreativeMode() || isToolItem(matId)) {
                         qtyEl.innerText = '∞';
                         qtyEl.style.color = '#00FF00';
                     } else {
@@ -2112,12 +2161,13 @@
             for (let i = 0; i < maxHunger; i++) {
                 const leg = document.createElement('div');
                 leg.className = 'hunger';
-                leg.innerText = i < hunger ? '🍗' : '🦴';
+                leg.innerText = isCreativeMode() ? '∞' : (i < hunger ? '🍗' : '🦴');
                 hungerBar.appendChild(leg);
             }
         }
         
         function takeDamage(amount) {
+            if (isCreativeMode()) return;
             if (!isGameStarted || isRespawning) return;
             health -= amount;
             if (health < 0) health = 0;
@@ -2229,11 +2279,11 @@
         }
 
         function eatCookedMeat() {
-            if ((playerInventory[40] || 0) <= 0) {
+            if (!hasInventoryItem(40)) {
                 showToast("No cooked meat to eat.");
                 return false;
             }
-            playerInventory[40]--;
+            consumeInventoryItem(40);
             health = maxHealth;
             hunger = maxHunger;
             foodProtectionTimer = DAY_SECONDS;
@@ -4828,8 +4878,8 @@
                     // 左键挖方块或攻击
                     // 处理吃东西/攻击逻辑
                     if (currentBlock === 39) { // 拿着生肉左键
-                        if (playerInventory[39] > 0) {
-                            playerInventory[39]--;
+                        if (hasInventoryItem(39)) {
+                            consumeInventoryItem(39);
                             updateHotbarUI();
                             updateInventoryCounts();
                             restoreHunger(2); // 生肉也能维持生活，但比烤肉少
@@ -4876,8 +4926,8 @@
                                 }
                             }
                             if (hasTorch) {
-                                if (playerInventory[39] > 0) {
-                                    playerInventory[39]--; // 消耗生肉
+                                if (hasInventoryItem(39)) {
+                                    consumeInventoryItem(39);
                                     playerInventory[40] = (playerInventory[40] || 0) + 1; // 获得烤肉
                                     updateHotbarUI();
                                     updateInventoryCounts();
@@ -5005,15 +5055,12 @@
                     
                     if (!inPlayer || matId === 8 || matId === 17) { 
                         // 检查库存 (如果是工具则不需要)
-                        let isTool = isToolItem(matId);
-                        if (!isTool) {
-                            if ((playerInventory[matId] || 0) <= 0) {
-                                showToast("Not enough items. Mine some more first.");
-                                return;
-                            }
-                            playerInventory[matId]--;
-                            updateHotbarUI();
+                        if (!hasInventoryItem(matId)) {
+                            showToast("Not enough items. Mine some more first.");
+                            return;
                         }
+                        consumeInventoryItem(matId);
+                        updateHotbarUI();
 
                         // 播放放置音效
                         if (matId === 6) {
@@ -5382,6 +5429,7 @@
             document.getElementById('coord-y').innerText = `Y: ${Math.round(camera.position.y)}`;
             document.getElementById('coord-z').innerText = `Z: ${Math.round(camera.position.z)}`;
             document.getElementById('terrain-display').innerText = `Terrain: ${getTerrainName(selectedTerrain)}`;
+            document.getElementById('mode-display').innerText = `Mode: ${isCreativeMode() ? 'Creative' : 'Survival'}`;
 
             // 第三人称摄像机跟随逻辑
             if (isThirdPerson && localPlayerModel) {
@@ -5402,7 +5450,7 @@
             const playerDelta = Math.min(delta, MAX_PLAYER_STEP);
             prevTime = time;
 
-            if (isGameStarted) {
+            if (isGameStarted && !isCreativeMode()) {
                 let isMoving = false;
                 if (foodProtectionTimer > 0) {
                     foodProtectionTimer = Math.max(0, foodProtectionTimer - delta);
@@ -5430,6 +5478,11 @@
                 } else {
                     starvationTimer = 0; // 只要吃了饭（有饥饿值），就不算挨饿
                 }
+            } else if (isGameStarted && isCreativeMode()) {
+                health = maxHealth;
+                hunger = maxHunger;
+                foodProtectionTimer = 0;
+                resetFoodTimers();
             }
 
             // Daylight lasts exactly 10 minutes. Night lasts another 10 minutes if the player does not sleep.
@@ -5457,12 +5510,12 @@
                     scene.fog.near = 0.1;
                     scene.fog.far = 15;
                 }
-                oxygen -= delta;
+                if (!isCreativeMode()) oxygen -= delta;
                 document.getElementById('oxygen-ui').style.display = 'block';
                 let mins = Math.floor(Math.max(0, oxygen) / 60);
                 let secs = Math.floor(Math.max(0, oxygen) % 60);
                 document.getElementById('oxygen-ui').innerText = `Oxygen: ${mins}:${secs.toString().padStart(2, '0')}`;
-                if (oxygen <= 0) {
+                if (oxygen <= 0 && !isCreativeMode()) {
                     // 疯狂掉血
                     takeDamage(1 * delta); // 差不多1秒掉一滴血
                 }
@@ -5529,13 +5582,13 @@
                 } else {
                     dirLight.intensity = 0.1; // 微弱月光
                     
-                    if (Math.random() < 0.02 && zombies.length < 10) spawnZombie();
-                    if (Math.random() < 0.01 && creepers.length < 5) spawnCreeper();
+                    if (!isCreativeMode() && Math.random() < 0.02 && zombies.length < 10) spawnZombie();
+                    if (!isCreativeMode() && Math.random() < 0.01 && creepers.length < 5) spawnCreeper();
                 }
             } else {
                 // 月球上一直刷怪，没有动物和村民
-                if (Math.random() < 0.02 && zombies.length < 10) spawnZombie();
-                if (Math.random() < 0.01 && creepers.length < 5) spawnCreeper();
+                if (!isCreativeMode() && Math.random() < 0.02 && zombies.length < 10) spawnZombie();
+                if (!isCreativeMode() && Math.random() < 0.01 && creepers.length < 5) spawnCreeper();
             }
 
             if (isGameStarted) {
