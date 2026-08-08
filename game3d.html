@@ -236,26 +236,28 @@
             <h2 style="margin-top: 0; color: #4CAF50;">Multiplayer</h2>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 18px;">
-                <button id="host-mode-btn" onclick="setMultiplayerMode('host')" style="padding: 14px; cursor: pointer; background: #4CAF50; border: 2px solid #fff; border-radius: 5px; color: white; font-weight: bold; font-size: 16px;">Create as Host</button>
-                <button id="guest-mode-btn" onclick="setMultiplayerMode('guest')" style="padding: 14px; cursor: pointer; background: #333; border: 2px solid #777; border-radius: 5px; color: white; font-weight: bold; font-size: 16px;">Join as Guest</button>
+                <button id="host-mode-btn" onclick="setMultiplayerMode('host')" style="padding: 14px; cursor: pointer; background: #4CAF50; border: 2px solid #fff; border-radius: 5px; color: white; font-weight: bold; font-size: 16px;">Create Room</button>
+                <button id="guest-mode-btn" onclick="setMultiplayerMode('guest')" style="padding: 14px; cursor: pointer; background: #333; border: 2px solid #777; border-radius: 5px; color: white; font-weight: bold; font-size: 16px;">Join Room</button>
             </div>
             
             <div id="host-panel" style="background: rgba(255,255,255,0.1); padding: 16px; border-radius: 6px; margin-bottom: 18px; text-align: left;">
-                <p style="margin: 0 0 8px 0; font-size: 16px; color: #ccc;">My server address</p>
+                <p style="margin: 0 0 8px 0; font-size: 16px; color: #ccc;">My room code</p>
                 <div style="display: flex; gap: 8px; align-items: center;">
-                    <input type="text" id="my-ip-display" readonly value="Loading..." style="flex: 1; padding: 12px; font-size: 20px; font-weight: bold; color: #FFEB3B; background: rgba(0,0,0,0.45); border: 2px solid #777; border-radius: 5px; user-select: all;">
-                    <button onclick="copyMyServerAddress()" style="padding: 12px 14px; cursor: pointer; background: #666; border: none; border-radius: 5px; color: white; font-weight: bold;">Copy</button>
+                    <input type="text" id="room-code-display" readonly value="Click Create Room" style="flex: 1; padding: 12px; font-size: 20px; font-weight: bold; color: #FFEB3B; background: rgba(0,0,0,0.45); border: 2px solid #777; border-radius: 5px; user-select: all;">
+                    <button onclick="copyRoomCode()" style="padding: 12px 14px; cursor: pointer; background: #666; border: none; border-radius: 5px; color: white; font-weight: bold;">Copy</button>
                 </div>
-                <p style="margin: 12px 0 0 0; color: #bbb; font-size: 14px;">Give this address to your guest. When they send an invite, you choose Enter Game or Do Not Enter.</p>
+                <button id="create-room-btn" onclick="createRoom()" style="margin: 12px auto 0; padding: 15px; width: 100%; font-size: 20px; cursor: pointer; background-color: #4CAF50; border: none; border-radius: 5px; color: white; font-weight: bold; display: block; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">Create Room</button>
+                <button id="enter-room-btn" onclick="enterCreatedRoom()" style="margin: 10px auto 0; padding: 14px; width: 100%; font-size: 18px; cursor: pointer; background-color: #2196F3; border: none; border-radius: 5px; color: white; font-weight: bold; display: none;">Enter Room</button>
+                <p style="margin: 12px 0 0 0; color: #bbb; font-size: 14px;">Copy this room code and send it to your friend. They can paste it into Join Room.</p>
             </div>
 
             <div id="guest-panel" style="display: none; background: rgba(255,255,255,0.08); padding: 16px; border-radius: 6px; margin-bottom: 16px; text-align: left;">
-                <label for="server-ip" style="display: block; margin-bottom: 8px; font-size: 16px; color: #ccc;">Host server address</label>
-                <input type="text" id="server-ip" placeholder="Type host address here" autocomplete="off" autocapitalize="off" spellcheck="false" style="width: 100%; box-sizing: border-box; padding: 12px; font-size: 18px; text-align: center; border-radius: 5px; border: none; background: #fff;">
-                <button id="connect-friend-btn" onclick="connectToServer()" style="margin: 12px auto 0; padding: 15px; width: 100%; font-size: 20px; cursor: pointer; background-color: #2196F3; border: none; border-radius: 5px; color: white; font-weight: bold; display: block; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">Ask to Join Host</button>
+                <label for="room-code-input" style="display: block; margin-bottom: 8px; font-size: 16px; color: #ccc;">Friend's room code</label>
+                <input type="text" id="room-code-input" placeholder="Paste room code here" autocomplete="off" autocapitalize="off" spellcheck="false" style="width: 100%; box-sizing: border-box; padding: 12px; font-size: 18px; text-align: center; border-radius: 5px; border: none; background: #fff;">
+                <button id="join-room-btn" onclick="joinRoom()" style="margin: 12px auto 0; padding: 15px; width: 100%; font-size: 20px; cursor: pointer; background-color: #2196F3; border: none; border-radius: 5px; color: white; font-weight: bold; display: block; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">Join Room</button>
             </div>
             
-            <p id="multiplayer-status" style="min-height: 24px; color: #ddd; font-size: 15px; margin: 12px 0;">Host mode: share your address with a guest.</p>
+            <p id="multiplayer-status" style="min-height: 24px; color: #ddd; font-size: 15px; margin: 12px 0;">Create a room, copy the code, and send it to your friend.</p>
             <button onclick="hideMultiplayerMenu()" style="margin: 10px auto 0; padding: 12px; width: 100%; font-size: 18px; cursor: pointer; background-color: #f44336; border: none; border-radius: 5px; color: white; font-weight: bold; display: block;">Back</button>
         </div>
 
@@ -1350,6 +1352,187 @@
             } catch (err) {
                 clearPendingInvite("Could not create the connection.");
             }
+        };
+
+        let currentRoomCode = '';
+        let currentRoomUrl = '';
+
+        function normalizeRoomDigits(value) {
+            return (value || '').replace(/\D/g, '');
+        }
+
+        function makeRoomCodeFromAddress(address) {
+            const clean = (address || '').trim().replace(/^wss?:\/\//, '').replace(/\/$/, '');
+            const [hostPart, portPart] = clean.split(':');
+            const port = String(portPart || '8081').padStart(5, '0');
+            const octets = hostPart.split('.');
+            if (octets.length === 4 && octets.every(n => /^\d+$/.test(n))) {
+                return `${octets.map(n => String(Math.max(0, Math.min(255, Number(n)))).padStart(3, '0')).join('.')}.${port}`;
+            }
+            return clean;
+        }
+
+        function parseRoomCodeToAddress(code) {
+            const raw = (code || '').trim();
+            if (!raw) return '';
+            if (/^wss?:\/\//.test(raw) || raw.includes(':') || /[a-zA-Z]/.test(raw)) {
+                return raw;
+            }
+
+            const digits = normalizeRoomDigits(raw);
+            if (digits.length < 12) return raw;
+            const ipParts = [
+                Number(digits.slice(0, 3)),
+                Number(digits.slice(3, 6)),
+                Number(digits.slice(6, 9)),
+                Number(digits.slice(9, 12))
+            ];
+            if (ipParts.some(n => !Number.isFinite(n) || n < 0 || n > 255)) return raw;
+            const portDigits = digits.slice(12);
+            const port = portDigits ? Number(portDigits) : 8081;
+            return `${ipParts.join('.')}:${Number.isFinite(port) && port > 0 ? port : 8081}`;
+        }
+
+        function setRoomCode(value) {
+            currentRoomCode = value || '';
+            const el = document.getElementById('room-code-display');
+            if (el) el.value = currentRoomCode || 'Click Create Room';
+        }
+
+        function setupRoomCodeInput() {
+            const input = document.getElementById('room-code-input');
+            if (!input || input.dataset.ready === 'true') return;
+            input.dataset.ready = 'true';
+            input.addEventListener('pointerdown', (e) => e.stopPropagation());
+            input.addEventListener('mousedown', (e) => e.stopPropagation());
+            input.addEventListener('click', (e) => {
+                e.stopPropagation();
+                input.focus();
+            });
+            input.addEventListener('keydown', (e) => e.stopPropagation());
+            input.addEventListener('keyup', (e) => e.stopPropagation());
+            input.addEventListener('input', () => {
+                input.value = input.value.trim();
+            });
+        }
+
+        function beginRoomConnection(url, role) {
+            if (!url) {
+                setMultiplayerStatus("Room code is empty.");
+                return;
+            }
+            if (ws && ws.readyState === WebSocket.OPEN) ws.close();
+            const socket = new WebSocket(url);
+            attachMultiplayerSocket(socket);
+            const buttonId = role === 'host' ? 'create-room-btn' : 'join-room-btn';
+            const btn = document.getElementById(buttonId);
+            if (btn) btn.disabled = true;
+            setMultiplayerStatus(role === 'host' ? "Creating room..." : "Joining room...");
+
+            socket.onopen = () => {
+                ws = socket;
+                if (btn) btn.disabled = false;
+                document.getElementById('multiplayer-menu').style.display = 'none';
+                document.getElementById('start-menu').style.display = 'none';
+                showToast(role === 'host' ? "Room created. Waiting for friend." : "Joined room.");
+                window.startNewGame(false);
+            };
+            socket.onerror = () => {
+                if (btn) btn.disabled = false;
+                setMultiplayerStatus("Could not connect. Make sure the room server is running.");
+                showToast("Could not connect to room.");
+            };
+            socket.onclose = () => {
+                if (btn) btn.disabled = false;
+                if (ws === socket && isGameStarted) showToast("Disconnected from room.");
+            };
+        }
+
+        window.setMultiplayerMode = function(mode) {
+            multiplayerMode = mode === 'guest' ? 'guest' : 'host';
+            const hostPanel = document.getElementById('host-panel');
+            const guestPanel = document.getElementById('guest-panel');
+            const hostBtn = document.getElementById('host-mode-btn');
+            const guestBtn = document.getElementById('guest-mode-btn');
+            if (hostPanel) hostPanel.style.display = multiplayerMode === 'host' ? 'block' : 'none';
+            if (guestPanel) guestPanel.style.display = multiplayerMode === 'guest' ? 'block' : 'none';
+            if (hostBtn) {
+                hostBtn.style.background = multiplayerMode === 'host' ? '#4CAF50' : '#333';
+                hostBtn.style.borderColor = multiplayerMode === 'host' ? '#fff' : '#777';
+            }
+            if (guestBtn) {
+                guestBtn.style.background = multiplayerMode === 'guest' ? '#2196F3' : '#333';
+                guestBtn.style.borderColor = multiplayerMode === 'guest' ? '#fff' : '#777';
+            }
+            setMultiplayerStatus(multiplayerMode === 'host'
+                ? "Create a room, copy the code, and send it to your friend."
+                : "Paste your friend's room code, then join.");
+            if (multiplayerMode === 'guest') setTimeout(setupRoomCodeInput, 0);
+        };
+
+        window.showMultiplayerMenu = function() {
+            document.getElementById('start-menu').style.display = 'none';
+            document.getElementById('multiplayer-menu').style.display = 'block';
+            setupRoomCodeInput();
+            setMultiplayerMode('host');
+            setRoomCode(currentRoomCode);
+        };
+
+        window.hideMultiplayerMenu = function() {
+            document.getElementById('multiplayer-menu').style.display = 'none';
+            document.getElementById('start-menu').style.display = 'flex';
+        };
+
+        window.copyRoomCode = function() {
+            const input = document.getElementById('room-code-display');
+            if (!input) return;
+            input.select();
+            const code = input.value;
+            navigator.clipboard?.writeText(code).then(() => {
+                setMultiplayerStatus("Room code copied.");
+            }).catch(() => {
+                setMultiplayerStatus("Room code selected. Press Copy on your keyboard.");
+            });
+        };
+
+        window.createRoom = function() {
+            setMultiplayerMode('host');
+            setMultiplayerStatus("Making room code...");
+            const enterBtn = document.getElementById('enter-room-btn');
+            if (enterBtn) enterBtn.style.display = 'none';
+            const fallbackHost = location.hostname && location.hostname !== 'localhost' ? location.hostname : '127.0.0.1';
+            fetch('https://api.ipify.org?format=json')
+                .then(res => res.json())
+                .then(data => data.ip || fallbackHost)
+                .catch(() => fallbackHost)
+                .then(host => {
+                    const address = `${host}:8081`;
+                    currentRoomUrl = buildWsUrl(address);
+                    setRoomCode(makeRoomCodeFromAddress(address));
+                    if (enterBtn) enterBtn.style.display = 'block';
+                    setMultiplayerStatus("Room code ready. Copy it, send it to your friend, then enter the room.");
+                });
+        };
+
+        window.enterCreatedRoom = function() {
+            if (!currentRoomUrl) {
+                setMultiplayerStatus("Create a room first.");
+                return;
+            }
+            beginRoomConnection(currentRoomUrl, 'host');
+        };
+
+        window.joinRoom = function() {
+            setMultiplayerMode('guest');
+            const input = document.getElementById('room-code-input');
+            const code = input ? input.value.trim() : '';
+            if (!code) {
+                setMultiplayerStatus("Paste a room code first.");
+                return;
+            }
+            const address = parseRoomCodeToAddress(code);
+            const url = buildWsUrl(address);
+            beginRoomConnection(url, 'guest');
         };
 
         function getTerrainFromSelect(selectId) {
