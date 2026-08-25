@@ -115,12 +115,16 @@
             <div class="slot" id="inv-15" onclick="selectSlot(15)">Sand</div>
             <div class="slot" id="inv-16" onclick="selectSlot(16)">Water</div>
             <div class="slot" id="inv-17" onclick="selectSlot(17)">Kelp</div>
+            <div class="slot" id="inv-33" onclick="selectSlot(33)">Lava</div>
+            <div class="slot" id="inv-34" onclick="selectSlot(34)">Obsidian</div>
         </div>
         <div id="tab-life" class="slot-container" style="display:none;">
             <div class="slot" id="inv-8" onclick="selectSlot(8)">Crafting Table</div>
             <div class="slot" id="inv-9" onclick="selectSlot(9)">Furnace</div>
             <div class="slot" id="inv-10" onclick="selectSlot(10)">Bed</div>
             <div class="slot" id="inv-11" onclick="selectSlot(11)">Torch</div>
+            <div class="slot" id="inv-35" onclick="selectSlot(35)">Bucket</div>
+            <div class="slot" id="inv-36" onclick="selectSlot(36)">Shrink Potion</div>
         </div>
         <div id="tab-weapon" class="slot-container" style="display:none;">
             <div class="slot" id="inv-24" onclick="selectSlot(24)">Sword</div>
@@ -729,7 +733,49 @@
                     ctx.fillRect(Math.random()*64, Math.random()*64, 2, 2);
                 }
             } else if (type === 'water') {
-                ctx.fillStyle = 'rgba(0, 105, 148, 0.7)'; ctx.fillRect(0,0,64,64);
+                ctx.fillStyle = 'rgba(24, 118, 210, 0.72)'; ctx.fillRect(0,0,64,64);
+                ctx.fillStyle = 'rgba(130, 200, 255, 0.45)';
+                for(let i=0; i<64; i+=16) {
+                    ctx.fillRect(i, 8 + (i % 32), 16, 4);
+                    ctx.fillRect(8 + (i % 24), i, 20, 3);
+                }
+            } else if (type === 'lava') {
+                ctx.fillStyle = '#ff6d00'; ctx.fillRect(0,0,64,64);
+                for(let x=0; x<64; x+=4) {
+                    for(let y=0; y<64; y+=4) {
+                        const r = Math.random();
+                        ctx.fillStyle = r < 0.22 ? '#fff176' : (r < 0.58 ? '#ffb300' : '#bf360c');
+                        ctx.fillRect(x,y,4,4);
+                    }
+                }
+            } else if (type === 'obsidian') {
+                ctx.fillStyle = '#12091f'; ctx.fillRect(0,0,64,64);
+                ctx.fillStyle = '#2e174a';
+                for(let i=0; i<28; i++) ctx.fillRect(Math.random()*60, Math.random()*60, 4, 4);
+                ctx.fillStyle = '#08040d';
+                ctx.fillRect(0, 0, 64, 4);
+                ctx.fillRect(0, 60, 64, 4);
+            } else if (type === 'bucket') {
+                ctx.clearRect(0,0,64,64);
+                ctx.fillStyle = '#b0bec5';
+                ctx.fillRect(14, 18, 36, 34);
+                ctx.fillStyle = '#78909c';
+                ctx.fillRect(18, 24, 28, 24);
+                ctx.strokeStyle = '#eceff1';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.arc(32, 20, 18, Math.PI, 0);
+                ctx.stroke();
+            } else if (type === 'shrink_potion') {
+                ctx.clearRect(0,0,64,64);
+                ctx.fillStyle = '#90caf9';
+                ctx.fillRect(24, 8, 16, 14);
+                ctx.fillStyle = '#7b1fa2';
+                ctx.fillRect(18, 22, 28, 34);
+                ctx.fillStyle = '#ce93d8';
+                ctx.fillRect(22, 28, 20, 18);
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(28, 32, 8, 8);
             } else if (type === 'kelp') {
                 ctx.clearRect(0,0,64,64);
                 ctx.fillStyle = '#2E8B57';
@@ -879,6 +925,8 @@
 
         const matSand = new THREE.MeshLambertMaterial({ map: createTexture('sand') });
         const matWater = new THREE.MeshLambertMaterial({ map: createTexture('water'), transparent: true, opacity: 0.7 });
+        const matLava = new THREE.MeshLambertMaterial({ map: createTexture('lava'), emissive: 0xff3d00, emissiveIntensity: 0.55 });
+        const matObsidian = new THREE.MeshLambertMaterial({ map: createTexture('obsidian') });
         const matKelp = new THREE.MeshLambertMaterial({ map: createTexture('kelp'), transparent: true, alphaTest: 0.5 });
         const matTallGrass = new THREE.MeshLambertMaterial({ map: createTexture('tall_grass'), transparent: true, alphaTest: 0.5 });
         const matRail = new THREE.MeshLambertMaterial({ map: createTexture('rail'), transparent: true, alphaTest: 0.5 });
@@ -899,6 +947,8 @@
         const matDiamondOre = new THREE.MeshLambertMaterial({ map: createTexture('diamond_ore') });
         const matRawMeat = new THREE.MeshLambertMaterial({ map: createTexture('raw_meat') });
         const matCookedMeat = new THREE.MeshLambertMaterial({ map: createTexture('cooked_meat') });
+        const matBucket = new THREE.MeshLambertMaterial({ map: createTexture('bucket'), transparent: true, alphaTest: 0.5 });
+        const matShrinkPotion = new THREE.MeshLambertMaterial({ map: createTexture('shrink_potion'), transparent: true, alphaTest: 0.5 });
 
         const materials = {
             1: matGrass, 2: matDirt, 3: matStone, 4: matWood, 5: matLeaves,
@@ -911,7 +961,8 @@
             28: matRedstone, 29: matMinecartItem, 30: matLever, 31: matLeverOn, 32: matEnchant,
             33: matSword, 34: matPickaxe, 35: matGun,
             36: matIronOre, 37: matGoldOre, 38: matDiamondOre,
-            39: matRawMeat, 40: matCookedMeat, 41: matScanner, 42: matTallGrass
+            39: matRawMeat, 40: matCookedMeat, 41: matScanner, 42: matTallGrass,
+            43: matLava, 44: matObsidian, 45: matBucket, 46: matShrinkPotion
         };
 
         const boxGeo = new THREE.BoxGeometry(1, 1, 1);
@@ -1609,6 +1660,9 @@
                 chunkScanYRanges: Array.from(chunkScanYRanges.entries()),
                 dayTime: dayTime,
                 oxygen: oxygen,
+                currentDimension: currentDimension,
+                playerScale: playerScale,
+                shrinkTimer: shrinkTimer,
                 playerInventory: playerInventory,
                 worldSpawnPoint: worldSpawnPoint,
                 homeSpawnPoint: homeSpawnPoint,
@@ -1673,6 +1727,9 @@
                     selectedTerrain = data.selectedTerrain || selectedTerrain || 'plains';
                     setTerrainChoice(selectedTerrain);
                     setGameModeChoice(data.gameMode || 'survival');
+                    currentDimension = data.currentDimension || 'overworld';
+                    playerScale = data.playerScale || 1;
+                    shrinkTimer = data.shrinkTimer || 0;
                     camera.position.set(data.camera.x, data.camera.y, data.camera.z);
                     if (data.camera.rx !== undefined) {
                         camera.rotation.set(data.camera.rx, data.camera.ry, data.camera.rz);
@@ -2062,6 +2119,8 @@
 
         let ridingMinecart = null;
         let oxygen = 20;
+        let playerScale = 1;
+        let shrinkTimer = 0;
         let health = 9;
         const maxHealth = 9;
         let hunger = 9;
@@ -2158,7 +2217,9 @@
             { ing: { 23: 1, 3: 1, 4: 1 }, out: 28, count: 1 }, // 沙子+石头+木头 -> 红石
             { ing: { 28: 1, 4: 1 }, out: 21, count: 1 },       // 红石+木头 -> TNT
             { ing: { 28: 1, 3: 1, 4: 1 }, out: 22, count: 1 }, // 红石+石头+木头 -> 核弹
-            { ing: { 3: 1, 36: 1 }, out: 33, count: 1 }        // 石头+铁矿 -> 剑
+            { ing: { 3: 1, 36: 1 }, out: 33, count: 1 },       // 石头+铁矿 -> 剑
+            { ing: { 36: 2 }, out: 45, count: 1 },             // 铁矿x2 -> 桶
+            { ing: { 36: 2, 23: 3 }, out: 46, count: 1 }       // 铁矿x2+沙子x3 -> 变小药水
         ];
         
         function getBlockName(id) {
@@ -2167,7 +2228,8 @@
                 12:'Crafting Table', 13:'Furnace', 14:'Bed', 16:'Torch', 17:'Iron Door', 21:'TNT',
                 22:'Nuke', 23:'Sand', 24:'Water', 25:'Kelp', 26:'Rail', 27:'Powered Rail',
                 28:'Redstone', 29:'Minecart', 30:'Lever', 32:'Enchanting Table', 33:'Sword', 34:'Pickaxe', 35:'Gun',
-                36:'Iron Ore', 37:'Gold Ore', 38:'Sapphire', 39:'Raw Meat', 40:'Cooked Meat', 41:'Scanner', 42:'Grass'
+                36:'Iron Ore', 37:'Gold Ore', 38:'Sapphire', 39:'Raw Meat', 40:'Cooked Meat', 41:'Scanner', 42:'Grass',
+                43:'Lava', 44:'Obsidian', 45:'Bucket', 46:'Shrink Potion'
             };
             return names[id] || '';
         }
@@ -2265,16 +2327,21 @@
             }
         };
 
-        function updateInventoryCounts() {
-            const mapping = {
+        function getInventorySlotMapping() {
+            return {
                  1:2, 2:3, 3:4, 4:5, 5:6, 
                  6:7, 7:8, 8:12, 9:13, 10:14, 
                  11:16, 12:17, 13:21, 14:22, 15:23, 
                  16:24, 17:25, 18:26, 19:27, 20:28, 
                  21:29, 22:30, 23:32, 24:33, 25:34, 26:35,
-                 27:36, 28:37, 29:38, 30:39, 31:40, 32:41
+                 27:36, 28:37, 29:38, 30:39, 31:40, 32:41,
+                 33:43, 34:44, 35:45, 36:46
              };
-             for(let i=1; i<=32; i++) {
+        }
+
+        function updateInventoryCounts() {
+            const mapping = getInventorySlotMapping();
+             for(let i=1; i<=36; i++) {
                  let el = document.getElementById('inv-' + i);
                 if(el) {
                     let id = mapping[i];
@@ -2303,14 +2370,7 @@
         
         function updateHotbarUI() {
             const hotbarIds = [1, 2, 3, 4, 5, 13, 7, 8, 32]; // 快捷栏显示的格子ID
-            const mapping = {
-                1:2, 2:3, 3:4, 4:5, 5:6, 
-                6:7, 7:8, 8:12, 9:13, 10:14, 
-                11:16, 12:17, 13:21, 14:22, 15:23, 
-                16:24, 17:25, 18:26, 19:27, 20:28, 
-                21:29, 22:30, 23:32, 24:33, 25:34, 26:35,
-                27:36, 28:37, 29:38, 30:39, 31:40, 32:41
-            };
+            const mapping = getInventorySlotMapping();
             for(let id of hotbarIds) {
                 let matId = mapping[id];
                 let qtyEl = document.getElementById('hotbar-qty-' + id);
@@ -2479,6 +2539,21 @@
             return true;
         }
 
+        function drinkShrinkPotion() {
+            if (!hasInventoryItem(SHRINK_POTION_ID)) {
+                showToast("No shrink potion to drink.");
+                return false;
+            }
+            consumeInventoryItem(SHRINK_POTION_ID);
+            playerScale = 0.25;
+            shrinkTimer = 240;
+            updateHotbarUI();
+            updateInventoryCounts();
+            playSound('pickup');
+            showToast("Shrink potion used. Tiny mode lasts 4 minutes.");
+            return true;
+        }
+
         function showCookedMeatPrompt() {
             const prompt = document.getElementById('cooked-meat-ui');
             if (!prompt) return;
@@ -2548,7 +2623,7 @@
                 17: 0xb8c0c8, 21: 0xcc2222, 22: 0xdddd55, 23: 0xd9c27a, 24: 0x3377cc,
                 25: 0x235f2d, 26: 0x8f8f8f, 27: 0xd6b33d, 28: 0xaa1111, 29: 0x606060,
                 30: 0x8b5a2b, 32: 0x191020, 36: 0xb8b0a8, 37: 0xffd43b, 38: 0x28d7ff,
-                42: 0x63b346
+                42: 0x63b346, 43: 0xff6d00, 44: 0x16091f, 45: 0xb0bec5, 46: 0x9c27b0
             };
             return colors[blockType] || 0x8b8b8b;
         }
@@ -2624,7 +2699,7 @@
 
         function updateDroppedItems(delta) {
             const playerPos = camera.position;
-            const playerFeetY = playerPos.y - PLAYER_HEIGHT;
+            const playerFeetY = playerPos.y - getPlayerHeight();
             const playerTopY = playerPos.y + 0.35;
             for (let i = droppedItems.length - 1; i >= 0; i--) {
                 const drop = droppedItems[i];
@@ -2638,13 +2713,13 @@
                 const closestPlayerY = Math.max(playerFeetY - 0.25, Math.min(playerTopY, drop.mesh.position.y));
                 const verticalDistance = Math.abs(drop.mesh.position.y - closestPlayerY);
                 const bodyDistance = Math.sqrt(horizontalDistance * horizontalDistance + verticalDistance * verticalDistance);
-                if (bodyDistance <= 1.35) {
+                if (bodyDistance <= 1.05) {
                     collectDroppedItem(drop, i);
                     continue;
                 }
 
                 const toPlayer = new THREE.Vector3(playerPos.x - drop.mesh.position.x, (playerFeetY + 0.7) - drop.mesh.position.y, playerPos.z - drop.mesh.position.z);
-                if (bodyDistance <= 1.75) {
+                if (bodyDistance <= 1.25) {
                     toPlayer.normalize();
                     drop.velocity.addScaledVector(toPlayer, 22 * delta);
                     drop.grounded = false;
@@ -2701,6 +2776,10 @@
         const SCANNER_SCAN_SIZE = 200;
         const SCANNER_SCAN_RADIUS = Math.floor(SCANNER_SCAN_SIZE / 2);
         const SCANNER_FILL_DEPTH = SCANNER_SCAN_SIZE;
+        const LAVA_ID = 43;
+        const OBSIDIAN_ID = 44;
+        const BUCKET_ID = 45;
+        const SHRINK_POTION_ID = 46;
         const SEA_LEVEL = 8;
         const WATER_FLOW_PER_FRAME = 8;
         const WATER_FLOW_DRAIN_EVERY = 6;
@@ -2737,6 +2816,7 @@
         const heightCache = new Map(); // 添加高度缓存，极大提升加载速度
         let selectedTerrain = 'plains';
         let terrainChoice = 'plains';
+        let currentDimension = 'overworld';
 
         const TERRAIN_NAMES = {
             plains: 'Plains',
@@ -2840,6 +2920,13 @@
             if (worldMap.has(key)) return worldMap.get(key);
 
             const h = getSurfaceHeight(x, z);
+            if (currentDimension === 'nether') {
+                if (y > h) return 0;
+                if (y <= 4) return LAVA_ID;
+                if (hash3(x, y, z, 44.4) < 0.035 && y < h - 5) return OBSIDIAN_ID;
+                return 3;
+            }
+
             if (y > h) {
                 if (selectedTerrain !== 'moon' && y <= SEA_LEVEL) {
                     if (y < SEA_LEVEL && Math.abs(hash(x * 3.14, z * 2.71)) < 0.1) {
@@ -2883,7 +2970,7 @@
             const key = `${bx},${by},${bz}`;
             if (worldMap.has(key)) {
                 const t = worldMap.get(key);
-                return [0, 6, 7, 8, 9, 10, 11, 16, 17, 18, 19, 20, 24, 25, 26, 27, 28, 30, 31, 42].includes(t);
+                return [0, 6, 7, 8, 9, 10, 11, 16, 17, 18, 19, 20, 24, 25, 26, 27, 28, 30, 31, 42, LAVA_ID].includes(t);
             }
             // 海平面下的天然地形如果没生成，可能是水或者沙子
             if (by <= 12 && by > getSurfaceHeight(bx, bz)) {
@@ -2968,6 +3055,141 @@
             dirtyChunks.add(`${cx},${cz + 1}`);
         }
 
+        function refreshBlockAndNeighbors(x, y, z) {
+            const dirtyChunks = new Set();
+            const cx = Math.floor(x / CHUNK_SIZE);
+            const cz = Math.floor(z / CHUNK_SIZE);
+            dirtyChunks.add(`${cx},${cz}`);
+            dirtyChunks.add(`${cx - 1},${cz}`);
+            dirtyChunks.add(`${cx + 1},${cz}`);
+            dirtyChunks.add(`${cx},${cz - 1}`);
+            dirtyChunks.add(`${cx},${cz + 1}`);
+            addDirtyChunksToQueue(dirtyChunks);
+        }
+
+        function solidifyFluidContact(x, y, z) {
+            const type = getBlock(x, y, z);
+            if (type !== 24 && type !== LAVA_ID) return;
+            const other = type === 24 ? LAVA_ID : 24;
+            const offsets = [[1,0,0], [-1,0,0], [0,0,1], [0,0,-1], [0,1,0], [0,-1,0]];
+            for (let off of offsets) {
+                if (getBlock(x + off[0], y + off[1], z + off[2]) === other) {
+                    setBlock(x, y, z, OBSIDIAN_ID);
+                    setBlock(x + off[0], y + off[1], z + off[2], OBSIDIAN_ID);
+                    showToast("Water and lava formed obsidian.");
+                    return;
+                }
+            }
+        }
+
+        function checkPortalAt(cx, cy, cz) {
+            let count = 0;
+            for (let dx = -1; dx <= 1; dx++) {
+                for (let dz = -1; dz <= 1; dz++) {
+                    if (dx === 0 && dz === 0) continue;
+                    if (getBlock(cx + dx, cy, cz + dz) === 32) count++;
+                }
+            }
+            return count >= 8 && getBlock(cx, cy, cz) === 0;
+        }
+
+        function isNetherPortalCenter(cx, cy, cz) {
+            if (getBlock(cx, cy, cz) !== LAVA_ID) return false;
+            let count = 0;
+            for (let dx = -1; dx <= 1; dx++) {
+                for (let dz = -1; dz <= 1; dz++) {
+                    if (dx === 0 && dz === 0) continue;
+                    if (getBlock(cx + dx, cy, cz + dz) === 32) count++;
+                }
+            }
+            return count >= 8;
+        }
+
+        function tryCreateNetherPortalNear(x, y, z) {
+            for (let dx = -1; dx <= 1; dx++) {
+                for (let dz = -1; dz <= 1; dz++) {
+                    const cx = x + dx;
+                    const cz = z + dz;
+                    if (checkPortalAt(cx, y, cz)) {
+                        setBlock(cx, y, cz, LAVA_ID);
+                        showToast("Nether portal opened.");
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function teleportToDimension(nextDimension) {
+            currentDimension = nextDimension;
+            heightCache.clear();
+            chunkMeshes.forEach(meshes => {
+                for (let type in meshes) {
+                    scene.remove(meshes[type]);
+                    if (meshes[type].geometry) meshes[type].geometry.dispose();
+                }
+            });
+            chunkMeshes.clear();
+            rebuildQueue.clear();
+            chunkQueue.length = 0;
+            lastChunkX = -999;
+            lastChunkZ = -999;
+            const spawnY = getSurfaceHeight(Math.round(camera.position.x), Math.round(camera.position.z)) + 4;
+            camera.position.y = Math.max(spawnY, 12);
+            velocity.set(0, 0, 0);
+            updateChunks(camera.position);
+            showToast(nextDimension === 'nether' ? "Entered the Nether." : "Returned to Overworld.");
+        }
+
+        const railShapes = new Map();
+        function isRailBlockAt(x, y, z) {
+            return getBlock(x, y, z) === 26 || getBlock(x, y, z) === 27;
+        }
+
+        function railConnects(x, y, z, dx, dz) {
+            return isRailBlockAt(x + dx, y, z + dz) ||
+                isRailBlockAt(x + dx, y + 1, z + dz) ||
+                isRailBlockAt(x + dx, y - 1, z + dz);
+        }
+
+        function computeRailShape(x, y, z) {
+            const east = railConnects(x, y, z, 1, 0);
+            const west = railConnects(x, y, z, -1, 0);
+            const south = railConnects(x, y, z, 0, 1);
+            const north = railConnects(x, y, z, 0, -1);
+            let shape = { yaw: 0, pitch: 0, roll: 0, lift: 0 };
+
+            if ((east || west) && !(north || south)) shape.yaw = Math.PI / 2;
+            if ((east || west) && (north || south)) {
+                shape.yaw = east || west ? Math.PI / 4 : 0;
+            }
+            if (east && isRailBlockAt(x + 1, y + 1, z)) { shape.yaw = Math.PI / 2; shape.roll = -Math.PI / 7; shape.lift = 0.12; }
+            else if (west && isRailBlockAt(x - 1, y + 1, z)) { shape.yaw = Math.PI / 2; shape.roll = Math.PI / 7; shape.lift = 0.12; }
+            else if (south && isRailBlockAt(x, y + 1, z + 1)) { shape.yaw = 0; shape.pitch = Math.PI / 7; shape.lift = 0.12; }
+            else if (north && isRailBlockAt(x, y + 1, z - 1)) { shape.yaw = 0; shape.pitch = -Math.PI / 7; shape.lift = 0.12; }
+            return shape;
+        }
+
+        function updateRailShapeAt(x, y, z) {
+            const key = `${x},${y},${z}`;
+            if (!isRailBlockAt(x, y, z)) {
+                railShapes.delete(key);
+                return;
+            }
+            railShapes.set(key, computeRailShape(x, y, z));
+        }
+
+        function updateRailsAround(x, y, z) {
+            for (let dx = -1; dx <= 1; dx++) {
+                for (let dz = -1; dz <= 1; dz++) {
+                    for (let dy = -1; dy <= 1; dy++) {
+                        updateRailShapeAt(x + dx, y + dy, z + dz);
+                    }
+                }
+            }
+            refreshBlockAndNeighbors(x, y, z);
+        }
+
         function addDirtyChunksToQueue(dirtyChunks) {
             for (let key of dirtyChunks) {
                 rebuildQueue.add(key);
@@ -2978,11 +3200,16 @@
             return type === 24;
         }
 
+        function isFluidBlock(type) {
+            return type === 24 || type === LAVA_ID;
+        }
+
         function waterFlowKey(x, y, z) {
             return `${x},${y},${z}`;
         }
 
         function enqueueWaterFlow(x, y, z) {
+            if (currentDimension === 'nether') return;
             if (selectedTerrain === 'moon') return;
             if (y > SEA_LEVEL + 3) return;
             const key = waterFlowKey(x, y, z);
@@ -3040,6 +3267,11 @@
                 if (!hasNeighborWater(p.x, p.y, p.z)) continue;
 
                 setBlockNoRebuild(p.x, p.y, p.z, 24, dirtyChunks);
+                const touchesLava = [[1,0,0], [-1,0,0], [0,0,1], [0,0,-1], [0,1,0], [0,-1,0]]
+                    .some(off => getBlock(p.x + off[0], p.y + off[1], p.z + off[2]) === LAVA_ID);
+                if (touchesLava) {
+                    setBlockNoRebuild(p.x, p.y, p.z, OBSIDIAN_ID, dirtyChunks);
+                }
                 drainNearbyWaterSurface(p.x, p.y, p.z, dirtyChunks);
                 spreadWaterFrom(p.x, p.y, p.z);
             }
@@ -3151,6 +3383,7 @@
             }
 
             addDirtyChunksToQueue(dirtyChunks);
+            if (targetType === 26 || targetType === 27) updateRailsAround(hit.x, hit.y, hit.z);
             playMineSound(targetType);
 
             if (ws && ws.readyState === WebSocket.OPEN) {
@@ -3367,6 +3600,10 @@
             // 创建 InstancedMesh 字典
             const instancedMeshes = {};
             const matrix = new THREE.Matrix4();
+            const railQuat = new THREE.Quaternion();
+            const railEuler = new THREE.Euler();
+            const railScale = new THREE.Vector3(1, 1, 1);
+            const railPos = new THREE.Vector3();
             const typeIndices = {};
 
             for (let type in typeCounts) {
@@ -3385,7 +3622,16 @@
 
             // 填充矩阵数据
             for (let b of blockData) {
-                matrix.setPosition(b.x, b.y, b.z);
+                if (b.type === 26 || b.type === 27) {
+                    const shape = railShapes.get(`${b.x},${b.y},${b.z}`) || computeRailShape(b.x, b.y, b.z);
+                    railPos.set(b.x, b.y + (shape.lift || 0), b.z);
+                    railEuler.set(shape.pitch || 0, shape.yaw || 0, shape.roll || 0);
+                    railQuat.setFromEuler(railEuler);
+                    matrix.compose(railPos, railQuat, railScale);
+                } else {
+                    matrix.identity();
+                    matrix.setPosition(b.x, b.y, b.z);
+                }
                 let idx = typeIndices[b.type];
                 instancedMeshes[b.type].setMatrixAt(idx, matrix);
                 typeIndices[b.type]++;
@@ -3612,6 +3858,14 @@
         const PLAYER_HEIGHT = 1.6;
         const PLAYER_RADIUS = 0.2; 
 
+        function getPlayerHeight() {
+            return PLAYER_HEIGHT * playerScale;
+        }
+
+        function getPlayerRadius() {
+            return Math.max(0.055, PLAYER_RADIUS * playerScale);
+        }
+
         // 第三人称模型保留给其他功能，但不再用双击 E 切换，避免相机和玩家坐标分离。
         let isThirdPerson = false;
         let localPlayerModel = null;
@@ -3752,6 +4006,9 @@
             seed = Math.random() * 1000;
             dayTime = Math.PI / 2;
             oxygen = 20;
+            currentDimension = 'overworld';
+            playerScale = 1;
+            shrinkTimer = 0;
             
             const spawn = findSafeSpawn();
             worldSpawnPoint = { ...spawn };
@@ -3816,7 +4073,7 @@
         initHotbar();
 
         window.selectSlot = function(id) {
-            for(let i=1; i<=32; i++) {
+            for(let i=1; i<=36; i++) {
                 document.getElementById(`inv-${i}`)?.classList.remove('selected');
             }
             document.getElementById(`inv-${id}`)?.classList.add('selected');
@@ -3829,21 +4086,7 @@
                 document.getElementById(`hotbar-slot-${id}`)?.classList.add('selected');
             }
             
-            // 确保这里的映射和 HTML 里的序号一一对应！
-            // 1:泥土(2), 2:石头(3), 3:木头(4), 4:树叶(5), 5:玻璃(6)
-            // 6:梯子(7), 7:木门(8), 8:工作台(12), 9:熔炉(13), 10:床(14)
-            // 11:火把(16), 12:大铁门(17), 13:TNT(21), 14:核弹(22), 15:沙子(23)
-            // 16:水(24), 17:海带(25), 18:铁轨(26), 19:动力轨(27), 20:红石(28)
-            // 21:矿车(29), 22:拉杆(30), 23:附魔台(32), 24:剑(33), 25:镐子(34), 26:枪(35)
-            // 27:铁矿(36), 28:金矿(37), 29:蓝宝石(38), 30:生肉(39), 31:烤肉(40), 32:扫描仪(41)
-            const mapping = {
-                1:2, 2:3, 3:4, 4:5, 5:6, 
-                6:7, 7:8, 8:12, 9:13, 10:14, 
-                11:16, 12:17, 13:21, 14:22, 15:23, 
-                16:24, 17:25, 18:26, 19:27, 20:28, 
-                21:29, 22:30, 23:32, 24:33, 25:34, 26:35,
-                27:36, 28:37, 29:38, 30:39, 31:40, 32:41
-            };
+            const mapping = getInventorySlotMapping();
             currentBlock = mapping[id];
             
             // 手持火把照明
@@ -3862,21 +4105,23 @@
         function isSolid(bx, by, bz) {
             let b = getBlock(bx, by, bz);
             // Ladders, open doors, water, rails, redstone, levers, and grass are passable. Leaves are solid.
-            if (b === 0 || b === 7 || b === 10 || b === 11 || b === 19 || b === 20 || b === 24 || b === 25 || b === 26 || b === 27 || b === 28 || b === 30 || b === 31 || b === 42) return false;
+            if (b === 0 || b === 7 || b === 10 || b === 11 || b === 19 || b === 20 || b === 24 || b === 25 || b === 26 || b === 27 || b === 28 || b === 30 || b === 31 || b === 42 || b === LAVA_ID) return false;
             return true;
         }
 
         function checkCollision(pos) {
+            const playerHeight = getPlayerHeight();
+            const playerRadius = getPlayerRadius();
             const checkPoints = [
-                new THREE.Vector3(pos.x, pos.y - PLAYER_HEIGHT + 0.1, pos.z), // 脚底
-                new THREE.Vector3(pos.x, pos.y - PLAYER_HEIGHT/2, pos.z), // 身体
+                new THREE.Vector3(pos.x, pos.y - playerHeight + 0.1, pos.z), // 脚底
+                new THREE.Vector3(pos.x, pos.y - playerHeight/2, pos.z), // 身体
                 new THREE.Vector3(pos.x, pos.y - 0.1, pos.z), // 眼睛
-                new THREE.Vector3(pos.x, pos.y + 0.2, pos.z)  // 头顶，防止跳跃时头卡进天花板导致透视虚空
+                new THREE.Vector3(pos.x, pos.y + Math.max(0.05, 0.2 * playerScale), pos.z)  // 头顶，防止跳跃时头卡进天花板导致透视虚空
             ];
 
             for (let pt of checkPoints) {
                 const offsets = [
-                    [0,0], [PLAYER_RADIUS,0], [-PLAYER_RADIUS,0], [0,PLAYER_RADIUS], [0,-PLAYER_RADIUS]
+                    [0,0], [playerRadius,0], [-playerRadius,0], [0,playerRadius], [0,-playerRadius]
                 ];
                 for (let off of offsets) {
                     let bx = Math.round(pt.x + off[0]);
@@ -4924,7 +5169,9 @@
                             let enchantBlocks = 0;
                             let redstoneCount = 0;
                             let closestEnchant = null;
+                            let closestObsidian = null;
                             let closestDist = Infinity;
+                            let closestObsidianDist = Infinity;
                             
                             for (let [key, t] of worldMap.entries()) {
                                 if (t === 32) {
@@ -4934,6 +5181,13 @@
                                     if (dist < closestDist) {
                                         closestDist = dist;
                                         closestEnchant = {x: ex, y: ey, z: ez};
+                                    }
+                                } else if (t === OBSIDIAN_ID) {
+                                    let [ox, oy, oz] = key.split(',').map(Number);
+                                    let dist = Math.sqrt((ox - camera.position.x)**2 + (oy - camera.position.y)**2 + (oz - camera.position.z)**2);
+                                    if (dist < closestObsidianDist) {
+                                        closestObsidianDist = dist;
+                                        closestObsidian = {x: ox, y: oy, z: oz};
                                     }
                                 } else if (t === 28) {
                                     redstoneCount++;
@@ -4946,9 +5200,15 @@
                             
                             // 保存最近的附魔台位置给 doTrade 用
                             window.currentEnchantPos = closestEnchant;
+                            window.currentObsidianBuildPos = closestObsidian;
                             
                             // 10个附魔台 = 20个方块（因为1个附魔台占两格），这里简化判断只要大于10个单块即可
-                            if (enchantBlocks >= 10 && redstoneCount >= 2) {
+                            if (closestObsidian && hasInventoryItem(OBSIDIAN_ID)) {
+                                tradeTitle.innerText = "Villager: Obsidian Villa Marker";
+                                tradeDesc.innerText = "Give me one obsidian, and I will build a 20x20 three-floor villa at your obsidian marker.";
+                                tradeBtn.innerText = "Trade Obsidian for Villa";
+                                tradeBtn.onclick = function() { doTrade('obsidianVilla'); };
+                            } else if (enchantBlocks >= 10 && redstoneCount >= 2) {
                                 tradeTitle.innerText = "Villager: Ultimate Enchanting Array!";
                                 tradeDesc.innerText = "You built a powerful enchanting array. I will raise a 30-floor tower for you!";
                                 tradeBtn.innerText = "Build 30-Floor Tower";
@@ -5073,6 +5333,9 @@
                     } else if (currentBlock === 40) { // 拿着烤肉左键
                         eatCookedMeat();
                         return;
+                    } else if (currentBlock === SHRINK_POTION_ID) {
+                        drinkShrinkPotion();
+                        return;
                     }
 
                     startMiningBlock(hit, currentBlock === SCANNER_ID, norm);
@@ -5085,8 +5348,22 @@
                         showToast("Use left click with the Scanner to mine blocks.");
                         return;
                     }
+                    if (matId === SHRINK_POTION_ID) {
+                        drinkShrinkPotion();
+                        return;
+                    }
                     if (isToolItem(matId)) {
                         showToast("Tools cannot be placed. Choose a block.");
+                        return;
+                    }
+
+                    if (matId === BUCKET_ID && targetType === LAVA_ID) {
+                        setBlock(hit.x, hit.y, hit.z, 0);
+                        playerInventory[LAVA_ID] = (playerInventory[LAVA_ID] || 0) + 1;
+                        updateHotbarUI();
+                        updateInventoryCounts();
+                        showToast("Lava scooped into the bucket.");
+                        playSound('pickup');
                         return;
                     }
 
@@ -5226,14 +5503,20 @@
                         return;
                     }
 
+                    if (currentDimension === 'nether' && matId === 24) {
+                        showToast("Water evaporates in the Nether.");
+                        playSound('crackle');
+                        return;
+                    }
+
                     let placePos = hit.clone().add(norm);
                     let px = camera.position.x;
                     let py = camera.position.y;
                     let pz = camera.position.z;
                     
-                    let inPlayerX = Math.abs(placePos.x - px) < 0.5 + PLAYER_RADIUS;
-                    let inPlayerY = placePos.y >= py - PLAYER_HEIGHT && placePos.y <= py + 0.2;
-                    let inPlayerZ = Math.abs(placePos.z - pz) < 0.5 + PLAYER_RADIUS;
+                    let inPlayerX = Math.abs(placePos.x - px) < 0.5 + getPlayerRadius();
+                    let inPlayerY = placePos.y >= py - getPlayerHeight() && placePos.y <= py + 0.2;
+                    let inPlayerZ = Math.abs(placePos.z - pz) < 0.5 + getPlayerRadius();
                     let inPlayer = inPlayerX && inPlayerY && inPlayerZ;
                     
                     if (!inPlayer || matId === 8 || matId === 17) { 
@@ -5313,9 +5596,12 @@
                                 getBlock(placePos.x, placePos.y + 1, placePos.z) === 0) {
                                 setBlock(placePos.x, placePos.y, placePos.z, 32);
                                 setBlock(placePos.x, placePos.y + 1, placePos.z, 32);
+                                tryCreateNetherPortalNear(placePos.x, placePos.y, placePos.z);
                             }
                         } else {
                             setBlock(placePos.x, placePos.y, placePos.z, matId);
+                            if (matId === 24 || matId === LAVA_ID) solidifyFluidContact(placePos.x, placePos.y, placePos.z);
+                            if (matId === 26 || matId === 27) updateRailsAround(placePos.x, placePos.y, placePos.z);
                         }
                     }
                 }
@@ -5375,6 +5661,17 @@
                     // 在旁边盖
                     buildHouseAt(bx, by, bz, 1, false, true, false);
                 }
+            } else if (type === 'obsidianVilla' && window.currentObsidianBuildPos) {
+                if (!consumeInventoryItem(OBSIDIAN_ID)) {
+                    showToast("You need one obsidian for this trade.");
+                    return;
+                }
+                const marker = window.currentObsidianBuildPos;
+                setBlock(marker.x, marker.y, marker.z, 0);
+                buildBigVillaAt(marker.x, marker.y, marker.z);
+                updateHotbarUI();
+                updateInventoryCounts();
+                showToast("Villager built the three-floor villa.");
             } else {
                 // 基础房屋，在村民正前方建造
                 let bx = Math.round(buildTargetPos.x + dir.x * 8);
@@ -5453,6 +5750,77 @@
                 for(let z = cz1 - 1; z <= cz2 + 1; z++){
                     rebuildQueue.add(`${x},${z}`);
                 }
+            }
+        }
+
+        function buildBigVillaAt(baseX, baseY, baseZ) {
+            const radius = 10;
+            const stories = 3;
+            const storyHeight = 4;
+            const surfaceY = getSurfaceHeight(baseX, baseZ);
+            baseY = Math.max(baseY, surfaceY);
+
+            for (let dx = -radius + 1; dx <= radius; dx++) {
+                for (let dz = -radius + 1; dz <= radius; dz++) {
+                    const localH = getSurfaceHeight(baseX + dx, baseZ + dz);
+                    for (let dy = baseY + 1; dy <= Math.max(baseY + stories * storyHeight + 3, localH + 2); dy++) {
+                        setGenBlock(baseX + dx, dy, baseZ + dz, 0);
+                    }
+                    for (let dy = baseY - 1; dy >= Math.min(baseY - 3, localH - 2); dy--) {
+                        setGenBlock(baseX + dx, dy, baseZ + dz, 3);
+                    }
+                    setGenBlock(baseX + dx, baseY, baseZ + dz, 4);
+                }
+            }
+
+            for (let s = 0; s < stories; s++) {
+                const sy = baseY + s * storyHeight;
+                for (let dx = -radius + 1; dx <= radius; dx++) {
+                    for (let dz = -radius + 1; dz <= radius; dz++) {
+                        if (s > 0) setGenBlock(baseX + dx, sy, baseZ + dz, 4);
+                        const wall = dx === -radius + 1 || dx === radius || dz === -radius + 1 || dz === radius;
+                        if (wall) {
+                            for (let dy = 1; dy <= 3; dy++) {
+                                const windowBand = dy === 2 && ((Math.abs(dx) % 4 === 1) || (Math.abs(dz) % 4 === 1));
+                                setGenBlock(baseX + dx, sy + dy, baseZ + dz, windowBand ? 6 : 4);
+                            }
+                        }
+                    }
+                }
+
+                setGenBlock(baseX, sy + 3, baseZ, 16);
+                setGenBlock(baseX - 6, sy + 3, baseZ - 6, 16);
+                setGenBlock(baseX + 6, sy + 3, baseZ + 6, 16);
+                setGenBlock(baseX - 6, sy + 3, baseZ + 6, 16);
+                setGenBlock(baseX + 6, sy + 3, baseZ - 6, 16);
+
+                if (s < stories - 1) {
+                    for (let step = 0; step < storyHeight; step++) {
+                        setGenBlock(baseX - 7 + step, sy + 1 + step, baseZ - 7, 7);
+                    }
+                    setGenBlock(baseX - 4, sy + storyHeight, baseZ - 7, 0);
+                }
+            }
+
+            const roofY = baseY + stories * storyHeight;
+            for (let dx = -radius; dx <= radius + 1; dx++) {
+                for (let dz = -radius; dz <= radius + 1; dz++) {
+                    const edge = dx === -radius || dx === radius + 1 || dz === -radius || dz === radius + 1;
+                    setGenBlock(baseX + dx, roofY, baseZ + dz, edge ? OBSIDIAN_ID : 4);
+                }
+            }
+
+            setGenBlock(baseX, baseY + 1, baseZ + radius, 17);
+            setGenBlock(baseX, baseY + 2, baseZ + radius, 18);
+            setGenBlock(baseX + 1, baseY + 1, baseZ + radius, 17);
+            setGenBlock(baseX + 1, baseY + 2, baseZ + radius, 18);
+
+            const cx1 = Math.floor((baseX - radius - 2) / CHUNK_SIZE);
+            const cx2 = Math.floor((baseX + radius + 2) / CHUNK_SIZE);
+            const cz1 = Math.floor((baseZ - radius - 2) / CHUNK_SIZE);
+            const cz2 = Math.floor((baseZ + radius + 2) / CHUNK_SIZE);
+            for (let x = cx1; x <= cx2; x++) {
+                for (let z = cz1; z <= cz2; z++) rebuildQueue.add(`${x},${z}`);
             }
         }
 
@@ -5576,6 +5944,7 @@
         let dayWasSlept = false;
         let playerTired = false;
         let previousIsDay = true;
+        let portalCooldown = 0;
         const DAY_SECONDS = 1200;
         const HALF_DAY_SECONDS = 600;
         const DAY_TIME_SPEED = Math.PI / HALF_DAY_SECONDS;
@@ -5668,6 +6037,15 @@
                 resetFoodTimers();
             }
 
+            if (shrinkTimer > 0) {
+                shrinkTimer = Math.max(0, shrinkTimer - delta);
+                if (shrinkTimer === 0 && playerScale !== 1) {
+                    playerScale = 1;
+                    showToast("Shrink potion wore off.");
+                }
+            }
+            if (portalCooldown > 0) portalCooldown = Math.max(0, portalCooldown - delta);
+
             // Daylight lasts exactly 10 minutes. Night lasts another 10 minutes if the player does not sleep.
             if (!isSleeping) dayTime += delta * DAY_TIME_SPEED;
             const sunHeight = Math.sin(dayTime);
@@ -5685,8 +6063,26 @@
             let headY = Math.round(camera.position.y);
             let headZ = Math.round(camera.position.z);
             let inWater = getBlock(headX, headY, headZ) === 24;
+            let feetX = Math.round(camera.position.x);
+            let feetY = Math.round(camera.position.y - getPlayerHeight() + 0.15);
+            let feetZ = Math.round(camera.position.z);
+            let inLava = getBlock(headX, headY, headZ) === LAVA_ID || getBlock(feetX, feetY, feetZ) === LAVA_ID;
+            if (portalCooldown === 0 && (isNetherPortalCenter(feetX, feetY, feetZ) || isNetherPortalCenter(headX, headY, headZ))) {
+                portalCooldown = 3;
+                teleportToDimension(currentDimension === 'nether' ? 'overworld' : 'nether');
+            }
 
-            if (inWater) {
+            if (inLava) {
+                scene.background.setHex(0x3a1000);
+                if (scene.fog) {
+                    scene.fog.color.setHex(0x3a1000);
+                    scene.fog.near = 0.1;
+                    scene.fog.far = 9;
+                }
+                if (!isCreativeMode()) takeDamage(4 * delta);
+                oxygen = 20;
+                document.getElementById('oxygen-ui').style.display = 'none';
+            } else if (inWater) {
                 scene.background.setHex(0x001133);
                 if (scene.fog) {
                     scene.fog.color.setHex(0x001133);
@@ -5706,7 +6102,16 @@
                 oxygen = 20;
                 document.getElementById('oxygen-ui').style.display = 'none';
                 
-                if (selectedTerrain === 'moon') {
+                if (currentDimension === 'nether') {
+                    scene.background.setHex(0x2a0600);
+                    if (scene.fog) {
+                        scene.fog.color.setHex(0x2a0600);
+                        scene.fog.near = 20; scene.fog.far = 55;
+                    }
+                    dirLight.intensity = 0.35;
+                    clouds.visible = false;
+                    if (earthMesh) earthMesh.visible = false;
+                } else if (selectedTerrain === 'moon') {
                     // 月球环境：黑色天空，显示方块地球
                     scene.background.setHex(0x000000);
                     if (scene.fog) {
@@ -5800,11 +6205,11 @@
 
             if (controls.isLocked) {
                 let bx = Math.round(camera.position.x);
-                let by = Math.round(camera.position.y - PLAYER_HEIGHT/2);
+                let by = Math.round(camera.position.y - getPlayerHeight()/2);
                 let bz = Math.round(camera.position.z);
-                let onLadder = (getBlock(bx, by, bz) === 7 || getBlock(bx, Math.round(camera.position.y - PLAYER_HEIGHT), bz) === 7);
-                let inWaterPhys = (getBlock(bx, by, bz) === 24 || getBlock(bx, Math.round(camera.position.y - PLAYER_HEIGHT), bz) === 24);
-                let onGroundPhys = isSolid(bx, Math.round(camera.position.y - PLAYER_HEIGHT - 0.1), bz);
+                let onLadder = (getBlock(bx, by, bz) === 7 || getBlock(bx, Math.round(camera.position.y - getPlayerHeight()), bz) === 7);
+                let inWaterPhys = (getBlock(bx, by, bz) === 24 || getBlock(bx, Math.round(camera.position.y - getPlayerHeight()), bz) === 24);
+                let onGroundPhys = isSolid(bx, Math.round(camera.position.y - getPlayerHeight() - 0.1), bz);
 
                 // --- 物理引擎 ---
                 if (inWaterPhys) {
