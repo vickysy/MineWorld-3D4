@@ -117,6 +117,9 @@
             <div class="slot" id="inv-17" onclick="selectSlot(17)">Kelp</div>
             <div class="slot" id="inv-33" onclick="selectSlot(33)">Lava</div>
             <div class="slot" id="inv-34" onclick="selectSlot(34)">Obsidian</div>
+            <div class="slot" id="inv-37" onclick="selectSlot(37)">Barrier</div>
+            <div class="slot" id="inv-38" onclick="selectSlot(38)">Glass Sensor Door</div>
+            <div class="slot" id="inv-39" onclick="selectSlot(39)">White Cobblestone</div>
         </div>
         <div id="tab-life" class="slot-container" style="display:none;">
             <div class="slot" id="inv-8" onclick="selectSlot(8)">Crafting Table</div>
@@ -563,14 +566,26 @@
                     }
                 }
             } else if (type === 'stone') {
-                // 16x16 像素风石头
+                // 16x16 像素风石头：更多层次和裂纹，看起来不再是一片灰。
                 for(let x=0; x<64; x+=4) {
                     for(let y=0; y<64; y+=4) {
-                        let r = Math.random();
-                        ctx.fillStyle = r < 0.2 ? '#616161' : (r < 0.8 ? '#757575' : '#9e9e9e');
+                        const shade = 92 + Math.floor(Math.random() * 58);
+                        ctx.fillStyle = `rgb(${shade},${shade + 2},${shade + 4})`;
                         ctx.fillRect(x,y,4,4);
                     }
                 }
+                ctx.strokeStyle = 'rgba(55,55,55,0.55)';
+                ctx.lineWidth = 3;
+                for(let i=0; i<7; i++) {
+                    const sx = Math.floor(Math.random() * 60);
+                    const sy = Math.floor(Math.random() * 60);
+                    ctx.beginPath();
+                    ctx.moveTo(sx, sy);
+                    ctx.lineTo(sx + 8 + Math.random() * 18, sy + (Math.random() - 0.5) * 12);
+                    ctx.stroke();
+                }
+                ctx.strokeStyle = 'rgba(180,180,180,0.35)';
+                ctx.strokeRect(2, 2, 60, 60);
             } else if (type === 'iron_ore') {
                 // 铁矿 (比石头深，带点棕色斑点)
                 for(let x=0; x<64; x+=4) {
@@ -631,6 +646,63 @@
                 ctx.fillRect(52, 4, 8, 8);
                 ctx.fillRect(4, 52, 8, 8);
                 ctx.fillRect(52, 52, 8, 8);
+            } else if (type === 'barrier') {
+                ctx.clearRect(0,0,64,64);
+                ctx.fillStyle = 'rgba(255,255,255,0.16)';
+                ctx.fillRect(0,0,64,64);
+                ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(2,2,60,60);
+                ctx.strokeStyle = '#ff1744';
+                ctx.lineWidth = 9;
+                ctx.beginPath();
+                ctx.arc(32, 32, 20, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(18, 46);
+                ctx.lineTo(46, 18);
+                ctx.stroke();
+            } else if (type === 'glass_sensor_door') {
+                ctx.clearRect(0,0,64,64);
+                ctx.fillStyle = 'rgba(180,235,255,0.18)';
+                ctx.fillRect(0,0,64,64);
+                ctx.strokeStyle = 'rgba(135,206,235,0.8)';
+                ctx.lineWidth = 4;
+                ctx.strokeRect(2,2,60,60);
+                ctx.fillStyle = 'rgba(255,255,255,0.75)';
+                ctx.fillRect(8, 8, 14, 4);
+                ctx.fillRect(42, 8, 14, 4);
+                ctx.fillStyle = '#00e5ff';
+                ctx.fillRect(26, 28, 12, 8);
+                ctx.fillStyle = 'rgba(0,229,255,0.35)';
+                ctx.fillRect(18, 38, 28, 4);
+            } else if (type === 'glass_sensor_open') {
+                ctx.clearRect(0,0,64,64);
+                ctx.fillStyle = 'rgba(180,235,255,0.16)';
+                ctx.fillRect(0,0,16,64);
+                ctx.fillRect(48,0,16,64);
+                ctx.strokeStyle = 'rgba(135,206,235,0.75)';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(1,1,14,62);
+                ctx.strokeRect(49,1,14,62);
+                ctx.fillStyle = '#00e5ff';
+                ctx.fillRect(4, 28, 8, 8);
+                ctx.fillRect(52, 28, 8, 8);
+            } else if (type === 'white_cobblestone') {
+                ctx.fillStyle = '#f7f7f2';
+                ctx.fillRect(0,0,64,64);
+                ctx.strokeStyle = '#d7d7cf';
+                ctx.lineWidth = 3;
+                const stones = [
+                    [0,0,20,18], [20,0,24,20], [44,0,20,18],
+                    [0,18,16,24], [16,20,26,22], [42,18,22,24],
+                    [0,42,22,22], [22,42,20,22], [42,42,22,22]
+                ];
+                stones.forEach(s => {
+                    ctx.fillStyle = Math.random() < 0.5 ? '#ffffff' : '#eeeeea';
+                    ctx.fillRect(s[0], s[1], s[2], s[3]);
+                    ctx.strokeRect(s[0], s[1], s[2], s[3]);
+                });
             } else if (type === 'ladder') {
                 ctx.clearRect(0,0,64,64); 
                 ctx.fillStyle = '#8B5A2B'; 
@@ -883,6 +955,10 @@
         
         const matLeaves = new THREE.MeshLambertMaterial({ map: createTexture('leaves'), transparent: true });
         const matGlass = new THREE.MeshLambertMaterial({ map: createTexture('glass'), transparent: true });
+        const matBarrier = new THREE.MeshLambertMaterial({ map: createTexture('barrier'), transparent: true, opacity: 0.72, depthWrite: false });
+        const matGlassSensorDoor = new THREE.MeshLambertMaterial({ map: createTexture('glass_sensor_door'), transparent: true, opacity: 0.78 });
+        const matGlassSensorDoorOpen = new THREE.MeshLambertMaterial({ map: createTexture('glass_sensor_open'), transparent: true, opacity: 0.62, alphaTest: 0.05 });
+        const matWhiteCobblestone = new THREE.MeshLambertMaterial({ map: createTexture('white_cobblestone') });
         const matLadder = new THREE.MeshLambertMaterial({ map: createTexture('ladder'), transparent: true });
         const matDoorB = new THREE.MeshLambertMaterial({ map: createTexture('door_bottom'), transparent: true });
         const matDoorT = new THREE.MeshLambertMaterial({ map: createTexture('door_top'), transparent: true });
@@ -962,7 +1038,9 @@
             33: matSword, 34: matPickaxe, 35: matGun,
             36: matIronOre, 37: matGoldOre, 38: matDiamondOre,
             39: matRawMeat, 40: matCookedMeat, 41: matScanner, 42: matTallGrass,
-            43: matLava, 44: matObsidian, 45: matBucket, 46: matShrinkPotion
+            43: matLava, 44: matObsidian, 45: matBucket, 46: matShrinkPotion,
+            47: matBarrier, 48: matGlassSensorDoor, 49: matGlassSensorDoor, 50: matGlassSensorDoorOpen,
+            51: matWhiteCobblestone
         };
 
         const boxGeo = new THREE.BoxGeometry(1, 1, 1);
@@ -1744,7 +1822,7 @@
                         playerInventory = {};
                         // 开局只给基础建造方块和原材料（泥土、石头、木头、树叶、沙子、水、海带、红石、TNT、核弹、工具）
                         // 移除了需要合成的物品：玻璃(6), 梯子(7), 木门(8), 工作台(12), 熔炉(13), 床(14), 火把(16), 大铁门(17), 铁轨(26), 动力轨(27), 矿车(29), 拉杆(30), 附魔台(32)
-                        [2,3,4,5,21,22,23,24,25,28,33,34,35].forEach(id => { playerInventory[id] = 20; });
+                        [2,3,4,5,21,22,23,24,25,28,33,34,35,47,48,51].forEach(id => { playerInventory[id] = 20; });
                     }
                     updateHotbarUI();
                     
@@ -2180,7 +2258,7 @@
         // --- 物品栏/库存系统 ---
         let playerInventory = {}; 
         // 初始只给原材料，数量 20 个。不给合成产物。
-        [2,3,4,5,21,22,23,24,25,28,33,34,35].forEach(id => { playerInventory[id] = 20; });
+        [2,3,4,5,21,22,23,24,25,28,33,34,35,47,48,51].forEach(id => { playerInventory[id] = 20; });
         const TOOL_ITEMS = [33, 34, 35, 41];
         function isToolItem(id) {
             return TOOL_ITEMS.includes(id);
@@ -2219,7 +2297,10 @@
             { ing: { 28: 1, 3: 1, 4: 1 }, out: 22, count: 1 }, // 红石+石头+木头 -> 核弹
             { ing: { 3: 1, 36: 1 }, out: 33, count: 1 },       // 石头+铁矿 -> 剑
             { ing: { 36: 2 }, out: 45, count: 1 },             // 铁矿x2 -> 桶
-            { ing: { 36: 2, 23: 3 }, out: 46, count: 1 }       // 铁矿x2+沙子x3 -> 变小药水
+            { ing: { 36: 2, 23: 3 }, out: 46, count: 1 },      // 铁矿x2+沙子x3 -> 变小药水
+            { ing: { 6: 1, 28: 1 }, out: 48, count: 1 },       // 玻璃+红石 -> 玻璃感应门
+            { ing: { 3: 1, 6: 1 }, out: 51, count: 4 },        // 石头+玻璃 -> 白色鹅卵石
+            { ing: { 3: 1, 6: 1, 28: 1 }, out: 47, count: 2 }  // 石头+玻璃+红石 -> 屏障
         ];
         
         function getBlockName(id) {
@@ -2229,7 +2310,9 @@
                 22:'Nuke', 23:'Sand', 24:'Water', 25:'Kelp', 26:'Rail', 27:'Powered Rail',
                 28:'Redstone', 29:'Minecart', 30:'Lever', 32:'Enchanting Table', 33:'Sword', 34:'Pickaxe', 35:'Gun',
                 36:'Iron Ore', 37:'Gold Ore', 38:'Sapphire', 39:'Raw Meat', 40:'Cooked Meat', 41:'Scanner', 42:'Grass',
-                43:'Lava', 44:'Obsidian', 45:'Bucket', 46:'Shrink Potion'
+                43:'Lava', 44:'Obsidian', 45:'Bucket', 46:'Shrink Potion', 47:'Barrier',
+                48:'Glass Sensor Door', 49:'Glass Sensor Door', 50:'Open Glass Sensor Door',
+                51:'White Cobblestone'
             };
             return names[id] || '';
         }
@@ -2335,13 +2418,13 @@
                  16:24, 17:25, 18:26, 19:27, 20:28, 
                  21:29, 22:30, 23:32, 24:33, 25:34, 26:35,
                  27:36, 28:37, 29:38, 30:39, 31:40, 32:41,
-                 33:43, 34:44, 35:45, 36:46
+                 33:43, 34:44, 35:45, 36:46, 37:47, 38:48, 39:51
              };
         }
 
         function updateInventoryCounts() {
             const mapping = getInventorySlotMapping();
-             for(let i=1; i<=36; i++) {
+             for(let i=1; i<=39; i++) {
                  let el = document.getElementById('inv-' + i);
                 if(el) {
                     let id = mapping[i];
@@ -2780,6 +2863,11 @@
         const OBSIDIAN_ID = 44;
         const BUCKET_ID = 45;
         const SHRINK_POTION_ID = 46;
+        const BARRIER_ID = 47;
+        const GLASS_SENSOR_DOOR_BOTTOM_ID = 48;
+        const GLASS_SENSOR_DOOR_TOP_ID = 49;
+        const GLASS_SENSOR_DOOR_OPEN_ID = 50;
+        const WHITE_COBBLESTONE_ID = 51;
         const SEA_LEVEL = 8;
         const WATER_FLOW_PER_FRAME = 8;
         const WATER_FLOW_DRAIN_EVERY = 6;
@@ -2970,7 +3058,7 @@
             const key = `${bx},${by},${bz}`;
             if (worldMap.has(key)) {
                 const t = worldMap.get(key);
-                return [0, 6, 7, 8, 9, 10, 11, 16, 17, 18, 19, 20, 24, 25, 26, 27, 28, 30, 31, 42, LAVA_ID].includes(t);
+                return [0, 6, 7, 8, 9, 10, 11, 16, 17, 18, 19, 20, 24, 25, 26, 27, 28, 30, 31, 42, LAVA_ID, BARRIER_ID, GLASS_SENSOR_DOOR_BOTTOM_ID, GLASS_SENSOR_DOOR_TOP_ID, GLASS_SENSOR_DOOR_OPEN_ID].includes(t);
             }
             // 海平面下的天然地形如果没生成，可能是水或者沙子
             if (by <= 12 && by > getSurfaceHeight(bx, bz)) {
@@ -3283,6 +3371,7 @@
             if (blockType === 9 || blockType === 10 || blockType === 11) return 8;
             if (blockType === 15) return 14;
             if (blockType === 18 || blockType === 19 || blockType === 20) return 17;
+            if (blockType === GLASS_SENSOR_DOOR_TOP_ID || blockType === GLASS_SENSOR_DOOR_OPEN_ID) return GLASS_SENSOR_DOOR_BOTTOM_ID;
             if (blockType === 31) return 30;
             return blockType;
         }
@@ -3361,6 +3450,9 @@
             if (targetType === 9 || targetType === 11) setBlockNoRebuild(hit.x, hit.y - 1, hit.z, 0, dirtyChunks);
             if (targetType === 17 || targetType === 19) setBlockNoRebuild(hit.x, hit.y + 1, hit.z, 0, dirtyChunks);
             if (targetType === 18 || targetType === 20) setBlockNoRebuild(hit.x, hit.y - 1, hit.z, 0, dirtyChunks);
+            if (targetType === GLASS_SENSOR_DOOR_BOTTOM_ID || targetType === GLASS_SENSOR_DOOR_OPEN_ID) setBlockNoRebuild(hit.x, hit.y + 1, hit.z, 0, dirtyChunks);
+            if (targetType === GLASS_SENSOR_DOOR_TOP_ID) setBlockNoRebuild(hit.x, hit.y - 1, hit.z, 0, dirtyChunks);
+            if (targetType === GLASS_SENSOR_DOOR_OPEN_ID) setBlockNoRebuild(hit.x, hit.y - 1, hit.z, 0, dirtyChunks);
 
             if (targetType === 14 || targetType === 15) {
                 const offsets = [[1,0,0], [-1,0,0], [0,0,1], [0,0,-1]];
@@ -4073,7 +4165,7 @@
         initHotbar();
 
         window.selectSlot = function(id) {
-            for(let i=1; i<=36; i++) {
+            for(let i=1; i<=39; i++) {
                 document.getElementById(`inv-${i}`)?.classList.remove('selected');
             }
             document.getElementById(`inv-${id}`)?.classList.add('selected');
@@ -4105,7 +4197,7 @@
         function isSolid(bx, by, bz) {
             let b = getBlock(bx, by, bz);
             // Ladders, open doors, water, rails, redstone, levers, and grass are passable. Leaves are solid.
-            if (b === 0 || b === 7 || b === 10 || b === 11 || b === 19 || b === 20 || b === 24 || b === 25 || b === 26 || b === 27 || b === 28 || b === 30 || b === 31 || b === 42 || b === LAVA_ID) return false;
+            if (b === 0 || b === 7 || b === 10 || b === 11 || b === 19 || b === 20 || b === 24 || b === 25 || b === 26 || b === 27 || b === 28 || b === 30 || b === 31 || b === 42 || b === LAVA_ID || b === GLASS_SENSOR_DOOR_OPEN_ID) return false;
             return true;
         }
 
@@ -4133,6 +4225,40 @@
                 }
             }
             return false;
+        }
+
+        function updateGlassSensorDoors() {
+            if (!isGameStarted) return;
+            const px = camera.position.x;
+            const py = camera.position.y;
+            const pz = camera.position.z;
+            const handled = new Set();
+            for (let [key, type] of worldMap.entries()) {
+                if (type !== GLASS_SENSOR_DOOR_BOTTOM_ID && type !== GLASS_SENSOR_DOOR_OPEN_ID) continue;
+                const [x, y, z] = key.split(',').map(Number);
+                let baseY = y;
+                if (type === GLASS_SENSOR_DOOR_OPEN_ID && getBlock(x, y - 1, z) === GLASS_SENSOR_DOOR_OPEN_ID) {
+                    baseY = y - 1;
+                }
+                const baseKey = `${x},${baseY},${z}`;
+                if (handled.has(baseKey)) continue;
+                handled.add(baseKey);
+
+                const horizontal = Math.hypot(px - x, pz - z);
+                const vertical = Math.abs((py - getPlayerHeight() * 0.5) - (baseY + 0.8));
+                const shouldOpen = horizontal <= 2.1 && vertical <= 2.4;
+                const currentBase = getBlock(x, baseY, z);
+                const currentTop = getBlock(x, baseY + 1, z);
+
+                if (shouldOpen && (currentBase === GLASS_SENSOR_DOOR_BOTTOM_ID || currentTop === GLASS_SENSOR_DOOR_TOP_ID)) {
+                    setBlock(x, baseY, z, GLASS_SENSOR_DOOR_OPEN_ID);
+                    setBlock(x, baseY + 1, z, GLASS_SENSOR_DOOR_OPEN_ID);
+                    playSound('glass');
+                } else if (!shouldOpen && currentBase === GLASS_SENSOR_DOOR_OPEN_ID && currentTop === GLASS_SENSOR_DOOR_OPEN_ID) {
+                    setBlock(x, baseY, z, GLASS_SENSOR_DOOR_BOTTOM_ID);
+                    setBlock(x, baseY + 1, z, GLASS_SENSOR_DOOR_TOP_ID);
+                }
+            }
         }
 
         function addModelBox(group, w, h, d, color, x, y, z, name) {
@@ -5519,7 +5645,7 @@
                     let inPlayerZ = Math.abs(placePos.z - pz) < 0.5 + getPlayerRadius();
                     let inPlayer = inPlayerX && inPlayerY && inPlayerZ;
                     
-                    if (!inPlayer || matId === 8 || matId === 17) { 
+                    if (!inPlayer || matId === 8 || matId === 17 || matId === GLASS_SENSOR_DOOR_BOTTOM_ID) { 
                         // 检查库存 (如果是工具则不需要)
                         if (!hasInventoryItem(matId)) {
                             showToast("Not enough items. Mine some more first.");
@@ -5589,6 +5715,13 @@
                                     setBlock(placePos.x, placePos.y, placePos.z, 17);
                                     setBlock(placePos.x, placePos.y + 1, placePos.z, 18);
                                 }
+                            }
+                        } else if (matId === GLASS_SENSOR_DOOR_BOTTOM_ID) {
+                            if (getBlock(placePos.x, placePos.y, placePos.z) === 0 &&
+                                getBlock(placePos.x, placePos.y + 1, placePos.z) === 0) {
+                                setBlock(placePos.x, placePos.y, placePos.z, GLASS_SENSOR_DOOR_BOTTOM_ID);
+                                setBlock(placePos.x, placePos.y + 1, placePos.z, GLASS_SENSOR_DOOR_TOP_ID);
+                                showToast("Glass sensor door placed. Walk close to open it.");
                             }
                         } else if (matId === 32) { 
                             // 附魔台，两格高
@@ -6181,6 +6314,7 @@
 
             if (isGameStarted) {
                 updateChunks(camera.position);
+                updateGlassSensorDoors();
 
                 // 异步处理区块生成与重建，防止主线程卡死导致“鼠标一粘就失灵”
                 processWaterFlowQueue();
