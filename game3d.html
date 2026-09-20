@@ -147,6 +147,8 @@
             <div class="slot" id="inv-22" onclick="selectSlot(22)">Lever</div>
             <div class="slot" id="inv-23" onclick="selectSlot(23)">Enchanting Table</div>
             <div class="slot" id="inv-32" onclick="selectSlot(32)">Scanner</div>
+            <div class="slot" id="inv-40" onclick="selectSlot(40)">Pressure Plate</div>
+            <div class="slot" id="inv-41" onclick="selectSlot(41)">Piston</div>
             <div class="slot" id="inv-13" onclick="selectSlot(13)">TNT</div>
             <div class="slot" id="inv-14" onclick="selectSlot(14)">Nuke</div>
         </div>
@@ -890,6 +892,42 @@
                 ctx.fillStyle = '#FF0000';
                 ctx.fillRect(28, 0, 8, 64);
                 ctx.fillRect(0, 28, 64, 8);
+            } else if (type === 'pressure_plate') {
+                ctx.clearRect(0,0,64,64);
+                ctx.fillStyle = '#9e9e9e';
+                ctx.fillRect(6, 22, 52, 20);
+                ctx.fillStyle = '#cfcfcf';
+                ctx.fillRect(10, 18, 44, 8);
+                ctx.fillStyle = '#616161';
+                ctx.fillRect(10, 42, 44, 4);
+                ctx.strokeStyle = '#424242';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(6, 18, 52, 28);
+                ctx.fillStyle = '#e53935';
+                ctx.fillRect(26, 26, 12, 8);
+            } else if (type === 'piston') {
+                ctx.fillStyle = '#6d4c41';
+                ctx.fillRect(0,0,64,64);
+                ctx.fillStyle = '#9e9e9e';
+                ctx.fillRect(10, 10, 44, 44);
+                ctx.fillStyle = '#cfcfcf';
+                ctx.fillRect(18, 18, 28, 28);
+                ctx.fillStyle = '#4e342e';
+                ctx.fillRect(0, 0, 64, 8);
+                ctx.fillRect(0, 56, 64, 8);
+                ctx.fillRect(0, 0, 8, 64);
+                ctx.fillRect(56, 0, 8, 64);
+                ctx.fillStyle = '#ffca28';
+                ctx.beginPath();
+                ctx.moveTo(32, 12);
+                ctx.lineTo(46, 32);
+                ctx.lineTo(34, 32);
+                ctx.lineTo(34, 52);
+                ctx.lineTo(30, 52);
+                ctx.lineTo(30, 32);
+                ctx.lineTo(18, 32);
+                ctx.closePath();
+                ctx.fill();
             } else if (type === 'minecart_item') {
                 ctx.clearRect(0,0,64,64);
                 ctx.fillStyle = '#808080';
@@ -1008,6 +1046,8 @@
         const matRail = new THREE.MeshLambertMaterial({ map: createTexture('rail'), transparent: true, alphaTest: 0.5 });
         const matPoweredRail = new THREE.MeshLambertMaterial({ map: createTexture('powered_rail'), transparent: true, alphaTest: 0.5 });
         const matRedstone = new THREE.MeshLambertMaterial({ map: createTexture('redstone'), transparent: true, alphaTest: 0.5 });
+        const matPressurePlate = new THREE.MeshLambertMaterial({ map: createTexture('pressure_plate'), transparent: true, alphaTest: 0.5 });
+        const matPiston = new THREE.MeshLambertMaterial({ map: createTexture('piston') });
         const matMinecartItem = new THREE.MeshLambertMaterial({ map: createTexture('minecart_item'), transparent: true, alphaTest: 0.5 });
         const matLever = new THREE.MeshLambertMaterial({ map: createTexture('lever'), transparent: true, alphaTest: 0.5 });
         const matLeverOn = new THREE.MeshLambertMaterial({ map: createTexture('lever_on'), transparent: true, alphaTest: 0.5 });
@@ -1040,7 +1080,7 @@
             39: matRawMeat, 40: matCookedMeat, 41: matScanner, 42: matTallGrass,
             43: matLava, 44: matObsidian, 45: matBucket, 46: matShrinkPotion,
             47: matBarrier, 48: matGlassSensorDoor, 49: matGlassSensorDoor, 50: matGlassSensorDoorOpen,
-            51: matWhiteCobblestone
+            51: matWhiteCobblestone, 52: matPressurePlate, 53: matPiston
         };
 
         const boxGeo = new THREE.BoxGeometry(1, 1, 1);
@@ -1822,7 +1862,7 @@
                         playerInventory = {};
                         // 开局只给基础建造方块和原材料（泥土、石头、木头、树叶、沙子、水、海带、红石、TNT、核弹、工具）
                         // 移除了需要合成的物品：玻璃(6), 梯子(7), 木门(8), 工作台(12), 熔炉(13), 床(14), 火把(16), 大铁门(17), 铁轨(26), 动力轨(27), 矿车(29), 拉杆(30), 附魔台(32)
-                        [2,3,4,5,21,22,23,24,25,28,33,34,35,47,48,51].forEach(id => { playerInventory[id] = 20; });
+                        [2,3,4,5,21,22,23,24,25,28,30,33,34,35,47,48,51,52,53].forEach(id => { playerInventory[id] = 20; });
                     }
                     updateHotbarUI();
                     
@@ -2258,7 +2298,7 @@
         // --- 物品栏/库存系统 ---
         let playerInventory = {}; 
         // 初始只给原材料，数量 20 个。不给合成产物。
-        [2,3,4,5,21,22,23,24,25,28,33,34,35,47,48,51].forEach(id => { playerInventory[id] = 20; });
+        [2,3,4,5,21,22,23,24,25,28,30,33,34,35,47,48,51,52,53].forEach(id => { playerInventory[id] = 20; });
         const TOOL_ITEMS = [33, 34, 35, 41];
         function isToolItem(id) {
             return TOOL_ITEMS.includes(id);
@@ -2300,7 +2340,9 @@
             { ing: { 36: 2, 23: 3 }, out: 46, count: 1 },      // 铁矿x2+沙子x3 -> 变小药水
             { ing: { 6: 1, 28: 1 }, out: 48, count: 1 },       // 玻璃+红石 -> 玻璃感应门
             { ing: { 3: 1, 6: 1 }, out: 51, count: 4 },        // 石头+玻璃 -> 白色鹅卵石
-            { ing: { 3: 1, 6: 1, 28: 1 }, out: 47, count: 2 }  // 石头+玻璃+红石 -> 屏障
+            { ing: { 3: 1, 6: 1, 28: 1 }, out: 47, count: 2 }, // 石头+玻璃+红石 -> 屏障
+            { ing: { 3: 1, 28: 1 }, out: 52, count: 1 },       // 石头+红石 -> 压力板
+            { ing: { 4: 1, 3: 1, 28: 1 }, out: 53, count: 1 }  // 木头+石头+红石 -> 活塞
         ];
         
         function getBlockName(id) {
@@ -2312,7 +2354,7 @@
                 36:'Iron Ore', 37:'Gold Ore', 38:'Sapphire', 39:'Raw Meat', 40:'Cooked Meat', 41:'Scanner', 42:'Grass',
                 43:'Lava', 44:'Obsidian', 45:'Bucket', 46:'Shrink Potion', 47:'Barrier',
                 48:'Glass Sensor Door', 49:'Glass Sensor Door', 50:'Open Glass Sensor Door',
-                51:'White Cobblestone'
+                51:'White Cobblestone', 52:'Pressure Plate', 53:'Piston'
             };
             return names[id] || '';
         }
@@ -2418,13 +2460,14 @@
                  16:24, 17:25, 18:26, 19:27, 20:28, 
                  21:29, 22:30, 23:32, 24:33, 25:34, 26:35,
                  27:36, 28:37, 29:38, 30:39, 31:40, 32:41,
-                 33:43, 34:44, 35:45, 36:46, 37:47, 38:48, 39:51
+                 33:43, 34:44, 35:45, 36:46, 37:47, 38:48, 39:51,
+                 40:52, 41:53
              };
         }
 
         function updateInventoryCounts() {
             const mapping = getInventorySlotMapping();
-             for(let i=1; i<=39; i++) {
+             for(let i=1; i<=41; i++) {
                  let el = document.getElementById('inv-' + i);
                 if(el) {
                     let id = mapping[i];
@@ -2868,12 +2911,17 @@
         const GLASS_SENSOR_DOOR_TOP_ID = 49;
         const GLASS_SENSOR_DOOR_OPEN_ID = 50;
         const WHITE_COBBLESTONE_ID = 51;
+        const PRESSURE_PLATE_ID = 52;
+        const PISTON_ID = 53;
         const SEA_LEVEL = 8;
         const WATER_FLOW_PER_FRAME = 8;
         const WATER_FLOW_DRAIN_EVERY = 6;
         const waterFlowQueue = [];
         const queuedWaterFlow = new Set();
         let waterFlowCount = 0;
+        const pistonDirections = new Map();
+        const pistonTimers = new Map();
+        let jumpPadCooldown = 0;
 
         let seed = Math.random() * 1000;
         function hash(x, z) {
@@ -3453,6 +3501,10 @@
             if (targetType === GLASS_SENSOR_DOOR_BOTTOM_ID || targetType === GLASS_SENSOR_DOOR_OPEN_ID) setBlockNoRebuild(hit.x, hit.y + 1, hit.z, 0, dirtyChunks);
             if (targetType === GLASS_SENSOR_DOOR_TOP_ID) setBlockNoRebuild(hit.x, hit.y - 1, hit.z, 0, dirtyChunks);
             if (targetType === GLASS_SENSOR_DOOR_OPEN_ID) setBlockNoRebuild(hit.x, hit.y - 1, hit.z, 0, dirtyChunks);
+            if (targetType === PISTON_ID) {
+                pistonDirections.delete(`${hit.x},${hit.y},${hit.z}`);
+                pistonTimers.delete(`${hit.x},${hit.y},${hit.z}`);
+            }
 
             if (targetType === 14 || targetType === 15) {
                 const offsets = [[1,0,0], [-1,0,0], [0,0,1], [0,0,-1]];
@@ -3703,7 +3755,7 @@
                 let typeInt = parseInt(type);
                 let geo = boxGeo;
                 if (typeInt === 16 || typeInt === 25 || typeInt === 30 || typeInt === 42) geo = torchGeo; // 火把、海带、拉杆、小草
-                else if (typeInt === 26 || typeInt === 27 || typeInt === 28) geo = flatGeo; // 铁轨、红石
+                else if (typeInt === 26 || typeInt === 27 || typeInt === 28 || typeInt === PRESSURE_PLATE_ID) geo = flatGeo; // 铁轨、红石、压力板
                 
                 let iMesh = new THREE.InstancedMesh(geo, materials[type], count);
                 iMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -4165,7 +4217,7 @@
         initHotbar();
 
         window.selectSlot = function(id) {
-            for(let i=1; i<=39; i++) {
+            for(let i=1; i<=41; i++) {
                 document.getElementById(`inv-${i}`)?.classList.remove('selected');
             }
             document.getElementById(`inv-${id}`)?.classList.add('selected');
@@ -4197,7 +4249,7 @@
         function isSolid(bx, by, bz) {
             let b = getBlock(bx, by, bz);
             // Ladders, open doors, water, rails, redstone, levers, and grass are passable. Leaves are solid.
-            if (b === 0 || b === 7 || b === 10 || b === 11 || b === 19 || b === 20 || b === 24 || b === 25 || b === 26 || b === 27 || b === 28 || b === 30 || b === 31 || b === 42 || b === LAVA_ID || b === GLASS_SENSOR_DOOR_OPEN_ID) return false;
+            if (b === 0 || b === 7 || b === 10 || b === 11 || b === 19 || b === 20 || b === 24 || b === 25 || b === 26 || b === 27 || b === 28 || b === 30 || b === 31 || b === 42 || b === LAVA_ID || b === GLASS_SENSOR_DOOR_OPEN_ID || b === PRESSURE_PLATE_ID) return false;
             return true;
         }
 
@@ -4257,6 +4309,114 @@
                 } else if (!shouldOpen && currentBase === GLASS_SENSOR_DOOR_OPEN_ID && currentTop === GLASS_SENSOR_DOOR_OPEN_ID) {
                     setBlock(x, baseY, z, GLASS_SENSOR_DOOR_BOTTOM_ID);
                     setBlock(x, baseY + 1, z, GLASS_SENSOR_DOOR_TOP_ID);
+                }
+            }
+        }
+
+        function redstoneNeighbors(x, y, z) {
+            return [[1,0,0], [-1,0,0], [0,0,1], [0,0,-1], [0,1,0], [0,-1,0]]
+                .map(off => ({ x: x + off[0], y: y + off[1], z: z + off[2], off }));
+        }
+
+        function hasPoweredLeverNear(x, y, z) {
+            return redstoneNeighbors(x, y, z).some(p => getBlock(p.x, p.y, p.z) === 31);
+        }
+
+        function hasRedstoneWireNear(x, y, z) {
+            return redstoneNeighbors(x, y, z).some(p => getBlock(p.x, p.y, p.z) === 28);
+        }
+
+        function isRedstonePowered(x, y, z) {
+            if (hasPoweredLeverNear(x, y, z)) return true;
+            return redstoneNeighbors(x, y, z).some(p => getBlock(p.x, p.y, p.z) === 28 && hasPoweredLeverNear(p.x, p.y, p.z));
+        }
+
+        function getStoredPistonDirection(x, y, z) {
+            const key = `${x},${y},${z}`;
+            if (pistonDirections.has(key)) return pistonDirections.get(key);
+            for (let p of redstoneNeighbors(x, y, z)) {
+                const t = getBlock(p.x, p.y, p.z);
+                if (t === 28 || t === 30 || t === 31) {
+                    const dir = { x: -p.off[0], y: -p.off[1], z: -p.off[2] };
+                    pistonDirections.set(key, dir);
+                    return dir;
+                }
+            }
+            pistonDirections.set(key, { x: 0, y: 0, z: 1 });
+            return pistonDirections.get(key);
+        }
+
+        function rememberPistonDirectionFromHit(x, y, z, norm) {
+            let dir = { x: 0, y: 0, z: 1 };
+            if (norm && (norm.x || norm.y || norm.z)) {
+                dir = { x: Math.round(norm.x), y: Math.round(norm.y), z: Math.round(norm.z) };
+            }
+            pistonDirections.set(`${x},${y},${z}`, dir);
+        }
+
+        function isMovableByPiston(type) {
+            return type !== 0 && type !== BARRIER_ID && type !== LAVA_ID && type !== 24 && type !== 25 &&
+                type !== 30 && type !== 31 && type !== 32 && type !== PISTON_ID;
+        }
+
+        function pushPlayerFromPiston(x, y, z, dir) {
+            const front = new THREE.Vector3(x + dir.x, y + dir.y, z + dir.z);
+            const playerFootY = camera.position.y - getPlayerHeight();
+            const nearFront = Math.abs(camera.position.x - front.x) < 1.05 &&
+                Math.abs(playerFootY - front.y) < 1.8 &&
+                Math.abs(camera.position.z - front.z) < 1.05;
+            if (!nearFront) return;
+            velocity.x += dir.x * 9;
+            velocity.y = Math.max(velocity.y, 4 + Math.max(0, dir.y) * 6);
+            velocity.z += dir.z * 9;
+        }
+
+        function pulsePiston(x, y, z) {
+            const dir = getStoredPistonDirection(x, y, z);
+            const tx = x + dir.x;
+            const ty = y + dir.y;
+            const tz = z + dir.z;
+            const target = getBlock(tx, ty, tz);
+            const nx = tx + dir.x;
+            const ny = ty + dir.y;
+            const nz = tz + dir.z;
+
+            if (isMovableByPiston(target) && getBlock(nx, ny, nz) === 0) {
+                setBlock(nx, ny, nz, target);
+                setBlock(tx, ty, tz, 0);
+            }
+            pushPlayerFromPiston(x, y, z, dir);
+            playSound('stone');
+        }
+
+        function updatePressurePlatesAndPistons(delta) {
+            if (jumpPadCooldown > 0) jumpPadCooldown = Math.max(0, jumpPadCooldown - delta);
+            const footX = Math.round(camera.position.x);
+            const footY = Math.round(camera.position.y - getPlayerHeight() - 0.05);
+            const footZ = Math.round(camera.position.z);
+            if (getBlock(footX, footY, footZ) === PRESSURE_PLATE_ID && isRedstonePowered(footX, footY, footZ) && jumpPadCooldown === 0) {
+                const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+                forward.y = 0;
+                if (forward.lengthSq() < 0.01) forward.set(0, 0, -1);
+                forward.normalize();
+                velocity.x += forward.x * 18;
+                velocity.z += forward.z * 18;
+                velocity.y = Math.max(velocity.y, 14);
+                jumpPadCooldown = 0.8;
+                showToast("Jump pad launched!");
+                playSound('stone');
+            }
+
+            for (let [key, type] of worldMap.entries()) {
+                if (type !== PISTON_ID) continue;
+                const [x, y, z] = key.split(',').map(Number);
+                if (!isRedstonePowered(x, y, z)) continue;
+                const elapsed = (pistonTimers.get(key) || 0) + delta;
+                if (elapsed >= 0.65) {
+                    pistonTimers.set(key, 0);
+                    pulsePiston(x, y, z);
+                } else {
+                    pistonTimers.set(key, elapsed);
                 }
             }
         }
@@ -5554,6 +5714,18 @@
                         let newState = targetType === 30 ? 31 : 30;
                         setBlock(hit.x, hit.y, hit.z, newState);
                         playSound('place');
+                        if (newState === 31) {
+                            for (let p of redstoneNeighbors(hit.x, hit.y, hit.z)) {
+                                if (getBlock(p.x, p.y, p.z) === 28) {
+                                    const touchesMachine = redstoneNeighbors(p.x, p.y, p.z)
+                                        .some(n => getBlock(n.x, n.y, n.z) === PRESSURE_PLATE_ID || getBlock(n.x, n.y, n.z) === PISTON_ID);
+                                    if (touchesMachine) {
+                                        showToast("Redstone machine powered.");
+                                        break;
+                                    }
+                                }
+                            }
+                        }
 
                         const offsets = [[1,0,0], [-1,0,0], [0,0,1], [0,0,-1], [0,1,0], [0,-1,0]];
                         for (let off of offsets) {
@@ -5735,6 +5907,10 @@
                             setBlock(placePos.x, placePos.y, placePos.z, matId);
                             if (matId === 24 || matId === LAVA_ID) solidifyFluidContact(placePos.x, placePos.y, placePos.z);
                             if (matId === 26 || matId === 27) updateRailsAround(placePos.x, placePos.y, placePos.z);
+                            if (matId === PISTON_ID) {
+                                rememberPistonDirectionFromHit(placePos.x, placePos.y, placePos.z, norm);
+                                showToast("Piston placed. Power it with redstone and a lever.");
+                            }
                         }
                     }
                 }
@@ -6315,6 +6491,7 @@
             if (isGameStarted) {
                 updateChunks(camera.position);
                 updateGlassSensorDoors();
+                updatePressurePlatesAndPistons(delta);
 
                 // 异步处理区块生成与重建，防止主线程卡死导致“鼠标一粘就失灵”
                 processWaterFlowQueue();
