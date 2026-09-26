@@ -1,4 +1,4 @@
-# MineWorld 3D
+# Daniel Game Minecraft
 
 这是一个完全基于 HTML5、Three.js 和 Web Audio API 构建的 3D《我的世界》网页版克隆项目。
 包含纯代码合成的正宗物理音效、程序化地形生成（无限挖掘）、以及真正的跨国 WebSocket 多人联机功能！
