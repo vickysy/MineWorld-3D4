@@ -120,6 +120,11 @@
             <div class="slot" id="inv-37" onclick="selectSlot(37)">Barrier</div>
             <div class="slot" id="inv-38" onclick="selectSlot(38)">Glass Sensor Door</div>
             <div class="slot" id="inv-39" onclick="selectSlot(39)">White Cobblestone</div>
+            <div class="slot" id="inv-47" onclick="selectSlot(47)">Brick</div>
+            <div class="slot" id="inv-48" onclick="selectSlot(48)">Blue Concrete</div>
+            <div class="slot" id="inv-49" onclick="selectSlot(49)">Blackstone</div>
+            <div class="slot" id="inv-50" onclick="selectSlot(50)">Glow Block</div>
+            <div class="slot" id="inv-51" onclick="selectSlot(51)">Modern Tile</div>
         </div>
         <div id="tab-life" class="slot-container" style="display:none;">
             <div class="slot" id="inv-8" onclick="selectSlot(8)">Crafting Table</div>
@@ -138,6 +143,11 @@
             <div class="slot" id="inv-29" onclick="selectSlot(29)">Sapphire</div>
             <div class="slot" id="inv-30" onclick="selectSlot(30)">Raw Meat</div>
             <div class="slot" id="inv-31" onclick="selectSlot(31)">Cooked Meat</div>
+            <div class="slot" id="inv-42" onclick="selectSlot(42)">Axe</div>
+            <div class="slot" id="inv-43" onclick="selectSlot(43)">Bow</div>
+            <div class="slot" id="inv-44" onclick="selectSlot(44)">Crossbow</div>
+            <div class="slot" id="inv-45" onclick="selectSlot(45)">Trident</div>
+            <div class="slot" id="inv-46" onclick="selectSlot(46)">Mace</div>
         </div>
         <div id="tab-redstone" class="slot-container" style="display:none;">
             <div class="slot" id="inv-18" onclick="selectSlot(18)">Rail</div>
@@ -176,6 +186,9 @@
     <div id="minecart-ui" style="display: none; position: absolute; top: 80px; left: 50%; transform: translateX(-50%); font-size: 24px; color: #FFD700; font-weight: bold; text-shadow: 2px 2px 4px black; z-index: 5;">
         Riding Minecart (Press E to dismount)
     </div>
+    <div id="room-code-float" style="display: none; position: absolute; top: 88px; left: 50%; transform: translateX(-50%); z-index: 6; padding: 10px 16px; border: 3px solid #fff; border-radius: 6px; background: rgba(0,0,0,0.68); color: #fff176; font-size: 18px; font-weight: bold; text-shadow: 2px 2px 0 #000; pointer-events: auto; cursor: pointer;" onclick="copyRoomCode()">
+        Room Code: ----
+    </div>
     <div id="info-panel" style="position: absolute; top: 10px; right: 10px; font-size: 16px; color: #00FF00; font-weight: bold; text-shadow: 2px 2px 4px black; z-index: 5; background-color: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px; text-align: right; line-height: 1.5;">
         <div id="fps-counter">FPS: 60</div>
         <div id="coord-x">X: 0</div>
@@ -200,6 +213,15 @@
         <p id="trade-desc">Give wood, and the villager will build a house and reward animals.</p>
         <button id="trade-btn" onclick="doTrade('house')" style="margin: 10px; padding: 10px; width: 90%; font-size: 16px; cursor: pointer; background-color: #4CAF50; border: none; border-radius: 5px; color: white; font-weight: bold;">Give Wood and Build House</button>
         <button onclick="closeUI()" style="margin: 10px; padding: 10px; width: 90%; font-size: 16px; cursor: pointer; border: none; border-radius: 5px;">Leave</button>
+    </div>
+    <div id="mod-ui" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0,0,0,0.86); padding: 20px; border-radius: 10px; color: white; text-align: center; border: 4px solid #673AB7; z-index: 25; width: 380px;">
+        <h2>Enchanting Table Mods</h2>
+        <p>Summon a mod pack into your inventory.</p>
+        <button onclick="summonModPack('builder')" style="margin: 8px; padding: 10px; width: 90%; font-size: 16px; cursor: pointer;">Builder Blocks Pack</button>
+        <button onclick="summonModPack('redstone')" style="margin: 8px; padding: 10px; width: 90%; font-size: 16px; cursor: pointer;">Redstone Machines Pack</button>
+        <button onclick="summonModPack('weapons')" style="margin: 8px; padding: 10px; width: 90%; font-size: 16px; cursor: pointer;">Weapons Pack</button>
+        <button onclick="summonModPack('nature')" style="margin: 8px; padding: 10px; width: 90%; font-size: 16px; cursor: pointer;">Nature Pack</button>
+        <button onclick="closeUI()" style="margin: 8px; padding: 10px; width: 90%; font-size: 16px; cursor: pointer;">Close</button>
     </div>
 
     <div id="blocker">
@@ -705,6 +727,46 @@
                     ctx.fillRect(s[0], s[1], s[2], s[3]);
                     ctx.strokeRect(s[0], s[1], s[2], s[3]);
                 });
+            } else if (type === 'brick_block') {
+                ctx.fillStyle = '#8d3f2f'; ctx.fillRect(0,0,64,64);
+                ctx.strokeStyle = '#5d241b'; ctx.lineWidth = 3;
+                for(let y=0; y<64; y+=16) {
+                    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(64,y); ctx.stroke();
+                    const offset = (y / 16) % 2 === 0 ? 0 : 16;
+                    for(let x=-offset; x<64; x+=32) {
+                        ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x,y+16); ctx.stroke();
+                    }
+                }
+            } else if (type === 'blue_concrete') {
+                ctx.fillStyle = '#1565c0'; ctx.fillRect(0,0,64,64);
+                ctx.fillStyle = 'rgba(255,255,255,0.12)';
+                for(let i=0; i<20; i++) ctx.fillRect(Math.random()*64, Math.random()*64, 3, 3);
+            } else if (type === 'blackstone') {
+                ctx.fillStyle = '#17171c'; ctx.fillRect(0,0,64,64);
+                for(let x=0; x<64; x+=8) {
+                    for(let y=0; y<64; y+=8) {
+                        const shade = 20 + Math.floor(Math.random()*32);
+                        ctx.fillStyle = `rgb(${shade},${shade},${shade+6})`;
+                        ctx.fillRect(x,y,8,8);
+                    }
+                }
+            } else if (type === 'glow_block') {
+                ctx.fillStyle = '#fff59d'; ctx.fillRect(0,0,64,64);
+                ctx.fillStyle = '#ffd54f';
+                for(let i=0; i<64; i+=16) {
+                    ctx.fillRect(i,0,8,64);
+                    ctx.fillRect(0,i,64,8);
+                }
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(24,24,16,16);
+            } else if (type === 'modern_tile') {
+                ctx.fillStyle = '#e0e0e0'; ctx.fillRect(0,0,64,64);
+                ctx.strokeStyle = '#9e9e9e'; ctx.lineWidth = 3;
+                ctx.strokeRect(2,2,60,60);
+                ctx.beginPath(); ctx.moveTo(32,2); ctx.lineTo(32,62); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(2,32); ctx.lineTo(62,32); ctx.stroke();
+                ctx.fillStyle = 'rgba(255,255,255,0.7)';
+                ctx.fillRect(6,6,18,8);
             } else if (type === 'ladder') {
                 ctx.clearRect(0,0,64,64); 
                 ctx.fillStyle = '#8B5A2B'; 
@@ -936,9 +998,11 @@
                 ctx.fillRect(14, 24, 36, 16);
             } else if (type === 'sword') {
                 ctx.clearRect(0,0,64,64);
-                ctx.fillStyle = '#8B4513'; ctx.fillRect(28, 40, 8, 20); // hilt
-                ctx.fillStyle = '#A9A9A9'; ctx.fillRect(30, 10, 4, 30); // blade
-                ctx.fillStyle = '#FFD700'; ctx.fillRect(20, 40, 24, 4); // crossguard
+                ctx.fillStyle = '#5d4037'; ctx.fillRect(28, 42, 8, 18);
+                ctx.fillStyle = '#ffd54f'; ctx.fillRect(20, 38, 24, 6);
+                ctx.fillStyle = '#e0f7fa'; ctx.fillRect(30, 8, 4, 30);
+                ctx.fillStyle = '#80deea'; ctx.fillRect(26, 14, 4, 24);
+                ctx.fillRect(34, 14, 4, 24);
             } else if (type === 'pickaxe') {
                 ctx.clearRect(0,0,64,64);
                 ctx.fillStyle = '#8B4513'; ctx.fillRect(30, 20, 4, 40); // handle
@@ -958,6 +1022,39 @@
                 for(let i=18; i<=34; i+=8) ctx.fillRect(14, i, 36, 2);
                 ctx.fillStyle = '#76FF03'; ctx.fillRect(22, 44, 20, 6);
                 ctx.fillStyle = '#FFFFFF'; ctx.fillRect(46, 46, 6, 6);
+            } else if (type === 'axe') {
+                ctx.clearRect(0,0,64,64);
+                ctx.fillStyle = '#6d4c41'; ctx.fillRect(30, 18, 6, 42);
+                ctx.fillStyle = '#b0bec5'; ctx.fillRect(18, 10, 30, 14);
+                ctx.fillRect(16, 22, 20, 12);
+                ctx.fillStyle = '#eceff1'; ctx.fillRect(20, 12, 22, 4);
+            } else if (type === 'bow') {
+                ctx.clearRect(0,0,64,64);
+                ctx.strokeStyle = '#8d6e63'; ctx.lineWidth = 8;
+                ctx.beginPath(); ctx.arc(38, 32, 24, -Math.PI/2, Math.PI/2); ctx.stroke();
+                ctx.strokeStyle = '#f5f5f5'; ctx.lineWidth = 3;
+                ctx.beginPath(); ctx.moveTo(38,8); ctx.lineTo(38,56); ctx.stroke();
+                ctx.fillStyle = '#cfd8dc'; ctx.fillRect(18,30,30,4);
+            } else if (type === 'crossbow') {
+                ctx.clearRect(0,0,64,64);
+                ctx.fillStyle = '#795548'; ctx.fillRect(28, 12, 8, 44);
+                ctx.fillStyle = '#8d6e63'; ctx.fillRect(12, 20, 40, 8);
+                ctx.fillStyle = '#cfd8dc'; ctx.fillRect(8, 28, 48, 4);
+                ctx.fillStyle = '#ffcc80'; ctx.fillRect(30, 30, 4, 22);
+            } else if (type === 'trident') {
+                ctx.clearRect(0,0,64,64);
+                ctx.fillStyle = '#80deea'; ctx.fillRect(30, 12, 4, 48);
+                ctx.fillRect(18, 8, 4, 20);
+                ctx.fillRect(42, 8, 4, 20);
+                ctx.fillRect(20, 8, 24, 4);
+                ctx.fillStyle = '#e0f7fa'; ctx.fillRect(28, 4, 8, 18);
+            } else if (type === 'mace') {
+                ctx.clearRect(0,0,64,64);
+                ctx.fillStyle = '#6d4c41'; ctx.fillRect(30, 28, 6, 30);
+                ctx.fillStyle = '#90a4ae'; ctx.fillRect(20, 8, 24, 24);
+                ctx.fillStyle = '#cfd8dc';
+                ctx.fillRect(16,12,4,8); ctx.fillRect(44,12,4,8);
+                ctx.fillRect(28,4,8,4); ctx.fillRect(28,32,8,4);
             } else if (type === 'lever') {
                 ctx.clearRect(0,0,64,64);
                 ctx.fillStyle = '#808080'; // 底座
@@ -1057,6 +1154,11 @@
         const matPickaxe = new THREE.MeshLambertMaterial({ map: createTexture('pickaxe'), transparent: true, alphaTest: 0.5 });
         const matGun = new THREE.MeshLambertMaterial({ map: createTexture('gun'), transparent: true, alphaTest: 0.5 });
         const matScanner = new THREE.MeshLambertMaterial({ map: createTexture('scanner'), transparent: true, alphaTest: 0.5 });
+        const matAxe = new THREE.MeshLambertMaterial({ map: createTexture('axe'), transparent: true, alphaTest: 0.5 });
+        const matBow = new THREE.MeshLambertMaterial({ map: createTexture('bow'), transparent: true, alphaTest: 0.5 });
+        const matCrossbow = new THREE.MeshLambertMaterial({ map: createTexture('crossbow'), transparent: true, alphaTest: 0.5 });
+        const matTrident = new THREE.MeshLambertMaterial({ map: createTexture('trident'), transparent: true, alphaTest: 0.5 });
+        const matMace = new THREE.MeshLambertMaterial({ map: createTexture('mace'), transparent: true, alphaTest: 0.5 });
         
         const matIronOre = new THREE.MeshLambertMaterial({ map: createTexture('iron_ore') });
         const matGoldOre = new THREE.MeshLambertMaterial({ map: createTexture('gold_ore') });
@@ -1065,6 +1167,11 @@
         const matCookedMeat = new THREE.MeshLambertMaterial({ map: createTexture('cooked_meat') });
         const matBucket = new THREE.MeshLambertMaterial({ map: createTexture('bucket'), transparent: true, alphaTest: 0.5 });
         const matShrinkPotion = new THREE.MeshLambertMaterial({ map: createTexture('shrink_potion'), transparent: true, alphaTest: 0.5 });
+        const matBrickBlock = new THREE.MeshLambertMaterial({ map: createTexture('brick_block') });
+        const matBlueConcrete = new THREE.MeshLambertMaterial({ map: createTexture('blue_concrete') });
+        const matBlackstone = new THREE.MeshLambertMaterial({ map: createTexture('blackstone') });
+        const matGlowBlock = new THREE.MeshLambertMaterial({ map: createTexture('glow_block'), emissive: 0xffd54f, emissiveIntensity: 0.45 });
+        const matModernTile = new THREE.MeshLambertMaterial({ map: createTexture('modern_tile') });
 
         const materials = {
             1: matGrass, 2: matDirt, 3: matStone, 4: matWood, 5: matLeaves,
@@ -1080,7 +1187,9 @@
             39: matRawMeat, 40: matCookedMeat, 41: matScanner, 42: matTallGrass,
             43: matLava, 44: matObsidian, 45: matBucket, 46: matShrinkPotion,
             47: matBarrier, 48: matGlassSensorDoor, 49: matGlassSensorDoor, 50: matGlassSensorDoorOpen,
-            51: matWhiteCobblestone, 52: matPressurePlate, 53: matPiston
+            51: matWhiteCobblestone, 52: matPressurePlate, 53: matPiston,
+            54: matAxe, 55: matBow, 56: matCrossbow, 57: matTrident, 58: matMace,
+            59: matBrickBlock, 60: matBlueConcrete, 61: matBlackstone, 62: matGlowBlock, 63: matModernTile
         };
 
         const boxGeo = new THREE.BoxGeometry(1, 1, 1);
@@ -1566,6 +1675,19 @@
             currentRoomCode = value || '';
             const el = document.getElementById('room-code-display');
             if (el) el.value = currentRoomCode || 'Click Create Room';
+            updateRoomCodeFloat();
+        }
+
+        function updateRoomCodeFloat() {
+            const el = document.getElementById('room-code-float');
+            if (!el) return;
+            if (isGameStarted && currentRoomCode) {
+                el.style.display = 'block';
+                el.innerText = `Room Code Above Head: ${currentRoomCode}`;
+                el.title = 'Click to copy room code';
+            } else {
+                el.style.display = 'none';
+            }
         }
 
         function setupRoomCodeInput() {
@@ -1603,8 +1725,9 @@
                 if (btn) btn.disabled = false;
                 document.getElementById('multiplayer-menu').style.display = 'none';
                 document.getElementById('start-menu').style.display = 'none';
-                showToast(role === 'host' ? "Room created. Waiting for friend." : "Joined room.");
+                showToast(role === 'host' ? "Room created. Your code is above your head." : "Joined room. Look for your friend in game.");
                 window.startNewGame(false);
+                updateRoomCodeFloat();
             };
             socket.onerror = () => {
                 if (btn) btn.disabled = false;
@@ -1679,7 +1802,7 @@
                     currentRoomUrl = buildWsUrl(address);
                     setRoomCode(makeRoomCodeFromAddress(address));
                     if (enterBtn) enterBtn.style.display = 'block';
-                    setMultiplayerStatus("Room code ready. Copy it, send it to your friend, then enter the room.");
+                    setMultiplayerStatus("Room code ready. It will also float above your head after you enter.");
                 });
         };
 
@@ -1862,7 +1985,7 @@
                         playerInventory = {};
                         // 开局只给基础建造方块和原材料（泥土、石头、木头、树叶、沙子、水、海带、红石、TNT、核弹、工具）
                         // 移除了需要合成的物品：玻璃(6), 梯子(7), 木门(8), 工作台(12), 熔炉(13), 床(14), 火把(16), 大铁门(17), 铁轨(26), 动力轨(27), 矿车(29), 拉杆(30), 附魔台(32)
-                        [2,3,4,5,21,22,23,24,25,28,30,33,34,35,47,48,51,52,53].forEach(id => { playerInventory[id] = 20; });
+                        [2,3,4,5,21,22,23,24,25,28,30,33,34,35,47,48,51,52,53,54,55,56,57,58,59,60,61,62,63].forEach(id => { playerInventory[id] = 20; });
                     }
                     updateHotbarUI();
                     
@@ -2298,8 +2421,8 @@
         // --- 物品栏/库存系统 ---
         let playerInventory = {}; 
         // 初始只给原材料，数量 20 个。不给合成产物。
-        [2,3,4,5,21,22,23,24,25,28,30,33,34,35,47,48,51,52,53].forEach(id => { playerInventory[id] = 20; });
-        const TOOL_ITEMS = [33, 34, 35, 41];
+        [2,3,4,5,21,22,23,24,25,28,30,33,34,35,47,48,51,52,53,54,55,56,57,58,59,60,61,62,63].forEach(id => { playerInventory[id] = 20; });
+        const TOOL_ITEMS = [33, 34, 35, 41, 54, 55, 56, 57, 58];
         function isToolItem(id) {
             return TOOL_ITEMS.includes(id);
         }
@@ -2342,7 +2465,17 @@
             { ing: { 3: 1, 6: 1 }, out: 51, count: 4 },        // 石头+玻璃 -> 白色鹅卵石
             { ing: { 3: 1, 6: 1, 28: 1 }, out: 47, count: 2 }, // 石头+玻璃+红石 -> 屏障
             { ing: { 3: 1, 28: 1 }, out: 52, count: 1 },       // 石头+红石 -> 压力板
-            { ing: { 4: 1, 3: 1, 28: 1 }, out: 53, count: 1 }  // 木头+石头+红石 -> 活塞
+            { ing: { 4: 1, 3: 1, 28: 1 }, out: 53, count: 1 }, // 木头+石头+红石 -> 活塞
+            { ing: { 4: 1, 36: 1 }, out: 54, count: 1 },       // 木头+铁 -> 斧
+            { ing: { 4: 2, 5: 1 }, out: 55, count: 1 },        // 木头+树叶 -> 弓
+            { ing: { 4: 1, 36: 1, 28: 1 }, out: 56, count: 1 },// 木头+铁+红石 -> 弩
+            { ing: { 36: 1, 38: 1 }, out: 57, count: 1 },      // 铁+蓝宝石 -> 三叉戟
+            { ing: { 36: 1, 3: 1 }, out: 58, count: 1 },       // 铁+石头 -> 重锤
+            { ing: { 2: 1, 23: 1 }, out: 59, count: 4 },       // 泥土+沙子 -> 砖块
+            { ing: { 23: 1, 38: 1 }, out: 60, count: 4 },      // 沙子+蓝宝石 -> 蓝混凝土
+            { ing: { 3: 1, 44: 1 }, out: 61, count: 4 },       // 石头+黑曜石 -> 黑石
+            { ing: { 6: 1, 37: 1 }, out: 62, count: 2 },       // 玻璃+金 -> 发光块
+            { ing: { 51: 1, 6: 1 }, out: 63, count: 4 }        // 白石+玻璃 -> 现代瓷砖
         ];
         
         function getBlockName(id) {
@@ -2354,7 +2487,9 @@
                 36:'Iron Ore', 37:'Gold Ore', 38:'Sapphire', 39:'Raw Meat', 40:'Cooked Meat', 41:'Scanner', 42:'Grass',
                 43:'Lava', 44:'Obsidian', 45:'Bucket', 46:'Shrink Potion', 47:'Barrier',
                 48:'Glass Sensor Door', 49:'Glass Sensor Door', 50:'Open Glass Sensor Door',
-                51:'White Cobblestone', 52:'Pressure Plate', 53:'Piston'
+                51:'White Cobblestone', 52:'Pressure Plate', 53:'Piston',
+                54:'Axe', 55:'Bow', 56:'Crossbow', 57:'Trident', 58:'Mace',
+                59:'Brick', 60:'Blue Concrete', 61:'Blackstone', 62:'Glow Block', 63:'Modern Tile'
             };
             return names[id] || '';
         }
@@ -2461,13 +2596,14 @@
                  21:29, 22:30, 23:32, 24:33, 25:34, 26:35,
                  27:36, 28:37, 29:38, 30:39, 31:40, 32:41,
                  33:43, 34:44, 35:45, 36:46, 37:47, 38:48, 39:51,
-                 40:52, 41:53
+                 40:52, 41:53, 42:54, 43:55, 44:56, 45:57, 46:58,
+                 47:59, 48:60, 49:61, 50:62, 51:63
              };
         }
 
         function updateInventoryCounts() {
             const mapping = getInventorySlotMapping();
-             for(let i=1; i<=41; i++) {
+             for(let i=1; i<=51; i++) {
                  let el = document.getElementById('inv-' + i);
                 if(el) {
                     let id = mapping[i];
@@ -2913,6 +3049,16 @@
         const WHITE_COBBLESTONE_ID = 51;
         const PRESSURE_PLATE_ID = 52;
         const PISTON_ID = 53;
+        const AXE_ID = 54;
+        const BOW_ID = 55;
+        const CROSSBOW_ID = 56;
+        const TRIDENT_ID = 57;
+        const MACE_ID = 58;
+        const BRICK_BLOCK_ID = 59;
+        const BLUE_CONCRETE_ID = 60;
+        const BLACKSTONE_ID = 61;
+        const GLOW_BLOCK_ID = 62;
+        const MODERN_TILE_ID = 63;
         const SEA_LEVEL = 8;
         const WATER_FLOW_PER_FRAME = 8;
         const WATER_FLOW_DRAIN_EVERY = 6;
@@ -4217,7 +4363,7 @@
         initHotbar();
 
         window.selectSlot = function(id) {
-            for(let i=1; i<=41; i++) {
+            for(let i=1; i<=51; i++) {
                 document.getElementById(`inv-${i}`)?.classList.remove('selected');
             }
             document.getElementById(`inv-${id}`)?.classList.add('selected');
@@ -5325,6 +5471,46 @@
             }
         }
 
+        function getHeldWeaponDamage() {
+            if (currentBlock === 33) return 2;
+            if (currentBlock === AXE_ID) return 2.5;
+            if (currentBlock === MACE_ID) return 4;
+            if (currentBlock === TRIDENT_ID) return 3;
+            return 1;
+        }
+
+        function shootRangedWeapon(itemId) {
+            const damage = itemId === CROSSBOW_ID ? 3 : (itemId === TRIDENT_ID ? 4 : 2);
+            const range = itemId === TRIDENT_ID ? 35 : (itemId === CROSSBOW_ID ? 50 : 38);
+            playSound(itemId === TRIDENT_ID ? 'stone' : 'gun');
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            const rayDir = raycaster.ray.direction.clone();
+            const rayPos = raycaster.ray.origin.clone();
+            for (let i = 0; i < range * 5; i++) {
+                const testPos = rayPos.clone().addScaledVector(rayDir, i * 0.2);
+                for (let mob of zombies) {
+                    if (testPos.distanceTo(mob.mesh.position) < 1.2) { damageMob(mob, damage); return true; }
+                }
+                for (let mob of animals) {
+                    if (testPos.distanceTo(mob.mesh.position) < 1.2) { damageMob(mob, damage); return true; }
+                }
+                for (let mob of villagers) {
+                    if (testPos.distanceTo(mob.mesh.position) < 1.2) { damageMob(mob, damage); return true; }
+                }
+                for (let j = creepers.length - 1; j >= 0; j--) {
+                    if (testPos.distanceTo(creepers[j].mesh.position) < 1.2) {
+                        scene.remove(creepers[j].mesh);
+                        creepers.splice(j, 1);
+                        return true;
+                    }
+                }
+                const bx = Math.round(testPos.x), by = Math.round(testPos.y), bz = Math.round(testPos.z);
+                const blockType = getBlock(bx, by, bz);
+                if (blockType !== 0 && blockType !== 24 && blockType !== 25 && blockType !== 42) return false;
+            }
+            return false;
+        }
+
         document.addEventListener('contextmenu', (e) => e.preventDefault());
         document.addEventListener('mouseup', (e) => {
             if (e.button === 0) cancelMining();
@@ -5335,6 +5521,11 @@
             if (e.button !== 0) cancelMining();
 
             // ===== 枪的特殊射击逻辑 =====
+            if ([BOW_ID, CROSSBOW_ID, TRIDENT_ID].includes(currentBlock) && e.button === 2) {
+                shootRangedWeapon(currentBlock);
+                return;
+            }
+
             if (currentBlock === 35 && e.button === 2) {
                 // 枪：右键开火
                 playSound('gun'); // 我们待会去补充这个音效
@@ -5410,7 +5601,7 @@
 	                for (let j = zombies.length - 1; j >= 0; j--) {
                     if (testPos.distanceTo(zombies[j].mesh.position) < 1.0) {
                         if (e.button === 0) { // 左键打
-                            damageMob(zombies[j], 1);
+                            damageMob(zombies[j], getHeldWeaponDamage());
                             playSound('dig');
                         }
                         hitEntity = true;
@@ -5435,7 +5626,7 @@
                 for (let j = animals.length - 1; j >= 0; j--) {
                     if (testPos.distanceTo(animals[j].mesh.position) < 1.0) {
                         if (e.button === 0) { // 左键打
-                            damageMob(animals[j], 1);
+                            damageMob(animals[j], getHeldWeaponDamage());
                             playSound('dig');
                         }
                         hitEntity = true;
@@ -5516,7 +5707,7 @@
                             
 	                            document.getElementById('trade-ui').style.display = 'block';
                         } else if (e.button === 0) {
-                            damageMob(villagers[j], 1);
+                            damageMob(villagers[j], getHeldWeaponDamage());
                             playSound('dig');
                         }
                         hitEntity = true;
@@ -5528,7 +5719,7 @@
                 for (let j = animals.length - 1; j >= 0; j--) {
                     if (testPos.distanceTo(animals[j].mesh.position) < 1.0) {
                         if (e.button === 0) {
-                            damageMob(animals[j], 1);
+                            damageMob(animals[j], getHeldWeaponDamage());
                             playSound('dig');
                         }
                         hitEntity = true;
@@ -5765,6 +5956,13 @@
                         return;
                     }
 
+                    if (targetType === 32) {
+                        controls.unlock();
+                        document.getElementById('mod-ui').style.display = 'block';
+                        showToast("Enchanting table opened the mod summoner.");
+                        return;
+                    }
+
                     if (matId === 29) { // 放置矿车实体
                         if (targetType === 26 || targetType === 27) {
                             playSound('place');
@@ -5807,7 +6005,7 @@
                         return;
                     }
 
-                    let placePos = hit.clone().add(norm);
+                    let placePos = targetType === 42 ? hit.clone() : hit.clone().add(norm);
                     let px = camera.position.x;
                     let py = camera.position.y;
                     let pz = camera.position.z;
@@ -5923,10 +6121,29 @@
         window.closeUI = function() {
             let autobuild = document.getElementById('autobuild-ui');
             let trade = document.getElementById('trade-ui');
+            let mod = document.getElementById('mod-ui');
             if (autobuild) autobuild.style.display = 'none';
             if (trade) trade.style.display = 'none';
+            if (mod) mod.style.display = 'none';
             controls.lock();
         }
+
+        window.summonModPack = function(type) {
+            const packs = {
+                builder: [[59, 32], [60, 32], [61, 32], [62, 16], [63, 32], [51, 32], [47, 12], [48, 8]],
+                redstone: [[28, 32], [30, 16], [52, 12], [53, 12], [26, 24], [27, 24], [29, 6]],
+                weapons: [[33, 1], [54, 1], [55, 1], [56, 1], [57, 1], [58, 1], [35, 1]],
+                nature: [[1, 32], [2, 32], [4, 24], [5, 24], [23, 24], [24, 8], [25, 12], [42, 32]]
+            };
+            const pack = packs[type] || packs.builder;
+            for (let [id, count] of pack) {
+                playerInventory[id] = (playerInventory[id] || 0) + count;
+            }
+            updateHotbarUI();
+            updateInventoryCounts();
+            showToast("Mod pack summoned: " + type);
+            window.closeUI();
+        };
 
         window.doAutoBuild = function(type) {
             closeUI();
@@ -6291,6 +6508,7 @@
             document.getElementById('coord-z').innerText = `Z: ${Math.round(camera.position.z)}`;
             document.getElementById('terrain-display').innerText = `Terrain: ${getTerrainName(selectedTerrain)}`;
             document.getElementById('mode-display').innerText = `Mode: ${isCreativeMode() ? 'Creative' : 'Survival'}`;
+            updateRoomCodeFloat();
 
             // 第三人称摄像机跟随逻辑
             if (isThirdPerson && localPlayerModel) {
