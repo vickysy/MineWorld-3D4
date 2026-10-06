@@ -1243,6 +1243,12 @@
         // 铁轨、红石等地表扁平物体
         const flatGeo = new THREE.BoxGeometry(1, 0.05, 1);
         flatGeo.translate(0, -0.475, 0); // 贴地
+        const microVoxelGeo = new THREE.BoxGeometry(0.19, 0.19, 0.19);
+        const microVoxelGroup = new THREE.Group();
+        microVoxelGroup.visible = false;
+        scene.add(microVoxelGroup);
+        let lastMicroVoxelKey = '';
+        let microVoxelRefreshTimer = 0;
 
         const mobGeo = new THREE.BoxGeometry(0.8, 1.8, 0.8);
 
@@ -3310,6 +3316,117 @@
             return by > getSurfaceHeight(bx, bz);
         }
 
+        function clearMicroVoxelOverlay() {
+            while (microVoxelGroup.children.length > 0) {
+                const child = microVoxelGroup.children[0];
+                microVoxelGroup.remove(child);
+            }
+        }
+
+        function updateMicroVoxelOverlay(delta) {
+            if (playerScale >= 0.5 || !isGameStarted) {
+                if (microVoxelGroup.visible) {
+                    microVoxelGroup.visible = false;
+                    clearMicroVoxelOverlay();
+                    lastMicroVoxelKey = '';
+                }
+                return;
+            }
+
+            microVoxelGroup.visible = true;
+            microVoxelRefreshTimer -= delta;
+            const px = Math.round(camera.position.x);
+            const py = Math.round(camera.position.y - getPlayerHeight() * 0.45);
+            const pz = Math.round(camera.position.z);
+            const refreshKey = `${px},${py},${pz},${currentDimension}`;
+            if (refreshKey === lastMicroVoxelKey && microVoxelRefreshTimer > 0) return;
+            lastMicroVoxelKey = refreshKey;
+            microVoxelRefreshTimer = 0.25;
+            clearMicroVoxelOverlay();
+
+            const radius = 3;
+            const divisions = 4;
+            const gapStep = 1 / divisions;
+            const offsetStart = -0.375;
+            const faceLift = 0.60;
+            const faceChecks = [
+                { n: [1,0,0], axis: 'x', sign: 1 },
+                { n: [-1,0,0], axis: 'x', sign: -1 },
+                { n: [0,1,0], axis: 'y', sign: 1 },
+                { n: [0,-1,0], axis: 'y', sign: -1 },
+                { n: [0,0,1], axis: 'z', sign: 1 },
+                { n: [0,0,-1], axis: 'z', sign: -1 }
+            ];
+            const counts = {};
+            const microData = {};
+            const maxMicroVoxels = 1400;
+            let total = 0;
+
+            for (let dx = -radius; dx <= radius; dx++) {
+                for (let dy = -radius; dy <= radius; dy++) {
+                    for (let dz = -radius; dz <= radius; dz++) {
+                        const x = px + dx;
+                        const y = py + dy;
+                        const z = pz + dz;
+                        const type = getBlock(x, y, z);
+                        if (type === 0 || type === 24 || type === 25 || type === 42) continue;
+                        if (!materials[type]) continue;
+
+                        for (let face of faceChecks) {
+                            if (!isTransparent(x + face.n[0], y + face.n[1], z + face.n[2])) continue;
+                            for (let a = 0; a < divisions; a++) {
+                                for (let b = 0; b < divisions; b++) {
+                                    if (total >= maxMicroVoxels) break;
+                                    const jitter = (hash3(x * 4 + a, y * 4 + b, z, 205.6) - 0.5) * 0.025;
+                                    const pos = new THREE.Vector3(x, y, z);
+                                    const u = offsetStart + a * gapStep;
+                                    const v = offsetStart + b * gapStep;
+                                    if (face.axis === 'x') {
+                                        pos.x += face.sign * faceLift;
+                                        pos.y += u + jitter;
+                                        pos.z += v - jitter;
+                                    } else if (face.axis === 'y') {
+                                        pos.y += face.sign * faceLift;
+                                        pos.x += u + jitter;
+                                        pos.z += v - jitter;
+                                    } else {
+                                        pos.z += face.sign * faceLift;
+                                        pos.x += u + jitter;
+                                        pos.y += v - jitter;
+                                    }
+                                    if (!microData[type]) {
+                                        microData[type] = [];
+                                        counts[type] = 0;
+                                    }
+                                    microData[type].push(pos);
+                                    counts[type]++;
+                                    total++;
+                                }
+                                if (total >= maxMicroVoxels) break;
+                            }
+                            if (total >= maxMicroVoxels) break;
+                        }
+                        if (total >= maxMicroVoxels) break;
+                    }
+                    if (total >= maxMicroVoxels) break;
+                }
+                if (total >= maxMicroVoxels) break;
+            }
+
+            const matrix = new THREE.Matrix4();
+            for (let type in microData) {
+                const mesh = new THREE.InstancedMesh(microVoxelGeo, materials[type], counts[type]);
+                mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+                microData[type].forEach((pos, index) => {
+                    matrix.identity();
+                    matrix.setPosition(pos);
+                    mesh.setMatrixAt(index, matrix);
+                });
+                mesh.instanceMatrix.needsUpdate = true;
+                microVoxelGroup.add(mesh);
+            }
+        }
+
         function setBlock(x, y, z, type) {
             modifiedColumns.add(`${x},${z}`); // 记录该列已被修改
             const colKey = `${x},${z}`;
@@ -4371,6 +4488,9 @@
             currentDimension = 'overworld';
             playerScale = 1;
             shrinkTimer = 0;
+            clearMicroVoxelOverlay();
+            microVoxelGroup.visible = false;
+            lastMicroVoxelKey = '';
             
             const spawn = findSafeSpawn();
             worldSpawnPoint = { ...spawn };
@@ -6674,6 +6794,9 @@
                 shrinkTimer = Math.max(0, shrinkTimer - delta);
                 if (shrinkTimer === 0 && playerScale !== 1) {
                     playerScale = 1;
+                    clearMicroVoxelOverlay();
+                    microVoxelGroup.visible = false;
+                    lastMicroVoxelKey = '';
                     showToast("Shrink potion wore off.");
                 }
             }
@@ -6939,6 +7062,7 @@
             updateMining(delta);
             updateDroppedItems(delta);
             updateExplosionParticles(delta);
+            updateMicroVoxelOverlay(delta);
 
             // 移动白云
                 for (let i = 0; i < clouds.children.length; i++) {
