@@ -1243,7 +1243,9 @@
         // 铁轨、红石等地表扁平物体
         const flatGeo = new THREE.BoxGeometry(1, 0.05, 1);
         flatGeo.translate(0, -0.475, 0); // 贴地
-        const microVoxelGeo = new THREE.BoxGeometry(0.19, 0.19, 0.19);
+        const MICRO_BLOCK_DIVISIONS = 20;
+        const MICRO_PLAYER_SCALE = 1 / MICRO_BLOCK_DIVISIONS;
+        const microGridPlaneGeo = new THREE.PlaneGeometry(1.001, 1.001);
         const microVoxelGroup = new THREE.Group();
         microVoxelGroup.visible = false;
         scene.add(microVoxelGroup);
@@ -2860,12 +2862,12 @@
                 return false;
             }
             consumeInventoryItem(SHRINK_POTION_ID);
-            playerScale = 0.25;
+            playerScale = MICRO_PLAYER_SCALE;
             shrinkTimer = 240;
             updateHotbarUI();
             updateInventoryCounts();
             playSound('pickup');
-            showToast("Shrink potion used. Tiny mode lasts 4 minutes.");
+            showToast("Shrink potion used. You are now 1/20 of a block.");
             return true;
         }
 
@@ -3317,10 +3319,62 @@
         }
 
         function clearMicroVoxelOverlay() {
+            const texturesToDispose = new Set();
             while (microVoxelGroup.children.length > 0) {
                 const child = microVoxelGroup.children[0];
                 microVoxelGroup.remove(child);
+                if (child.userData.disposeMaterial && child.material && child.material.map) texturesToDispose.add(child.material.map);
+                if (child.userData.disposeMaterial && child.material) child.material.dispose();
             }
+            texturesToDispose.forEach(texture => texture.dispose());
+        }
+
+        function createMicroGridTexture(type) {
+            const baseTexture = Array.isArray(materials[type]) ? materials[type][2]?.map || materials[type][0]?.map : materials[type]?.map;
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            if (baseTexture && baseTexture.image) {
+                ctx.drawImage(baseTexture.image, 0, 0, canvas.width, canvas.height);
+            } else {
+                ctx.fillStyle = '#888888';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            const step = canvas.width / MICRO_BLOCK_DIVISIONS;
+            ctx.strokeStyle = 'rgba(20, 20, 20, 0.34)';
+            ctx.lineWidth = 1;
+            for (let i = 1; i < MICRO_BLOCK_DIVISIONS; i++) {
+                const p = Math.round(i * step) + 0.5;
+                ctx.beginPath();
+                ctx.moveTo(p, 0);
+                ctx.lineTo(p, canvas.height);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(0, p);
+                ctx.lineTo(canvas.width, p);
+                ctx.stroke();
+            }
+
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < MICRO_BLOCK_DIVISIONS; i += 4) {
+                const p = Math.round(i * step) + 0.5;
+                ctx.beginPath();
+                ctx.moveTo(p, 0);
+                ctx.lineTo(p, canvas.height);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(0, p);
+                ctx.lineTo(canvas.width, p);
+                ctx.stroke();
+            }
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.magFilter = THREE.NearestFilter;
+            texture.minFilter = THREE.NearestFilter;
+            return texture;
         }
 
         function updateMicroVoxelOverlay(delta) {
@@ -3344,23 +3398,19 @@
             microVoxelRefreshTimer = 0.25;
             clearMicroVoxelOverlay();
 
-            const radius = 3;
-            const divisions = 4;
-            const gapStep = 1 / divisions;
-            const offsetStart = -0.375;
-            const faceLift = 0.60;
+            const radius = 2;
+            const faceLift = 0.506;
             const faceChecks = [
-                { n: [1,0,0], axis: 'x', sign: 1 },
-                { n: [-1,0,0], axis: 'x', sign: -1 },
-                { n: [0,1,0], axis: 'y', sign: 1 },
-                { n: [0,-1,0], axis: 'y', sign: -1 },
-                { n: [0,0,1], axis: 'z', sign: 1 },
-                { n: [0,0,-1], axis: 'z', sign: -1 }
+                { n: [1,0,0], rot: [0, Math.PI / 2, 0], off: [faceLift,0,0] },
+                { n: [-1,0,0], rot: [0, -Math.PI / 2, 0], off: [-faceLift,0,0] },
+                { n: [0,1,0], rot: [-Math.PI / 2, 0, 0], off: [0,faceLift,0] },
+                { n: [0,-1,0], rot: [Math.PI / 2, 0, 0], off: [0,-faceLift,0] },
+                { n: [0,0,1], rot: [0, 0, 0], off: [0,0,faceLift] },
+                { n: [0,0,-1], rot: [0, Math.PI, 0], off: [0,0,-faceLift] }
             ];
-            const counts = {};
-            const microData = {};
-            const maxMicroVoxels = 1400;
-            let total = 0;
+            const textureCache = new Map();
+            let faces = 0;
+            const maxFaces = 90;
 
             for (let dx = -radius; dx <= radius; dx++) {
                 for (let dy = -radius; dy <= radius; dy++) {
@@ -3374,57 +3424,30 @@
 
                         for (let face of faceChecks) {
                             if (!isTransparent(x + face.n[0], y + face.n[1], z + face.n[2])) continue;
-                            for (let a = 0; a < divisions; a++) {
-                                for (let b = 0; b < divisions; b++) {
-                                    if (total >= maxMicroVoxels) break;
-                                    const jitter = (hash3(x * 4 + a, y * 4 + b, z, 205.6) - 0.5) * 0.025;
-                                    const pos = new THREE.Vector3(x, y, z);
-                                    const u = offsetStart + a * gapStep;
-                                    const v = offsetStart + b * gapStep;
-                                    if (face.axis === 'x') {
-                                        pos.x += face.sign * faceLift;
-                                        pos.y += u + jitter;
-                                        pos.z += v - jitter;
-                                    } else if (face.axis === 'y') {
-                                        pos.y += face.sign * faceLift;
-                                        pos.x += u + jitter;
-                                        pos.z += v - jitter;
-                                    } else {
-                                        pos.z += face.sign * faceLift;
-                                        pos.x += u + jitter;
-                                        pos.y += v - jitter;
-                                    }
-                                    if (!microData[type]) {
-                                        microData[type] = [];
-                                        counts[type] = 0;
-                                    }
-                                    microData[type].push(pos);
-                                    counts[type]++;
-                                    total++;
-                                }
-                                if (total >= maxMicroVoxels) break;
-                            }
-                            if (total >= maxMicroVoxels) break;
+                            if (!textureCache.has(type)) textureCache.set(type, createMicroGridTexture(type));
+                            const texture = textureCache.get(type);
+                            const mat = new THREE.MeshBasicMaterial({
+                                map: texture,
+                                transparent: true,
+                                opacity: 0.92,
+                                side: THREE.DoubleSide,
+                                depthWrite: false
+                            });
+                            const mesh = new THREE.Mesh(microGridPlaneGeo, mat);
+                            mesh.position.set(x + face.off[0], y + face.off[1], z + face.off[2]);
+                            mesh.rotation.set(face.rot[0], face.rot[1], face.rot[2]);
+                            mesh.userData.disposeMaterial = true;
+                            microVoxelGroup.add(mesh);
+                            faces++;
+                            if (faces >= maxFaces) break;
                         }
-                        if (total >= maxMicroVoxels) break;
+                        if (faces >= maxFaces) break;
                     }
-                    if (total >= maxMicroVoxels) break;
+                    if (faces >= maxFaces) break;
                 }
-                if (total >= maxMicroVoxels) break;
+                if (faces >= maxFaces) break;
             }
 
-            const matrix = new THREE.Matrix4();
-            for (let type in microData) {
-                const mesh = new THREE.InstancedMesh(microVoxelGeo, materials[type], counts[type]);
-                mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-                microData[type].forEach((pos, index) => {
-                    matrix.identity();
-                    matrix.setPosition(pos);
-                    mesh.setMatrixAt(index, matrix);
-                });
-                mesh.instanceMatrix.needsUpdate = true;
-                microVoxelGroup.add(mesh);
-            }
         }
 
         function setBlock(x, y, z, type) {
@@ -4342,7 +4365,7 @@
         }
 
         function getPlayerRadius() {
-            return Math.max(0.055, PLAYER_RADIUS * playerScale);
+            return Math.max(0.012, PLAYER_RADIUS * playerScale);
         }
 
         // 第三人称模型保留给其他功能，但不再用双击 E 切换，避免相机和玩家坐标分离。
