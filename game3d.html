@@ -1249,6 +1249,7 @@
         const microVoxelGroup = new THREE.Group();
         microVoxelGroup.visible = false;
         scene.add(microVoxelGroup);
+        const microMinedBlocks = new Set();
         let lastMicroVoxelKey = '';
         let microVoxelRefreshTimer = 0;
 
@@ -1947,6 +1948,7 @@
                     rx: camera.rotation.x, ry: camera.rotation.y, rz: camera.rotation.z
                 },
                 worldMap: Array.from(worldMap.entries()),
+                microMinedBlocks: Array.from(microMinedBlocks),
                 modifiedColumns: Array.from(modifiedColumns),
                 columnMinY: Array.from(columnMinY.entries()),
                 chunkMaxY: Array.from(chunkMaxY.entries()),
@@ -1992,6 +1994,7 @@
                     rebuildQueue.clear();
                     heightCache.clear();
                     worldMap.clear();
+                    microMinedBlocks.clear();
                     modifiedColumns.clear();
                     columnMinY.clear();
                     chunkMaxY.clear();
@@ -2042,6 +2045,7 @@
                     updateHotbarUI();
                     
                     data.worldMap.forEach(([k, v]) => worldMap.set(k, v));
+                    if (data.microMinedBlocks) data.microMinedBlocks.forEach(k => microMinedBlocks.add(k));
                     if (data.modifiedColumns) data.modifiedColumns.forEach(v => modifiedColumns.add(v));
                     if (data.columnMinY) data.columnMinY.forEach(([k, v]) => columnMinY.set(k, v));
 	                    if (data.chunkMaxY) {
@@ -2862,7 +2866,9 @@
                 return false;
             }
             consumeInventoryItem(SHRINK_POTION_ID);
+            const feetY = camera.position.y - getPlayerHeight();
             playerScale = MICRO_PLAYER_SCALE;
+            camera.position.y = feetY + getPlayerHeight();
             shrinkTimer = 240;
             updateHotbarUI();
             updateInventoryCounts();
@@ -3329,7 +3335,75 @@
             texturesToDispose.forEach(texture => texture.dispose());
         }
 
-        function createMicroGridTexture(type) {
+        function isTinyMode() {
+            return playerScale <= MICRO_PLAYER_SCALE * 1.5;
+        }
+
+        function microBlockKey(bx, by, bz, mx, my, mz) {
+            return `${bx},${by},${bz}:${mx},${my},${mz}`;
+        }
+
+        function getMicroCoords(worldPos, bx, by, bz) {
+            const localX = Math.max(0, Math.min(0.9999, worldPos.x - (bx - 0.5)));
+            const localY = Math.max(0, Math.min(0.9999, worldPos.y - (by - 0.5)));
+            const localZ = Math.max(0, Math.min(0.9999, worldPos.z - (bz - 0.5)));
+            return {
+                mx: Math.floor(localX * MICRO_BLOCK_DIVISIONS),
+                my: Math.floor(localY * MICRO_BLOCK_DIVISIONS),
+                mz: Math.floor(localZ * MICRO_BLOCK_DIVISIONS)
+            };
+        }
+
+        function isMicroMined(bx, by, bz, mx, my, mz) {
+            return microMinedBlocks.has(microBlockKey(bx, by, bz, mx, my, mz));
+        }
+
+        function mineMicroBlock(hit) {
+            const key = microBlockKey(hit.x, hit.y, hit.z, hit.mx, hit.my, hit.mz);
+            if (microMinedBlocks.has(key)) return false;
+            microMinedBlocks.add(key);
+            lastMicroVoxelKey = '';
+            microVoxelRefreshTimer = 0;
+            playMineSound(hit.type);
+            showToast(`Micro block mined: ${hit.mx + 1}, ${hit.my + 1}, ${hit.mz + 1}`);
+            updateMicroVoxelOverlay(1);
+            return true;
+        }
+
+        function findMicroBlockHit(rayPos, rayDir, maxDistance = 0.85) {
+            const step = 1 / MICRO_BLOCK_DIVISIONS / 2;
+            let lastBig = null;
+            for (let d = 0; d <= maxDistance; d += step) {
+                const pos = rayPos.clone().addScaledVector(rayDir, d);
+                const bx = Math.round(pos.x);
+                const by = Math.round(pos.y);
+                const bz = Math.round(pos.z);
+                const type = getBlock(bx, by, bz);
+                if (type === 0 || type === 24 || type === 25 || type === 42) {
+                    lastBig = { x: bx, y: by, z: bz };
+                    continue;
+                }
+                const micro = getMicroCoords(pos, bx, by, bz);
+                if (isMicroMined(bx, by, bz, micro.mx, micro.my, micro.mz)) continue;
+                let norm = new THREE.Vector3(0, 1, 0);
+                if (lastBig) norm.set(lastBig.x - bx, lastBig.y - by, lastBig.z - bz);
+                if (norm.x === 0 && norm.y === 0 && norm.z === 0) {
+                    const back = rayPos.clone().addScaledVector(rayDir, Math.max(0, d - step));
+                    norm.set(Math.round(back.x) - bx, Math.round(back.y) - by, Math.round(back.z) - bz);
+                }
+                if (norm.x === 0 && norm.y === 0 && norm.z === 0) norm.set(0, 1, 0);
+                return { x: bx, y: by, z: bz, type, norm, ...micro };
+            }
+            return null;
+        }
+
+        function faceMicroCoords(face, a, b) {
+            if (face.axis === 'x') return { mx: face.sign > 0 ? MICRO_BLOCK_DIVISIONS - 1 : 0, my: a, mz: b };
+            if (face.axis === 'y') return { mx: a, my: face.sign > 0 ? MICRO_BLOCK_DIVISIONS - 1 : 0, mz: b };
+            return { mx: a, my: b, mz: face.sign > 0 ? MICRO_BLOCK_DIVISIONS - 1 : 0 };
+        }
+
+        function createMicroGridTexture(type, block, face) {
             const baseTexture = Array.isArray(materials[type]) ? materials[type][2]?.map || materials[type][0]?.map : materials[type]?.map;
             const canvas = document.createElement('canvas');
             canvas.width = 256;
@@ -3355,6 +3429,17 @@
                 ctx.moveTo(0, p);
                 ctx.lineTo(canvas.width, p);
                 ctx.stroke();
+            }
+
+            for (let a = 0; a < MICRO_BLOCK_DIVISIONS; a++) {
+                for (let b = 0; b < MICRO_BLOCK_DIVISIONS; b++) {
+                    const c = faceMicroCoords(face, a, b);
+                    if (!isMicroMined(block.x, block.y, block.z, c.mx, c.my, c.mz)) continue;
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.62)';
+                    ctx.fillRect(a * step + 1, b * step + 1, step - 2, step - 2);
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.24)';
+                    ctx.strokeRect(a * step + 1.5, b * step + 1.5, step - 3, step - 3);
+                }
             }
 
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
@@ -3424,8 +3509,9 @@
 
                         for (let face of faceChecks) {
                             if (!isTransparent(x + face.n[0], y + face.n[1], z + face.n[2])) continue;
-                            if (!textureCache.has(type)) textureCache.set(type, createMicroGridTexture(type));
-                            const texture = textureCache.get(type);
+                            const textureKey = `${type}:${x},${y},${z}:${face.n.join(',')}`;
+                            if (!textureCache.has(textureKey)) textureCache.set(textureKey, createMicroGridTexture(type, { x, y, z }, { axis: face.n[0] ? 'x' : (face.n[1] ? 'y' : 'z'), sign: face.n[0] || face.n[1] || face.n[2] }));
+                            const texture = textureCache.get(textureKey);
                             const mat = new THREE.MeshBasicMaterial({
                                 map: texture,
                                 transparent: true,
@@ -4481,6 +4567,7 @@
             rebuildQueue.clear();
             heightCache.clear();
             worldMap.clear();
+            microMinedBlocks.clear();
             modifiedColumns.clear();
             columnMinY.clear();
             chunkMaxY.clear();
@@ -4614,6 +4701,18 @@
             return true;
         }
 
+        function isTinySolidAtPoint(x, y, z) {
+            const bx = Math.round(x);
+            const by = Math.round(y);
+            const bz = Math.round(z);
+            const blockType = getBlock(bx, by, bz);
+            if (blockType === 0 || blockType === 7 || blockType === 10 || blockType === 11 || blockType === 19 || blockType === 20 || blockType === 24 || blockType === 25 || blockType === 26 || blockType === 27 || blockType === 28 || blockType === 30 || blockType === 31 || blockType === 42 || blockType === LAVA_ID || blockType === GLASS_SENSOR_DOOR_OPEN_ID || blockType === PRESSURE_PLATE_ID) {
+                return false;
+            }
+            const micro = getMicroCoords(new THREE.Vector3(x, y, z), bx, by, bz);
+            return !isMicroMined(bx, by, bz, micro.mx, micro.my, micro.mz);
+        }
+
         function checkCollision(pos) {
             const playerHeight = getPlayerHeight();
             const playerRadius = getPlayerRadius();
@@ -4629,10 +4728,13 @@
                     [0,0], [playerRadius,0], [-playerRadius,0], [0,playerRadius], [0,-playerRadius]
                 ];
                 for (let off of offsets) {
+                    if (isTinyMode() && isTinySolidAtPoint(pt.x + off[0], pt.y, pt.z + off[1])) {
+                        return true;
+                    }
                     let bx = Math.round(pt.x + off[0]);
                     let by = Math.round(pt.y);
                     let bz = Math.round(pt.z + off[1]);
-                    if (isSolid(bx, by, bz)) {
+                    if (!isTinyMode() && isSolid(bx, by, bz)) {
                         return true; 
                     }
                 }
@@ -6030,6 +6132,14 @@
                         return;
                     }
 
+                    if (isTinyMode()) {
+                        const microHit = findMicroBlockHit(rayPosFast, rayDirFast);
+                        if (microHit) {
+                            mineMicroBlock(microHit);
+                            return;
+                        }
+                    }
+
                     startMiningBlock(hit, currentBlock === SCANNER_ID, norm);
 
                 } else if (e.button === 2) { 
@@ -6816,7 +6926,9 @@
             if (shrinkTimer > 0) {
                 shrinkTimer = Math.max(0, shrinkTimer - delta);
                 if (shrinkTimer === 0 && playerScale !== 1) {
+                    const feetY = camera.position.y - getPlayerHeight();
                     playerScale = 1;
+                    camera.position.y = feetY + getPlayerHeight();
                     clearMicroVoxelOverlay();
                     microVoxelGroup.visible = false;
                     lastMicroVoxelKey = '';
@@ -6990,7 +7102,10 @@
                 let bz = Math.round(camera.position.z);
                 let onLadder = (getBlock(bx, by, bz) === 7 || getBlock(bx, Math.round(camera.position.y - getPlayerHeight()), bz) === 7);
                 let inWaterPhys = (getBlock(bx, by, bz) === 24 || getBlock(bx, Math.round(camera.position.y - getPlayerHeight()), bz) === 24);
-                let onGroundPhys = isSolid(bx, Math.round(camera.position.y - getPlayerHeight() - 0.1), bz);
+                const physicsScale = isTinyMode() ? MICRO_PLAYER_SCALE : 1;
+                let onGroundPhys = isTinyMode()
+                    ? isTinySolidAtPoint(camera.position.x, camera.position.y - getPlayerHeight() - Math.max(0.004, 0.06 * physicsScale), camera.position.z)
+                    : isSolid(bx, Math.round(camera.position.y - getPlayerHeight() - Math.max(0.01, 0.1 * physicsScale)), bz);
 
                 // --- 物理引擎 ---
                 if (inWaterPhys) {
@@ -7005,16 +7120,16 @@
                 
                 if (onLadder) {
                     velocity.y = 0; 
-                    if (moveForward) velocity.y = 4; 
-                    if (moveBackward) velocity.y = -4; 
+                    if (moveForward) velocity.y = 4 * physicsScale; 
+                    if (moveBackward) velocity.y = -4 * physicsScale; 
                 } else if (inWaterPhys) {
-                    velocity.y -= 5.0 * playerDelta; // 水中下沉慢
-                    if (holdingSpace) velocity.y = 4; // 水中游泳上升
+                    velocity.y -= 5.0 * physicsScale * playerDelta; // 水中下沉慢
+                    if (holdingSpace) velocity.y = 4 * physicsScale; // 水中游泳上升
                 } else if (holdingSpace) {
-                    if (onGroundPhys) velocity.y = 8; // 正常跳跃，只跳一下，不再一直飞
+                    if (onGroundPhys) velocity.y = 8 * physicsScale; // 正常跳跃，只跳一下，不再一直飞
                     holdingSpace = false;
                 } else {
-                    velocity.y -= 25.0 * playerDelta; // 正常重力
+                    velocity.y -= 25.0 * physicsScale * playerDelta; // 正常重力
                 }
 
                 direction.z = Number(moveForward) - Number(moveBackward);
@@ -7022,7 +7137,7 @@
                 direction.normalize(); 
 
                 const tiredMultiplier = playerTired ? TIRED_WALK_MULTIPLIER : 1;
-                let moveSpeed = (inWaterPhys ? 25.0 : 50.0) * tiredMultiplier; // 水中移动慢
+                let moveSpeed = (inWaterPhys ? 25.0 : 50.0) * tiredMultiplier * physicsScale; // 水中移动慢
                 if (moveForward || moveBackward) {
                     velocity.z -= direction.z * moveSpeed * playerDelta;
                     isMoving = true;
@@ -7032,7 +7147,7 @@
                     isMoving = true;
                 }
 
-                const maxSpeed = (inWaterPhys ? MAX_WATER_WALK_SPEED : MAX_WALK_SPEED) * tiredMultiplier;
+                const maxSpeed = (inWaterPhys ? MAX_WATER_WALK_SPEED : MAX_WALK_SPEED) * tiredMultiplier * physicsScale;
                 const horizontalSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
                 if (horizontalSpeed > maxSpeed) {
                     const scale = maxSpeed / horizontalSpeed;
