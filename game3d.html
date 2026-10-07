@@ -3370,29 +3370,32 @@
             return true;
         }
 
-        function findMicroBlockHit(rayPos, rayDir, maxDistance = 0.85) {
-            const step = 1 / MICRO_BLOCK_DIVISIONS / 2;
-            let lastBig = null;
-            for (let d = 0; d <= maxDistance; d += step) {
-                const pos = rayPos.clone().addScaledVector(rayDir, d);
+        function findMicroBlockHitFromBigHit(hit, norm, rayPos, rayDir) {
+            const type = getBlock(hit.x, hit.y, hit.z);
+            if (type === 0 || type === 24 || type === 25 || type === 42) return null;
+
+            const faceNormal = norm && (norm.x || norm.y || norm.z) ? norm.clone() : new THREE.Vector3(0, 1, 0);
+            const axis = Math.abs(faceNormal.x) > 0 ? 'x' : (Math.abs(faceNormal.y) > 0 ? 'y' : 'z');
+            const plane = hit[axis] + faceNormal[axis] * 0.5;
+            const denom = rayDir[axis];
+            if (Math.abs(denom) < 0.0001) return null;
+
+            let entryD = (plane - rayPos[axis]) / denom;
+            if (!Number.isFinite(entryD) || entryD < 0) entryD = 0;
+            const microSize = 1 / MICRO_BLOCK_DIVISIONS;
+            const step = microSize * 0.45;
+            const epsilon = 0.002;
+
+            for (let i = 0; i < MICRO_BLOCK_DIVISIONS * 3; i++) {
+                const pos = rayPos.clone().addScaledVector(rayDir, entryD + epsilon + i * step);
                 const bx = Math.round(pos.x);
                 const by = Math.round(pos.y);
                 const bz = Math.round(pos.z);
-                const type = getBlock(bx, by, bz);
-                if (type === 0 || type === 24 || type === 25 || type === 42) {
-                    lastBig = { x: bx, y: by, z: bz };
-                    continue;
-                }
+                if (bx !== hit.x || by !== hit.y || bz !== hit.z) return null;
                 const micro = getMicroCoords(pos, bx, by, bz);
-                if (isMicroMined(bx, by, bz, micro.mx, micro.my, micro.mz)) continue;
-                let norm = new THREE.Vector3(0, 1, 0);
-                if (lastBig) norm.set(lastBig.x - bx, lastBig.y - by, lastBig.z - bz);
-                if (norm.x === 0 && norm.y === 0 && norm.z === 0) {
-                    const back = rayPos.clone().addScaledVector(rayDir, Math.max(0, d - step));
-                    norm.set(Math.round(back.x) - bx, Math.round(back.y) - by, Math.round(back.z) - bz);
+                if (!isMicroMined(bx, by, bz, micro.mx, micro.my, micro.mz)) {
+                    return { x: bx, y: by, z: bz, type, norm: faceNormal, ...micro };
                 }
-                if (norm.x === 0 && norm.y === 0 && norm.z === 0) norm.set(0, 1, 0);
-                return { x: bx, y: by, z: bz, type, norm, ...micro };
             }
             return null;
         }
@@ -3435,10 +3438,22 @@
                 for (let b = 0; b < MICRO_BLOCK_DIVISIONS; b++) {
                     const c = faceMicroCoords(face, a, b);
                     if (!isMicroMined(block.x, block.y, block.z, c.mx, c.my, c.mz)) continue;
-                    ctx.fillStyle = 'rgba(0, 0, 0, 0.62)';
-                    ctx.fillRect(a * step + 1, b * step + 1, step - 2, step - 2);
-                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.24)';
-                    ctx.strokeRect(a * step + 1.5, b * step + 1.5, step - 3, step - 3);
+                    const px = a * step;
+                    const py = b * step;
+                    ctx.fillStyle = 'rgba(45, 38, 30, 0.34)';
+                    ctx.fillRect(px + 1, py + 1, step - 2, step - 2);
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.20)';
+                    ctx.beginPath();
+                    ctx.moveTo(px + 1.5, py + 1.5);
+                    ctx.lineTo(px + step - 2, py + 1.5);
+                    ctx.lineTo(px + step - 2, py + step - 2);
+                    ctx.stroke();
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.28)';
+                    ctx.beginPath();
+                    ctx.moveTo(px + 1.5, py + step - 2);
+                    ctx.lineTo(px + 1.5, py + 1.5);
+                    ctx.lineTo(px + step - 2, py + 1.5);
+                    ctx.stroke();
                 }
             }
 
@@ -6133,7 +6148,7 @@
                     }
 
                     if (isTinyMode()) {
-                        const microHit = findMicroBlockHit(rayPosFast, rayDirFast);
+                        const microHit = findMicroBlockHitFromBigHit(hit, norm, rayPosFast, rayDirFast);
                         if (microHit) {
                             mineMicroBlock(microHit);
                             return;
