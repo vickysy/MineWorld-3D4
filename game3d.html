@@ -2068,6 +2068,7 @@
                 try {
                     const data = JSON.parse(e.target.result);
                     clearMech();
+                    clearCombatState();
                     
                     // 清理旧区块
                     for (let [key, meshes] of chunkMeshes) {
@@ -2508,6 +2509,9 @@
         let creepers = [];
         const explosionParticles = [];
         const droppedItems = [];
+        const cannonProjectiles = [];
+        const combatEffects = [];
+        let companionOrder = null;
 
 
         let ridingMinecart = null;
@@ -2911,10 +2915,10 @@
                     starvationTimer = 0;
                     dayWasSlept = true;
                     playerTired = false;
-                    for (let z of zombies) scene.remove(z.mesh);
-                    zombies = [];
-                    for (let c of creepers) scene.remove(c.mesh);
-                    creepers = [];
+                    for (let z of zombies) if(!isCompanion(z)) scene.remove(z.mesh);
+                    zombies = zombies.filter(isCompanion);
+                    for (let c of creepers) if(!isCompanion(c)) scene.remove(c.mesh);
+                    creepers = creepers.filter(isCompanion);
                     showToast("Good morning!");
                     playSound('place');
                 }
@@ -4196,6 +4200,7 @@
         }
 
         function teleportToDimension(nextDimension) {
+            clearCombatState();
             currentDimension = nextDimension;
             heightCache.clear();
             chunkMeshes.forEach(meshes => {
@@ -5012,6 +5017,7 @@
             if (isTextEntryTarget(e.target)) return;
             if (controls.isLocked && !e.repeat && e.code === 'KeyR' && activeMech) { transformMech(); return; }
             if (controls.isLocked && !e.repeat && e.code === 'KeyX' && activeMech) { exitMech(); return; }
+            if (controls.isLocked && !e.repeat && e.code === 'KeyF' && activeMech) { fireHandCannon(); return; }
             if (e.code === 'KeyE') {
                 isThirdPerson = false;
                 if (localPlayerModel) scene.remove(localPlayerModel);
@@ -5112,6 +5118,7 @@
 
         window.resetWorld = function() {
             clearMech();
+            clearCombatState();
             // 清理旧区块
             for (let meshes of chunkMeshes.values()) {
                 for (const mesh of Object.values(meshes)) scene.remove(mesh);
@@ -5598,6 +5605,14 @@
                 panel([0.16,0.08,1.1],dark,[0.17,2.4,-0.35],[0.17,0.71,0.69]);
                 panel([0.9,0.1,0.75],cfg.paint,[0,2.7,-0.37],[0,1.04,-0.02]);
             }
+            const cannon = new THREE.Group();
+            cannon.position.set(0.66,1.9,0.12);
+            addModelBox(cannon,0.36,0.38,0.65,dark,0,0,0.23);
+            addModelBox(cannon,0.29,0.3,0.12,steel,0,0,0.59);
+            addModelBox(cannon,0.2,0.2,0.025,truck?0x71e5ff:0xffd95b,0,0,0.665);
+            addModelBox(cannon,0.12,0.08,0.42,cfg.paint,0,0.22,0.18);
+            const muzzle=new THREE.Object3D();muzzle.position.set(0,0,0.7);cannon.add(muzzle);
+            group.add(cannon);group.userData.cannon=cannon;group.userData.muzzle=muzzle;
             group.userData.parts=parts;
             return group;
         }
@@ -5692,6 +5707,11 @@
                 if(part.limb && moving) part.mesh.rotation.x+=Math.sin(mechWalkTime)*0.25*part.limb*(1-t);
                 if(part.mesh.userData.wheel && moving) part.mesh.rotation.x+=mechWalkTime*t;
             }
+            const cannon=mechVisual.userData.cannon;
+            cannon.visible=activeMech.form==='robot' && t<0.9;
+            cannon.scale.setScalar(Math.max(0.001,1-t));
+            cannon.rotation.x=-camera.rotation.x;
+            cannon.position.z=0.12-Math.max(0,1-(performance.now()-mechAttackTime)/180)*0.12;
             const forward=new THREE.Vector3();camera.getWorldDirection(forward);
             const yaw=Math.atan2(forward.x,forward.z);
             mechVisual.rotation.y=yaw;
@@ -5700,6 +5720,8 @@
             const focus=camera.position.clone();
             const chaseDistance=(innerWidth<500?7.5:6.5)-1.5*t;
             const desired=focus.clone().addScaledVector(forward,-chaseDistance);
+            const shoulder=new THREE.Vector3(forward.z,0,-forward.x).normalize();
+            desired.addScaledVector(shoulder,(innerWidth<500?0.55:0.95)*(1-t));
             desired.y+=1.1;
             const offset=desired.clone().sub(focus), length=offset.length();offset.normalize();
             let distance=length;
@@ -5713,8 +5735,9 @@
             mechCamera.lookAt(viewTarget);
             mechCamera.updateMatrixWorld(true);
             mechVisual.visible=distance>0.6;
-            let aim=focus.clone().addScaledVector(forward,6);
-            for(let d=0.05;d<=6;d+=0.05) {
+            const cannonAiming=activeMech.form==='robot';
+            let aim=cannonAiming ? traceCombatRay(focus,forward,60).point : focus.clone().addScaledVector(forward,6);
+            for(let d=0.05;!cannonAiming && d<=6;d+=0.05) {
                 const p=focus.clone().addScaledVector(forward,d);
                 if(isSolid(Math.round(p.x),Math.round(p.y),Math.round(p.z))) {aim=p;break;}
             }
@@ -5727,17 +5750,7 @@
 
         let mechAttackTime=-Infinity;
         function mechAttack() {
-            if(!activeMech || activeMech.form!=='robot' || performance.now()-mechAttackTime<500) return false;
-            mechAttackTime=performance.now();
-            const dir=new THREE.Vector3();camera.getWorldDirection(dir);
-            for(let d=0.2;d<=7;d+=0.15) {
-                const p=camera.position.clone().addScaledVector(dir,d);
-                if(isSolid(Math.round(p.x),Math.round(p.y),Math.round(p.z))) return false;
-                for(const mob of [...zombies,...creepers,...villagers,...animals]) {
-                    if(!mob.dying && p.distanceTo(mob.mesh.position)<1) {damageMob(mob,2);playSound('stone');return true;}
-                }
-            }
-            return false;
+            return fireHandCannon();
         }
 
         function createCreeperModel() {
@@ -5762,7 +5775,13 @@
                     soundTimer:3,hp:3,hurtTimer:0,dying:false,deathTimer:0,walkTime:0};
                 (id===68?creepers:zombies).push(mob);
             }
-            mob.eggId=id;return mob;
+            mob.eggId=id;
+            mob.friendly=id===68 || id===69;
+            if(mob.friendly) {
+                addModelBox(mob.mesh,0.62,0.09,0.5,0x46d9c2,0,id===69?0.99:0.56,0);
+                rememberOriginalMaterials(mob.mesh);
+            }
+            return mob;
         }
 
         function useSpawnEgg(id) {
@@ -5926,8 +5945,27 @@
             return true;
         }
 
-        function damageMob(entity, amount) {
-            if (!entity || entity.dying) return;
+        function isCompanion(entity) {
+            return !!entity && (entity.friendly || entity.eggId===68 || entity.eggId===69);
+        }
+
+        function findCompanionEnemy(ally) {
+            const canReach=target=>target && !target.dying && !isCompanion(target) && target.mesh.parent===scene &&
+                target.mesh.position.distanceTo(ally.mesh.position)<18 && hasClearLineBetween(
+                    ally.mesh.position.clone().add(new THREE.Vector3(0,0.4,0)),
+                    target.mesh.position.clone().add(new THREE.Vector3(0,0.4,0)));
+            if(companionOrder && canReach(companionOrder.target)) return companionOrder.target;
+            let best=null, distance=14;
+            for(const target of [...zombies,...creepers]) {
+                const d=target.mesh.position.distanceTo(ally.mesh.position);
+                if(d<distance && canReach(target)) {best=target;distance=d;}
+            }
+            return best;
+        }
+
+        function damageMob(entity, amount, source='player') {
+            if (!entity || entity.dying || (source==='player' && isCompanion(entity))) return false;
+            if(source==='player') companionOrder={target:entity,remaining:12};
             entity.hp = (entity.hp || 1) - amount;
             entity.hurtTimer = 0.35;
             setEntityTint(entity.mesh, 0xff3b30);
@@ -5942,6 +5980,7 @@
             } else if (entity.kind === 'zombie') {
                 playSound('zombie_hurt');
             }
+            return true;
         }
 
         function spawnMobAshParticles(entity) {
@@ -6118,6 +6157,10 @@
         }
 
         function updateEntities(delta) {
+            if(companionOrder) {
+                companionOrder.remaining-=delta;
+                if(companionOrder.remaining<=0 || companionOrder.target.dying || companionOrder.target.mesh.parent!==scene) companionOrder=null;
+            }
             // 更新僵尸
             for (let i = zombies.length - 1; i >= 0; i--) {
                 let z = zombies[i];
@@ -6128,14 +6171,25 @@
                 }
                 if (z.dying) continue;
 
-                let dx = camera.position.x - z.mesh.position.x;
-                let dz = camera.position.z - z.mesh.position.z;
+                const friendly=isCompanion(z);
+                let target=null;
+                if(friendly) target=findCompanionEnemy(z);
+                else {
+                    let nearest=z.mesh.position.distanceTo(camera.position);
+                    for(const ally of [...zombies,...creepers]) {
+                        const distance=ally.mesh.position.distanceTo(z.mesh.position);
+                        if(isCompanion(ally) && !ally.dying && distance<nearest && distance<14) {target=ally;nearest=distance;}
+                    }
+                }
+                const destination=target ? target.mesh.position : camera.position;
+                let dx = destination.x - z.mesh.position.x;
+                let dz = destination.z - z.mesh.position.z;
                 let len = Math.sqrt(dx*dx + dz*dz);
-                
-                if (len > 0) {
+                z.vx=0;z.vz=0;
+                if (len > (friendly && !target ? 2.6 : 0.85)) {
                     // 僵尸像人一样慢慢平移走，不再跳墙。
-                    z.vx = (dx/len) * 0.55; 
-                    z.vz = (dz/len) * 0.55;
+                    z.vx = (dx/len) * (friendly?1.6:0.55);
+                    z.vz = (dz/len) * (friendly?1.6:0.55);
                 }
                 z.vy -= 25.0 * delta; // 重力
 	                
@@ -6165,7 +6219,12 @@
                 }
 
                 // 碰到玩家造成伤害
-	                if (z.mesh.position.distanceTo(camera.position) < 1.5 && hasClearLineBetween(
+                z.attackCooldown=Math.max(0,(z.attackCooldown||0)-delta);
+                if(target && !target.dying && z.attackCooldown===0 && z.mesh.position.distanceTo(target.mesh.position)<1.5 && hasClearLineBetween(
+                    z.mesh.position.clone().add(new THREE.Vector3(0,0.4,0)),target.mesh.position.clone().add(new THREE.Vector3(0,0.4,0)))) {
+                    damageMob(target,1,friendly?'companion':'hostile');z.attackCooldown=0.9;
+                }
+	                if (!friendly && !target && z.mesh.position.distanceTo(camera.position) < 1.5 && hasClearLineBetween(
                     new THREE.Vector3(z.mesh.position.x, z.mesh.position.y + 0.9, z.mesh.position.z),
                     new THREE.Vector3(camera.position.x, camera.position.y - 0.4, camera.position.z)
                 )) {
@@ -6193,7 +6252,8 @@
                 let dz = camera.position.z - c.mesh.position.z;
                 let len = Math.sqrt(dx*dx + dz*dz);
                 
-                if (len > 0) {
+                c.vx=0;c.vz=0;
+                if (len > (isCompanion(c)?2.6:0)) {
                     c.vx = (dx/len) * 1.5; 
                     c.vz = (dz/len) * 1.5;
                 }
@@ -6224,7 +6284,7 @@
 
                 // 靠近玩家自爆
                 let distToPlayer = c.mesh.position.distanceTo(camera.position);
-                if (!isCreativeMode() && distToPlayer < 3.0 && hasClearLineBetween(c.mesh.position,camera.position)) {
+                if (!isCompanion(c) && !isCreativeMode() && distToPlayer < 3.0 && hasClearLineBetween(c.mesh.position,camera.position)) {
                     c.vx = 0;
                     c.vz = 0;
                     c.fuseTimer += delta;
@@ -6703,36 +6763,105 @@
             return 1;
         }
 
-        function shootRangedWeapon(itemId) {
-            const damage = itemId === CROSSBOW_ID ? 3 : (itemId === TRIDENT_ID ? 4 : 2);
-            const range = itemId === TRIDENT_ID ? 35 : (itemId === CROSSBOW_ID ? 50 : 38);
-            playSound(itemId === TRIDENT_ID ? 'stone' : 'gun');
-            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
-            const rayDir = raycaster.ray.direction.clone();
-            const rayPos = raycaster.ray.origin.clone();
-            for (let i = 0; i < range * 5; i++) {
-                const testPos = rayPos.clone().addScaledVector(rayDir, i * 0.2);
-                for (let mob of zombies) {
-                    if (testPos.distanceTo(mob.mesh.position) < 1.2) { damageMob(mob, damage); return true; }
-                }
-                for (let mob of animals) {
-                    if (testPos.distanceTo(mob.mesh.position) < 1.2) { damageMob(mob, damage); return true; }
-                }
-                for (let mob of villagers) {
-                    if (testPos.distanceTo(mob.mesh.position) < 1.2) { damageMob(mob, damage); return true; }
-                }
-                for (let j = creepers.length - 1; j >= 0; j--) {
-                    if (testPos.distanceTo(creepers[j].mesh.position) < 1.2) {
-                        scene.remove(creepers[j].mesh);
-                        creepers.splice(j, 1);
-                        return true;
-                    }
-                }
-                const bx = Math.round(testPos.x), by = Math.round(testPos.y), bz = Math.round(testPos.z);
-                const blockType = getBlock(bx, by, bz);
-                if (blockType !== 0 && blockType !== 24 && blockType !== 25 && blockType !== 42) return false;
+        function traceCombatRay(origin, direction, range, includeMobs=true) {
+            const dir=direction.clone().normalize();
+            const axes=['x','y','z'],cell=axes.map(a=>Math.floor(origin[a]+0.5+dir[a]*1e-8));
+            const step=axes.map(a=>Math.sign(dir[a]));
+            const stride=axes.map(a=>dir[a]?1/Math.abs(dir[a]):Infinity);
+            const next=axes.map((a,i)=>dir[a]?(cell[i]+(step[i]>0?0.5:-0.5)-origin[a])/dir[a]:Infinity);
+            let distance=0,block=null;
+            while(distance<=range) {
+                if(isSolid(...cell)) {block={x:cell[0],y:cell[1],z:cell[2],type:getBlock(...cell)};break;}
+                const boundary=Math.min(...next);
+                if(!Number.isFinite(boundary)) break;
+                for(let i=0;i<3;i++) if(Math.abs(next[i]-boundary)<1e-9) {cell[i]+=step[i];next[i]+=stride[i];}
+                distance=boundary;
             }
-            return false;
+            let closest=block?distance:range,entity=null;
+            const ray=new THREE.Ray(origin,dir),box=new THREE.Box3(),intersection=new THREE.Vector3();
+            if(includeMobs) for(const mob of [...zombies,...creepers,...villagers,...animals]) {
+                if(mob.dying || mob.mesh.parent!==scene) continue;
+                mob.mesh.updateMatrixWorld(true);box.setFromObject(mob.mesh);
+                if(!ray.intersectBox(box,intersection)) continue;
+                const d=origin.distanceTo(intersection);
+                if(d<closest) {closest=d;entity=mob;}
+            }
+            return {entity,block:entity?null:block,distance:closest,point:origin.clone().addScaledVector(dir,closest)};
+        }
+
+        function combatFlash(position,color,size=0.18,life=0.16) {
+            const mesh=new THREE.Mesh(new THREE.BoxGeometry(size,size,size),
+                new THREE.MeshBasicMaterial({color,transparent:true,opacity:1,depthWrite:false}));
+            mesh.position.copy(position);scene.add(mesh);
+            combatEffects.push({mesh,life,maxLife:life});
+            return mesh;
+        }
+
+        function clearCombatState() {
+            for(const shot of cannonProjectiles) disposeModModel(shot.mesh);
+            for(const effect of combatEffects) disposeModModel(effect.mesh);
+            cannonProjectiles.length=0;combatEffects.length=0;companionOrder=null;mechAttackTime=-Infinity;
+        }
+
+        function fireHandCannon() {
+            if(!activeMech || activeMech.form!=='robot' || !mechVisual || mechBlend>0.05 ||
+                performance.now()-mechAttackTime<450) return false;
+            updateMechView(0);mechVisual.updateMatrixWorld(true);
+            const forward=new THREE.Vector3();camera.getWorldDirection(forward);
+            const aim=traceCombatRay(camera.position,forward,60);
+            const muzzle=new THREE.Vector3();mechVisual.userData.muzzle.getWorldPosition(muzzle);
+            const path=muzzle.clone().sub(camera.position);
+            const obstruction=traceCombatRay(camera.position,path,path.length(),false);
+            mechAttackTime=performance.now();cancelMining();playSound('gun');
+            const color=activeMech.id===70?0x63dfff:0xffcf40;
+            if(obstruction.block) {combatFlash(obstruction.point,color,0.28);return true;}
+            combatFlash(muzzle,color,0.3,0.09);
+            const mesh=new THREE.Mesh(new THREE.BoxGeometry(0.17,0.17,0.65),
+                new THREE.MeshBasicMaterial({color}));
+            mesh.position.copy(muzzle);mesh.lookAt(aim.point);scene.add(mesh);
+            const direction=aim.point.clone().sub(muzzle).normalize();
+            cannonProjectiles.push({mesh,direction,remaining:60,speed:34,damage:3,color,dimension:currentDimension});
+            return true;
+        }
+
+        function updateCombatEffects(delta) {
+            if(isGameStarted && controls.isLocked && !isSleeping) for(let i=cannonProjectiles.length-1;i>=0;i--) {
+                const shot=cannonProjectiles[i],distance=Math.min(shot.remaining,shot.speed*delta);
+                if(shot.dimension!==currentDimension) {disposeModModel(shot.mesh);cannonProjectiles.splice(i,1);continue;}
+                const hit=traceCombatRay(shot.mesh.position,shot.direction,distance);
+                shot.mesh.position.copy(hit.point);shot.remaining-=distance;
+                if(hit.entity) damageMob(hit.entity,shot.damage);
+                if(hit.entity || hit.block) {
+                    for(let n=0;n<5;n++) combatFlash(hit.point.clone().add(new THREE.Vector3(
+                        (Math.random()-0.5)*0.4,(Math.random()-0.5)*0.4,(Math.random()-0.5)*0.4)),shot.color,0.08,0.24);
+                }
+                if(hit.entity || hit.block || shot.remaining<=0 || shot.dimension!==currentDimension) {
+                    disposeModModel(shot.mesh);cannonProjectiles.splice(i,1);
+                }
+            }
+            for(let i=combatEffects.length-1;i>=0;i--) {
+                const effect=combatEffects[i];effect.life-=delta;
+                effect.mesh.material.opacity=Math.max(0,effect.life/effect.maxLife);
+                if(effect.life<=0) {disposeModModel(effect.mesh);combatEffects.splice(i,1);}
+            }
+        }
+
+        function shootRangedWeapon(itemId) {
+            const gun=itemId===35;
+            const damage=gun || itemId===CROSSBOW_ID?3:itemId===TRIDENT_ID?4:2;
+            const range=gun?100:itemId===TRIDENT_ID?35:itemId===CROSSBOW_ID?50:38;
+            playSound(itemId===TRIDENT_ID?'stone':'gun');
+            const direction=new THREE.Vector3();camera.getWorldDirection(direction);
+            const hit=traceCombatRay(camera.position,direction,range);
+            if(hit.entity) damageMob(hit.entity,damage);
+            if(hit.block && gun) {
+                const {x,y,z,type}=hit.block;
+                setBlock(x,y,z,0);
+                if([8,10,17,19].includes(type)) setBlock(x,y+1,z,0);
+                if([9,11,18,20].includes(type)) setBlock(x,y-1,z,0);
+            }
+            if(hit.entity || hit.block) combatFlash(hit.point,0xffe8b0,0.12);
+            return !!(hit.entity || hit.block);
         }
 
         document.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -6785,65 +6914,8 @@
             }
 
             if (currentBlock === 35 && e.button === 2) {
-                // 枪：右键开火
-                playSound('gun'); // 我们待会去补充这个音效
-                
-                raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
-                const rayDir = raycaster.ray.direction.clone();
-                const rayPos = raycaster.ray.origin.clone();
-                
-                // 枪的射程极远 (100格)，并且步长更精细
-                let hitSomething = false;
-                for (let i = 0; i < 500; i++) {
-                    let testPos = rayPos.clone().addScaledVector(rayDir, i * 0.2);
-                    
-	                    // 1. 打僵尸/动物
-                    for (let j = zombies.length - 1; j >= 0; j--) {
-                        if (testPos.distanceTo(zombies[j].mesh.position) < 1.5) {
-                            damageMob(zombies[j], 3);
-                            hitSomething = true;
-                            break;
-                        }
-                    }
-                    if (hitSomething) break;
-
-                    for (let j = creepers.length - 1; j >= 0; j--) {
-                        if (testPos.distanceTo(creepers[j].mesh.position) < 1.5) {
-                            scene.remove(creepers[j].mesh);
-                            creepers.splice(j, 1);
-                            hitSomething = true;
-                            break;
-                        }
-                    }
-                    if (hitSomething) break;
-
-                    for (let j = animals.length - 1; j >= 0; j--) {
-                        if (testPos.distanceTo(animals[j].mesh.position) < 1.5) {
-                            damageMob(animals[j], 3);
-                            hitSomething = true;
-                            break;
-                        }
-                    }
-                    if (hitSomething) break;
-
-                    // 2. 打破方块
-                    let bx = Math.round(testPos.x);
-                    let by = Math.round(testPos.y);
-                    let bz = Math.round(testPos.z);
-                    let blockType = getBlock(bx, by, bz);
-                    
-                    if (blockType !== 0 && blockType !== 24 && blockType !== 25) { // 遇到实体方块
-                        setBlock(bx, by, bz, 0);
-                        // 顺便处理双层门被枪打断的情况
-                        if (blockType === 8 || blockType === 10 || blockType === 17 || blockType === 19) setBlock(bx, by + 1, bz, 0);
-                        if (blockType === 9 || blockType === 11 || blockType === 18 || blockType === 20) setBlock(bx, by - 1, bz, 0);
-                        hitSomething = true;
-                        
-                        // 在击中点产生一点粒子效果 (可选，简单画个小方块瞬间消失)
-                        break;
-                    }
-                }
-                return; // 开完枪直接结束，不执行后续常规交互
+                shootRangedWeapon(35);
+                return;
             }
 
             raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
@@ -6871,8 +6943,7 @@
                 for (let j = creepers.length - 1; j >= 0; j--) {
                     if (testPos.distanceTo(creepers[j].mesh.position) < 1.0) {
                         if (e.button === 0) { // 左键打
-                            scene.remove(creepers[j].mesh);
-                            creepers.splice(j, 1);
+                            damageMob(creepers[j],getHeldWeaponDamage());
                         }
                         hitEntity = true;
                         break;
@@ -8143,6 +8214,7 @@
             updateMining(delta);
             updateDroppedItems(delta);
             updateExplosionParticles(delta);
+            updateCombatEffects(delta);
             updateMicroVoxelOverlay(delta);
 
             // 移动白云
