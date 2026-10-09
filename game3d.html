@@ -72,21 +72,47 @@
         .hotbar-number {
             position: absolute; top: 2px; left: 2px; font-size: 10px; text-shadow: 1px 1px 0 #000;
         }
+        #inventory-ui { width: min(500px, calc(100vw - 40px)); max-height: calc(100dvh - 48px); overflow-y: auto; box-sizing: border-box; }
+        #inventory-tabs { flex-wrap: wrap; gap: 6px !important; }
+        #inventory-tabs .tab-btn { margin: 0; padding: 9px 10px; }
+        #tab-mods .slot { width: 100px; height: 104px; box-sizing: border-box; flex-direction: column; gap: 5px; padding: 5px; }
+        #tab-mods .slot img { width: 42px; height: 42px; image-rendering: pixelated; }
+        .mod-actions { flex-basis: 100%; display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; }
+        .mod-actions button { padding: 9px 12px; color: white; background: #37474f; border: 1px solid #78909c; border-radius: 4px; cursor: pointer; }
+        #mech-status { display: none; position: absolute; top: 14px; left: 14px; max-width: 45vw; color: white; background: #20272de0; padding: 9px; font-size: 14px; z-index: 5; pointer-events: none; }
+        #toast-msg { max-width: calc(100vw - 48px); box-sizing: border-box; width: max-content; text-align: center; pointer-events: none; }
+        #craft-grid .slot { font-size: 9px; overflow-wrap: anywhere; }
+        @media (max-width: 500px) {
+            #inventory-ui { padding: 10px; }
+            #inventory-ui h2 { font-size: 21px; }
+            #crafting-area { gap: 8px !important; padding: 8px !important; }
+            #crafting-area > div:last-child { display: none; }
+            #hotbar { max-width: calc(100vw - 12px); }
+            .hotbar-slot { width: 36px; min-width: 0; height: 44px; font-size: 9px; overflow-wrap: anywhere; }
+            #status-bars { width: min(450px, calc(100vw - 16px)); }
+            .heart, .hunger { width: 16px; font-size: 15px; }
+        }
     </style>
 </head>
 <body>
     <div id="crosshair">+</div>
+    <div id="mech-status"></div>
     
     <div id="inventory-ui">
         <h2>Inventory & Crafting</h2>
         
         <!-- 合成区域 -->
-        <div style="display: flex; justify-content: center; align-items: center; gap: 20px; margin-bottom: 15px; padding: 15px; background-color: rgba(255,255,255,0.1); border-radius: 8px; border: 2px solid #555;">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
+        <div id="crafting-area" style="display: flex; justify-content: center; align-items: center; gap: 20px; margin-bottom: 15px; padding: 15px; background-color: rgba(255,255,255,0.1); border-radius: 8px; border: 2px solid #555;">
+            <div id="craft-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px;">
                 <div class="slot" id="craft-0" onclick="craftSlotClick(0)" style="width: 40px; height: 40px; position: relative;"></div>
                 <div class="slot" id="craft-1" onclick="craftSlotClick(1)" style="width: 40px; height: 40px; position: relative;"></div>
                 <div class="slot" id="craft-2" onclick="craftSlotClick(2)" style="width: 40px; height: 40px; position: relative;"></div>
                 <div class="slot" id="craft-3" onclick="craftSlotClick(3)" style="width: 40px; height: 40px; position: relative;"></div>
+                <div class="slot" id="craft-4" onclick="craftSlotClick(4)" style="width: 40px; height: 40px; position: relative;"></div>
+                <div class="slot" id="craft-5" onclick="craftSlotClick(5)" style="width: 40px; height: 40px; position: relative;"></div>
+                <div class="slot" id="craft-6" onclick="craftSlotClick(6)" style="width: 40px; height: 40px; position: relative;"></div>
+                <div class="slot" id="craft-7" onclick="craftSlotClick(7)" style="width: 40px; height: 40px; position: relative;"></div>
+                <div class="slot" id="craft-8" onclick="craftSlotClick(8)" style="width: 40px; height: 40px; position: relative;"></div>
             </div>
             <div style="font-size: 24px; color: white;">➔</div>
             <div class="slot" id="craft-out" onclick="craftOutputClick()" style="width: 50px; height: 50px; border-color: #4CAF50; border-width: 3px; position: relative;"></div>
@@ -95,11 +121,12 @@
             </div>
         </div>
 
-        <div style="display:flex; justify-content:center; gap:10px; margin-bottom:15px;">
+        <div id="inventory-tabs" style="display:flex; justify-content:center; gap:10px; margin-bottom:15px;">
             <button class="tab-btn active" onclick="switchTab('build', this)">Blocks</button>
             <button class="tab-btn" onclick="switchTab('life', this)">Survival</button>
             <button class="tab-btn" onclick="switchTab('weapon', this)">Tools</button>
             <button class="tab-btn" onclick="switchTab('redstone', this)">Redstone</button>
+            <button class="tab-btn" onclick="switchTab('mods', this)">Mods</button>
         </div>
         <p>Click to select an item. Press E to return to the game.</p>
         
@@ -133,6 +160,7 @@
             <div class="slot" id="inv-11" onclick="selectSlot(11)">Torch</div>
             <div class="slot" id="inv-35" onclick="selectSlot(35)">Bucket</div>
             <div class="slot" id="inv-36" onclick="selectSlot(36)">Shrink Potion</div>
+            <div class="slot" id="inv-54" onclick="selectSlot(54)">Grow Potion</div>
             <div class="slot" id="inv-52" onclick="selectSlot(52)">Dry Sponge</div>
             <div class="slot" id="inv-53" onclick="selectSlot(53)">Water Bucket</div>
         </div>
@@ -150,6 +178,19 @@
             <div class="slot" id="inv-44" onclick="selectSlot(44)">Crossbow</div>
             <div class="slot" id="inv-45" onclick="selectSlot(45)">Trident</div>
             <div class="slot" id="inv-46" onclick="selectSlot(46)">Mace</div>
+        </div>
+        <div id="tab-mods" class="slot-container" style="display:none;">
+            <button class="slot" id="inv-55" onclick="selectSlot(55)"><img alt="" data-mod-icon="67">Villager Egg</button>
+            <button class="slot" id="inv-56" onclick="selectSlot(56)"><img alt="" data-mod-icon="68">Creeper Egg</button>
+            <button class="slot" id="inv-57" onclick="selectSlot(57)"><img alt="" data-mod-icon="69">Zombie Egg</button>
+            <button class="slot" id="inv-58" onclick="selectSlot(58)"><img alt="" data-mod-icon="70">Prime Truck Core</button>
+            <button class="slot" id="inv-59" onclick="selectSlot(59)"><img alt="" data-mod-icon="71">Bee Scout Core</button>
+            <div class="mod-actions">
+                <button onclick="summonModPack('mobs')">Get Spawn Eggs</button>
+                <button onclick="summonModPack('mechs')">Get Mech Cores</button>
+                <button id="transform-btn" onclick="transformMech()" title="Transform (R)" disabled>Transform</button>
+                <button id="exit-mech-btn" onclick="exitMech()" title="Return to Player (X)" disabled>Return to Player</button>
+            </div>
         </div>
         <div id="tab-redstone" class="slot-container" style="display:none;">
             <div class="slot" id="inv-18" onclick="selectSlot(18)">Rail</div>
@@ -223,6 +264,8 @@
         <button onclick="summonModPack('redstone')" style="margin: 8px; padding: 10px; width: 90%; font-size: 16px; cursor: pointer;">Redstone Machines Pack</button>
         <button onclick="summonModPack('weapons')" style="margin: 8px; padding: 10px; width: 90%; font-size: 16px; cursor: pointer;">Weapons Pack</button>
         <button onclick="summonModPack('nature')" style="margin: 8px; padding: 10px; width: 90%; font-size: 16px; cursor: pointer;">Nature Pack</button>
+        <button onclick="summonModPack('mobs')" style="margin: 8px; padding: 10px; width: 90%; font-size: 16px; cursor: pointer;">Spawn Eggs Pack</button>
+        <button onclick="summonModPack('mechs')" style="margin: 8px; padding: 10px; width: 90%; font-size: 16px; cursor: pointer;">Transforming Mechs Pack</button>
         <button onclick="closeUI()" style="margin: 8px; padding: 10px; width: 90%; font-size: 16px; cursor: pointer;">Close</button>
     </div>
 
@@ -430,6 +473,7 @@
         scene.add(earthMesh);
 
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 150); // 远裁剪面适配迷雾距离
+        const mechCamera = camera.clone();
         const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" }); // 关闭抗锯齿，强制高性能，拯救卡顿
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
@@ -438,6 +482,8 @@
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
+            mechCamera.aspect = camera.aspect;
+            mechCamera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
@@ -495,9 +541,16 @@
         function updateHeldItem3D(blockId) {
             // 清除旧模型
             while(heldItemGroup.children.length > 0){ 
+                if (heldItemGroup.children[0].userData.modItem) disposeModModel(heldItemGroup.children[0]);
                 heldItemGroup.remove(heldItemGroup.children[0]); 
             }
             if (blockId === 0) return;
+            if (blockId >= 67 && blockId <= 71) {
+                const item = createModItemModel(blockId);
+                item.scale.setScalar(0.45);
+                heldItemGroup.add(item);
+                return;
+            }
             
             let mat = materials[blockId];
             if (!mat) return;
@@ -933,16 +986,17 @@
                     const y = Math.floor(Math.random()*56);
                     ctx.fillRect(x, y, 6, 6);
                 }
-            } else if (type === 'shrink_potion') {
+            } else if (type === 'shrink_potion' || type === 'grow_potion') {
                 ctx.clearRect(0,0,64,64);
                 ctx.fillStyle = '#90caf9';
                 ctx.fillRect(24, 8, 16, 14);
-                ctx.fillStyle = '#7b1fa2';
+                ctx.fillStyle = type === 'grow_potion' ? '#00796b' : '#7b1fa2';
                 ctx.fillRect(18, 22, 28, 34);
-                ctx.fillStyle = '#ce93d8';
+                ctx.fillStyle = type === 'grow_potion' ? '#80cbc4' : '#ce93d8';
                 ctx.fillRect(22, 28, 20, 18);
                 ctx.fillStyle = '#ffffff';
                 ctx.fillRect(28, 32, 8, 8);
+                if (type === 'grow_potion') ctx.fillRect(25,35,14,3);
             } else if (type === 'kelp') {
                 ctx.clearRect(0,0,64,64);
                 ctx.fillStyle = '#2E8B57';
@@ -1210,6 +1264,7 @@
         const matWaterBucket = new THREE.MeshLambertMaterial({ map: createTexture('water_bucket'), transparent: true, alphaTest: 0.5 });
         const matDrySponge = new THREE.MeshLambertMaterial({ map: createTexture('dry_sponge') });
         const matShrinkPotion = new THREE.MeshLambertMaterial({ map: createTexture('shrink_potion'), transparent: true, alphaTest: 0.5 });
+        const matGrowPotion = new THREE.MeshLambertMaterial({ map: createTexture('grow_potion'), transparent: true, alphaTest: 0.5 });
         const matBrickBlock = new THREE.MeshLambertMaterial({ map: createTexture('brick_block') });
         const matBlueConcrete = new THREE.MeshLambertMaterial({ map: createTexture('blue_concrete') });
         const matBlackstone = new THREE.MeshLambertMaterial({ map: createTexture('blackstone') });
@@ -1233,7 +1288,7 @@
             51: matWhiteCobblestone, 52: matPressurePlate, 53: matPiston,
             54: matAxe, 55: matBow, 56: matCrossbow, 57: matTrident, 58: matMace,
             59: matBrickBlock, 60: matBlueConcrete, 61: matBlackstone, 62: matGlowBlock, 63: matModernTile,
-            64: matDrySponge, 65: matWaterBucket
+            64: matDrySponge, 65: matWaterBucket, 66: matGrowPotion
         };
 
         const boxGeo = new THREE.BoxGeometry(1, 1, 1);
@@ -1245,6 +1300,9 @@
         flatGeo.translate(0, -0.475, 0); // 贴地
         const MICRO_BLOCK_DIVISIONS = 20;
         const MICRO_PLAYER_SCALE = 1 / MICRO_BLOCK_DIVISIONS;
+        const MICRO_SUBDIVISIONS = 10;
+        const MIN_PLAYER_SCALE = 0.0000005;
+        const MAX_PLAYER_SCALE = 4 / 1.8;
         const microVoxelGroup = new THREE.Group();
         microVoxelGroup.visible = false;
         scene.add(microVoxelGroup);
@@ -1252,10 +1310,14 @@
         const microEdits = new Map();
         const microPlacedBlocks = new Map();
         const microPlacements = new Map();
+        const fineVoxelEdits = new Map();
+        const refinedMicroCells = new Set();
+        const fineRoots = new Map();
         const microRenderBlocks = new Set();
         const microMeshes = new Map();
         const microDirtyBlocks = new Set();
         const microMaterialCache = new Map();
+        const microGridUniform = { value: MICRO_BLOCK_DIVISIONS };
         const microFaces = [
             { n: [1,0,0], u: [0,0,-1], v: [0,1,0] },
             { n: [-1,0,0], u: [0,0,1], v: [0,1,0] },
@@ -1968,6 +2030,7 @@
                 worldMap: Array.from(worldMap.entries()),
                 microMinedBlocks: Array.from(microMinedBlocks),
                 microPlacedBlocks: Array.from(microPlacedBlocks),
+                fineVoxelEdits: Array.from(fineVoxelEdits),
                 modifiedColumns: Array.from(modifiedColumns),
                 columnMinY: Array.from(columnMinY.entries()),
                 chunkMaxY: Array.from(chunkMaxY.entries()),
@@ -1976,7 +2039,10 @@
                 oxygen: oxygen,
                 currentDimension: currentDimension,
                 playerScale: playerScale,
-                shrinkTimer: shrinkTimer,
+                activeMech: activeMech,
+                spawnedMobs: [...villagers,...creepers,...zombies].filter(m=>m.eggId && !m.dying).map(m=>({
+                    id:m.eggId,x:m.mesh.position.x,y:m.mesh.position.y,z:m.mesh.position.z,hp:m.hp
+                })),
                 playerInventory: playerInventory,
                 worldSpawnPoint: worldSpawnPoint,
                 homeSpawnPoint: homeSpawnPoint,
@@ -2001,6 +2067,7 @@
             reader.onload = function(e) {
                 try {
                     const data = JSON.parse(e.target.result);
+                    clearMech();
                     
                     // 清理旧区块
                     for (let [key, meshes] of chunkMeshes) {
@@ -2021,6 +2088,7 @@
                     
                     // 清理实体
                     zombies.forEach(z => scene.remove(z.mesh)); zombies = [];
+                    creepers.forEach(c => scene.remove(c.mesh)); creepers = [];
                     villagers.forEach(v => scene.remove(v.mesh)); villagers = [];
                     animals.forEach(a => scene.remove(a.mesh)); animals = [];
                     minecarts.forEach(m => scene.remove(m.mesh)); minecarts = [];
@@ -2043,8 +2111,7 @@
                     setTerrainChoice(selectedTerrain);
                     setGameModeChoice(data.gameMode || 'survival');
                     currentDimension = data.currentDimension || 'overworld';
-                    playerScale = data.playerScale || 1;
-                    shrinkTimer = data.shrinkTimer || 0;
+                    playerScale = Math.max(MIN_PLAYER_SCALE, Math.min(MAX_PLAYER_SCALE, Number(data.playerScale) || 1));
                     camera.position.set(data.camera.x, data.camera.y, data.camera.z);
                     if (data.camera.rx !== undefined) {
                         camera.rotation.set(data.camera.rx, data.camera.ry, data.camera.rz);
@@ -2065,6 +2132,14 @@
                     
                     data.worldMap.forEach(([k, v]) => worldMap.set(k, v));
                     restoreMicroEdits(data.microMinedBlocks || [], data.microPlacedBlocks || []);
+                    restoreFineVoxelEdits(data.fineVoxelEdits || []);
+                    restoreMech(data.activeMech);
+                    for(const mob of (Array.isArray(data.spawnedMobs)?data.spawnedMobs:[]).slice(0,80)) {
+                        if([67,68,69].includes(mob.id) && [mob.x,mob.y,mob.z].every(Number.isFinite)) {
+                            const entity=spawnMobFromEgg(mob.id,mob.x,mob.y,mob.z);
+                            entity.hp=Math.max(1,Math.min(entity.hp,Number(mob.hp)||entity.hp));
+                        }
+                    }
                     updatePlayerScaleView();
                     resolveTinyOverlap();
                     if (data.modifiedColumns) data.modifiedColumns.forEach(v => modifiedColumns.add(v));
@@ -2438,7 +2513,10 @@
         let ridingMinecart = null;
         let oxygen = 20;
         let playerScale = 1;
-        let shrinkTimer = 0;
+        let activeMech = null;
+        let mechVisual = null;
+        let mechBlend = 0;
+        let mechWalkTime = 0;
         let health = 9;
         const maxHealth = 9;
         let hunger = 9;
@@ -2520,7 +2598,7 @@
         }
 
         // --- 合成系统 ---
-        let craftingGrid = [0, 0, 0, 0];
+        let craftingGrid = Array(9).fill(0);
         let craftingOutput = { id: 0, count: 0 };
         const recipes = [
             { ing: { 4: 1, 3: 1 }, out: 8, count: 1 },   // 木头+石头 -> 木门
@@ -2538,6 +2616,7 @@
             { ing: { 3: 1, 36: 1 }, out: 33, count: 1 },       // 石头+铁矿 -> 剑
             { ing: { 36: 2 }, out: 45, count: 1 },             // 铁矿x2 -> 桶
             { ing: { 36: 2, 23: 3 }, out: 46, count: 1 },      // 铁矿x2+沙子x3 -> 变小药水
+            { ing: { 37: 2, 23: 3 }, out: 66, count: 1 },
             { ing: { 6: 1, 28: 1 }, out: 48, count: 1 },       // 玻璃+红石 -> 玻璃感应门
             { ing: { 3: 1, 6: 1 }, out: 51, count: 4 },        // 石头+玻璃 -> 白色鹅卵石
             { ing: { 3: 1, 6: 1, 28: 1 }, out: 47, count: 2 }, // 石头+玻璃+红石 -> 屏障
@@ -2564,19 +2643,20 @@
                 22:'Nuke', 23:'Sand', 24:'Water', 25:'Kelp', 26:'Rail', 27:'Powered Rail',
                 28:'Redstone', 29:'Minecart', 30:'Lever', 32:'Enchanting Table', 33:'Sword', 34:'Pickaxe', 35:'Gun',
                 36:'Iron Ore', 37:'Gold Ore', 38:'Sapphire', 39:'Raw Meat', 40:'Cooked Meat', 41:'Scanner', 42:'Grass',
-                43:'Lava', 44:'Obsidian', 45:'Bucket', 46:'Shrink Potion', 47:'Barrier',
+                43:'Lava', 44:'Obsidian', 45:'Bucket', 46:'Shrink Potion', 66:'Grow Potion', 47:'Barrier',
                 48:'Glass Sensor Door', 49:'Glass Sensor Door', 50:'Open Glass Sensor Door',
                 51:'White Cobblestone', 52:'Pressure Plate', 53:'Piston',
                 54:'Axe', 55:'Bow', 56:'Crossbow', 57:'Trident', 58:'Mace',
                 59:'Brick', 60:'Blue Concrete', 61:'Blackstone', 62:'Glow Block', 63:'Modern Tile',
-                64:'Dry Sponge', 65:'Water Bucket'
+                64:'Dry Sponge', 65:'Water Bucket', 67:'Villager Egg', 68:'Creeper Egg', 69:'Zombie Egg',
+                70:'Prime Truck Core', 71:'Bee Scout Core'
             };
             return names[id] || '';
         }
 
         function checkRecipes() {
             let counts = {};
-            for(let i=0; i<4; i++) {
+            for(let i=0; i<craftingGrid.length; i++) {
                 if(craftingGrid[i] !== 0) {
                     counts[craftingGrid[i]] = (counts[craftingGrid[i]] || 0) + 1;
                 }
@@ -2608,7 +2688,7 @@
         }
 
         function updateCraftingUI() {
-            for(let i=0; i<4; i++) {
+            for(let i=0; i<craftingGrid.length; i++) {
                 let el = document.getElementById('craft-' + i);
                 let id = craftingGrid[i];
                 if (id === 0) {
@@ -2655,7 +2735,7 @@
                 let outCount = craftingOutput.count;
                 playerInventory[outId] = (playerInventory[outId] || 0) + outCount;
                 
-                for (let i = 0; i < 4; i++) {
+                for (let i = 0; i < craftingGrid.length; i++) {
                     craftingGrid[i] = 0;
                 }
                 
@@ -2677,13 +2757,14 @@
                  27:36, 28:37, 29:38, 30:39, 31:40, 32:41,
                  33:43, 34:44, 35:45, 36:46, 37:47, 38:48, 39:51,
                  40:52, 41:53, 42:54, 43:55, 44:56, 45:57, 46:58,
-                 47:59, 48:60, 49:61, 50:62, 51:63, 52:64, 53:65
+                 47:59, 48:60, 49:61, 50:62, 51:63, 52:64, 53:65, 54:66,
+                 55:67, 56:68, 57:69, 58:70, 59:71
              };
         }
 
         function updateInventoryCounts() {
             const mapping = getInventorySlotMapping();
-             for(let i=1; i<=53; i++) {
+             for(const i of Object.keys(mapping)) {
                  let el = document.getElementById('inv-' + i);
                 if(el) {
                     let id = mapping[i];
@@ -2778,6 +2859,7 @@
         }
 
         function respawnPlayer() {
+            if(activeMech) {playerScale=activeMech.previousScale;clearMech();updatePlayerScaleView();}
             isRespawning = true;
             showToast("You died. Respawning...");
             const point = findHomeSpawnPoint();
@@ -2882,24 +2964,45 @@
         }
 
         function drinkShrinkPotion() {
-            if (!hasInventoryItem(SHRINK_POTION_ID)) {
-                showToast("No shrink potion to drink.");
+            const nextScale = playerScale > 1 ? (playerScale > 2.001 ? 2 : 1)
+                : playerScale > MICRO_PLAYER_SCALE * 1.01 ? MICRO_PLAYER_SCALE : playerScale / MICRO_SUBDIVISIONS;
+            return drinkSizePotion(SHRINK_POTION_ID, nextScale);
+        }
+
+        function drinkGrowPotion() {
+            const nextScale = playerScale < MICRO_PLAYER_SCALE * 0.99 ? playerScale * MICRO_SUBDIVISIONS
+                : playerScale < 1 ? 1 : Math.min(MAX_PLAYER_SCALE, playerScale * 2);
+            return drinkSizePotion(GROW_POTION_ID, nextScale);
+        }
+
+        function drinkSizePotion(item, nextScale) {
+            if (activeMech) { showToast("Return to Player before drinking a size potion."); return false; }
+            if (!hasInventoryItem(item)) { showToast("No potion available."); return false; }
+            if (nextScale < MIN_PLAYER_SCALE * 0.99 || Math.abs(nextScale-playerScale) < playerScale*0.001) {
+                showToast(item === GROW_POTION_ID ? "Maximum height: 4 blocks." : "Minimum size reached.");
                 return false;
             }
-            consumeInventoryItem(SHRINK_POTION_ID);
             const feetY = camera.position.y - getPlayerHeight();
             const previousScale = playerScale;
-            playerScale = MICRO_PLAYER_SCALE;
+            const previousPosition = camera.position.clone();
+            playerScale = Math.max(MIN_PLAYER_SCALE,Math.min(MAX_PLAYER_SCALE,nextScale));
             camera.position.y = feetY + getPlayerHeight();
+            if (playerScale > previousScale && checkScaledCollision(camera.position)) {
+                playerScale = previousScale;
+                camera.position.copy(previousPosition);
+                showToast("Not enough room to grow. Move into an open space.");
+                return false;
+            }
+            consumeInventoryItem(item);
             velocity.multiplyScalar(playerScale / previousScale);
             cancelMining();
             updatePlayerScaleView();
             resolveTinyOverlap();
-            shrinkTimer = 240;
             updateHotbarUI();
             updateInventoryCounts();
             playSound('pickup');
-            showToast("Shrink potion used. You are now 1/20 of a block.");
+            showToast(playerScale < 1 ? `Size: 1/${Math.round(1/playerScale)}. Lasts until you drink another size potion.`
+                : playerScale === 1 ? "Normal size restored." : `Height: ${(1.8*playerScale).toFixed(1)} blocks.`);
             return true;
         }
 
@@ -3129,6 +3232,7 @@
         const OBSIDIAN_ID = 44;
         const BUCKET_ID = 45;
         const SHRINK_POTION_ID = 46;
+        const GROW_POTION_ID = 66;
         const BARRIER_ID = 47;
         const GLASS_SENSOR_DOOR_BOTTOM_ID = 48;
         const GLASS_SENSOR_DOOR_TOP_ID = 49;
@@ -3364,6 +3468,90 @@
             return playerScale <= MICRO_PLAYER_SCALE * 1.5;
         }
 
+        function getMicroLevel() {
+            return Math.max(1, 1 + Math.round(Math.log10(MICRO_PLAYER_SCALE / Math.min(playerScale,MICRO_PLAYER_SCALE))));
+        }
+
+        function microDivisions(level = 1) {
+            return MICRO_BLOCK_DIVISIONS * Math.pow(MICRO_SUBDIVISIONS, level-1);
+        }
+
+        function microCellSize(c) {
+            return 1 / microDivisions(c?.level || getMicroLevel());
+        }
+
+        function microAncestor(c, level) {
+            const factor = Math.pow(MICRO_SUBDIVISIONS,(c.level || 1)-level);
+            return {x:c.x,y:c.y,z:c.z,mx:Math.floor(c.mx/factor),my:Math.floor(c.my/factor),mz:Math.floor(c.mz/factor),level};
+        }
+
+        function detailKey(c) {
+            const parent = microParentKey(c.x,c.y,c.z);
+            return `${parent}${(c.level || 1)>1 ? '@'+c.level : ''}:${c.mx},${c.my},${c.mz}`;
+        }
+
+        function parseDetailKey(key) {
+            const [parent,local] = key.split(':');
+            const [world,levelText] = parent.split('@');
+            const [dimension,xyz] = world.split('|');
+            const [x,y,z] = (xyz || '').split(',').map(Number);
+            const [mx,my,mz] = (local || '').split(',').map(Number);
+            const level=Number(levelText);
+            const n=microDivisions(level);
+            if (![x,y,z,mx,my,mz,level].every(Number.isInteger) || level<2 || 1/n<MIN_PLAYER_SCALE*0.99 ||
+                ![mx,my,mz].every(v=>v>=0 && v<n)) return null;
+            return {dimension,c:{x,y,z,mx,my,mz,level},world};
+        }
+
+        function rebuildFineIndex() {
+            refinedMicroCells.clear();
+            fineRoots.clear();
+            for (const key of fineVoxelEdits.keys()) {
+                const parsed=parseDetailKey(key);
+                if (!parsed) continue;
+                const {c,world,dimension}=parsed;
+                for (let level=1; level<c.level; level++) {
+                    const a=microAncestor(c,level);
+                    refinedMicroCells.add(`${world}${level>1 ? '@'+level : ''}:${a.mx},${a.my},${a.mz}`);
+                }
+                const root=microAncestor(c,1);
+                if (!fineRoots.has(world)) fineRoots.set(world,new Set());
+                fineRoots.get(world).add(microIndex(root.mx,root.my,root.mz));
+                for (const f of [[0,0,0],...microFaces.map(f=>f.n)]) {
+                    const parent=`${dimension}|${c.x+f[0]},${c.y+f[1]},${c.z+f[2]}`;
+                    microRenderBlocks.add(parent);
+                    microDirtyBlocks.add(parent);
+                }
+            }
+        }
+
+        function restoreFineVoxelEdits(entries) {
+            fineVoxelEdits.clear();
+            for (const [key,type] of entries) {
+                if (parseDetailKey(key) && (type===0 || materials[type])) fineVoxelEdits.set(key,type);
+            }
+            rebuildFineIndex();
+        }
+
+        function clearFineDescendants(c) {
+            const parent=microParentKey(c.x,c.y,c.z);
+            let changed=false;
+            for (const key of fineVoxelEdits.keys()) {
+                const parsed=parseDetailKey(key);
+                if (!parsed || parsed.world!==parent || parsed.c.level <= (c.level || 1)) continue;
+                const a=microAncestor(parsed.c,c.level || 1);
+                if (a.mx===c.mx && a.my===c.my && a.mz===c.mz) { fineVoxelEdits.delete(key); changed=true; }
+            }
+            return changed;
+        }
+
+        function setFineVoxel(c,type) {
+            clearFineDescendants(c);
+            fineVoxelEdits.set(detailKey(c),type);
+            rebuildFineIndex();
+            markMicroNeighborhood(c.x,c.y,c.z);
+        }
+
         function microParentKey(x, y, z) {
             return `${currentDimension}|${x},${y},${z}`;
         }
@@ -3376,15 +3564,15 @@
             return x + MICRO_BLOCK_DIVISIONS * (y + MICRO_BLOCK_DIVISIONS * z);
         }
 
-        function microCell(gx, gy, gz) {
-            const n = MICRO_BLOCK_DIVISIONS;
+        function microCell(gx, gy, gz, level = 1) {
+            const n = microDivisions(level);
             const x = Math.floor(gx / n), y = Math.floor(gy / n), z = Math.floor(gz / n);
-            return { x, y, z, mx: gx - x * n, my: gy - y * n, mz: gz - z * n };
+            return { x, y, z, mx: gx - x * n, my: gy - y * n, mz: gz - z * n, level };
         }
 
-        function microCellAt(x, y, z) {
-            const n = MICRO_BLOCK_DIVISIONS;
-            return microCell(Math.floor((x + 0.5) * n), Math.floor((y + 0.5) * n), Math.floor((z + 0.5) * n));
+        function microCellAt(x, y, z, level = getMicroLevel()) {
+            const n = microDivisions(level);
+            return microCell(Math.floor((x + 0.5) * n), Math.floor((y + 0.5) * n), Math.floor((z + 0.5) * n),level);
         }
 
         function isMicroMined(bx, by, bz, mx, my, mz) {
@@ -3392,17 +3580,27 @@
         }
 
         function getMicroType(c) {
+            if ((c.level || 1)>1) {
+                let type=getMicroType(microAncestor(c,1));
+                for (let level=2; level<=c.level; level++) {
+                    const override=fineVoxelEdits.get(detailKey(microAncestor(c,level)));
+                    if (override!==undefined) type=override;
+                }
+                return type;
+            }
             const placed = microPlacements.get(microParentKey(c.x,c.y,c.z))?.get(microIndex(c.mx,c.my,c.mz));
             if (placed !== undefined) return placed;
             return isMicroMined(c.x,c.y,c.z,c.mx,c.my,c.mz) ? 0 : getBlock(c.x,c.y,c.z);
         }
 
         function offsetMicroCell(c, dx, dy, dz) {
-            const n = MICRO_BLOCK_DIVISIONS;
-            return microCell(c.x*n+c.mx+dx, c.y*n+c.my+dy, c.z*n+c.mz+dz);
+            const level=c.level || 1, n = microDivisions(level);
+            return microCell(c.x*n+c.mx+dx, c.y*n+c.my+dy, c.z*n+c.mz+dz,level);
         }
 
         function setMicroPlacement(c, type) {
+            if ((c.level || 1)>1) { setFineVoxel(c,type); return; }
+            if (clearFineDescendants(c)) rebuildFineIndex();
             const parent = microParentKey(c.x,c.y,c.z);
             const index = microIndex(c.mx,c.my,c.mz);
             const key = microBlockKey(c.x,c.y,c.z,c.mx,c.my,c.mz);
@@ -3427,6 +3625,9 @@
         }
 
         function restoreMicroEdits(keys, placed = []) {
+            fineVoxelEdits.clear();
+            refinedMicroCells.clear();
+            fineRoots.clear();
             clearMicroVoxelOverlay();
             microMinedBlocks.clear();
             microEdits.clear();
@@ -3468,6 +3669,10 @@
 
         function resetMicroBlock(x, y, z) {
             const parent = microParentKey(x, y, z);
+            if (fineRoots.has(parent)) {
+                for (const key of fineVoxelEdits.keys()) if (key.startsWith(parent+'@')) fineVoxelEdits.delete(key);
+                rebuildFineIndex();
+            }
             const edits = microEdits.get(parent);
             const placements = microPlacements.get(parent);
             if (placements) {
@@ -3489,6 +3694,14 @@
 
         function mineMicroBlock(hit) {
             if (!hit || !getMicroType(hit)) return false;
+            if ((hit.level || 1)>1) {
+                cancelMining();
+                setFineVoxel(hit,0);
+                playMineSound(hit.type);
+                updateMicroVoxelOverlay();
+                return true;
+            }
+            if (clearFineDescendants(hit)) rebuildFineIndex();
             const key = microBlockKey(hit.x, hit.y, hit.z, hit.mx, hit.my, hit.mz);
             if (microPlacedBlocks.has(key)) {
                 cancelMining();
@@ -3521,10 +3734,10 @@
         }
 
         // Traverse exact grid boundaries, including tunnels that cross a large-block boundary.
-        function findMicroBlockHit(origin, direction, maxDistance = 6 * MICRO_PLAYER_SCALE) {
-            const n = MICRO_BLOCK_DIVISIONS;
+        function findMicroBlockHit(origin, direction, maxDistance = 6 * microCellSize()) {
+            const level=getMicroLevel(), n = microDivisions(level);
             const axes = ['x', 'y', 'z'];
-            const cell = axes.map(a => Math.floor((origin[a] + 0.5 + direction[a] * 1e-8) * n));
+            const cell = axes.map(a => Math.floor((origin[a] + 0.5 + direction[a] * 1e-7/n) * n));
             const step = axes.map(a => Math.sign(direction[a]));
             const tDelta = axes.map(a => direction[a] ? 1 / (n * Math.abs(direction[a])) : Infinity);
             const tMax = axes.map((a, i) => direction[a] ?
@@ -3532,7 +3745,7 @@
             let distance = 0;
             let norm = new THREE.Vector3();
             while (distance <= maxDistance) {
-                const c = microCell(...cell);
+                const c = microCell(...cell,level);
                 const type = getMicroType(c);
                 if (type && type !== 24 && type !== 25 && type !== LAVA_ID && type !== 42) {
                     return { ...c, type, norm, distance };
@@ -3553,15 +3766,16 @@
         }
 
         function microCellTouchesPlayer(c) {
-            const size=MICRO_PLAYER_SCALE, radius=getPlayerRadius();
+            const size=microCellSize(c), radius=getPlayerRadius();
+            const epsilon=size*0.00002;
             const min=[c.x-0.5+c.mx*size,c.y-0.5+c.my*size,c.z-0.5+c.mz*size];
-            return camera.position.x+radius>min[0]+1e-6 && camera.position.x-radius<min[0]+size-1e-6 &&
-                camera.position.y+0.2*playerScale>min[1]+1e-6 && camera.position.y-getPlayerHeight()<min[1]+size-1e-6 &&
-                camera.position.z+radius>min[2]+1e-6 && camera.position.z-radius<min[2]+size-1e-6;
+            return camera.position.x+radius>min[0]+epsilon && camera.position.x-radius<min[0]+size-epsilon &&
+                camera.position.y+0.2*playerScale>min[1]+epsilon && camera.position.y-getPlayerHeight()<min[1]+size-epsilon &&
+                camera.position.z+radius>min[2]+epsilon && camera.position.z-radius<min[2]+size-epsilon;
         }
 
         function placeMicroBlock(hit, itemType) {
-            if (!hit || !hit.norm.lengthSq() || isToolItem(itemType) || [39,40,45,46].includes(itemType)) return false;
+            if (!hit || !hit.norm.lengthSq() || isToolItem(itemType) || [39,40,45,46,GROW_POTION_ID].includes(itemType)) return false;
             if (!materials[itemType] || !hasInventoryItem(itemType)) return false;
             let type=itemType===WATER_BUCKET_ID ? 24 : itemType;
             if (currentDimension==='nether' && type===24) return false;
@@ -3588,7 +3802,8 @@
 
         function getMicroDoorBase(hit) {
             const type=getMicroType(hit);
-            if (!microPlacedBlocks.has(microBlockKey(hit.x,hit.y,hit.z,hit.mx,hit.my,hit.mz))) return null;
+            if ((hit.level || 1)>1 ? !fineVoxelEdits.has(detailKey(hit))
+                : !microPlacedBlocks.has(microBlockKey(hit.x,hit.y,hit.z,hit.mx,hit.my,hit.mz))) return null;
             if ([8,10,17,19,GLASS_SENSOR_DOOR_BOTTOM_ID].includes(type)) return hit;
             if ([9,11,18,20,GLASS_SENSOR_DOOR_TOP_ID].includes(type)) return offsetMicroCell(hit,0,-1,0);
             if (type===GLASS_SENSOR_DOOR_OPEN_ID) {
@@ -3620,19 +3835,20 @@
         }
 
         function updateTinySensorDoors() {
-            for (const [key,type] of microPlacedBlocks) {
+            for (const [key,type] of [...microPlacedBlocks,...fineVoxelEdits]) {
                 if (type!==GLASS_SENSOR_DOOR_BOTTOM_ID && type!==GLASS_SENSOR_DOOR_OPEN_ID) continue;
                 const [parent,local]=key.split(':');
                 if (!parent.startsWith(`${currentDimension}|`)) continue;
-                const [x,y,z]=parent.split('|')[1].split(',').map(Number);
+                const [x,y,z]=parent.split('@')[0].split('|')[1].split(',').map(Number);
                 const [mx,my,mz]=local.split(',').map(Number);
-                const cell={x,y,z,mx,my,mz};
+                const cell={x,y,z,mx,my,mz,level:Number(parent.split('@')[1]) || 1};
                 if (type===GLASS_SENSOR_DOOR_OPEN_ID && getMicroType(offsetMicroCell(cell,0,-1,0))===type) continue;
-                const sx=x-0.5+(mx+0.5)*MICRO_PLAYER_SCALE;
-                const sy=y-0.5+(my+1)*MICRO_PLAYER_SCALE;
-                const sz=z-0.5+(mz+0.5)*MICRO_PLAYER_SCALE;
-                const nearby=Math.hypot(camera.position.x-sx,camera.position.z-sz)<1.8*MICRO_PLAYER_SCALE &&
-                    Math.abs(camera.position.y-getPlayerHeight()/2-sy)<2*MICRO_PLAYER_SCALE;
+                const size=microCellSize(cell);
+                const sx=x-0.5+(mx+0.5)*size;
+                const sy=y-0.5+(my+1)*size;
+                const sz=z-0.5+(mz+0.5)*size;
+                const nearby=Math.hypot(camera.position.x-sx,camera.position.z-sz)<1.8*size &&
+                    Math.abs(camera.position.y-getPlayerHeight()/2-sy)<2*size;
                 toggleMicroDoor(cell,nearby);
             }
         }
@@ -3644,6 +3860,22 @@
             const result = source.map(base => {
                 if (faceMaterials.has(base)) return faceMaterials.get(base);
                 const mat = base.clone();
+                mat.extensions = { ...mat.extensions, derivatives: true };
+                mat.onBeforeCompile = shader => {
+                    shader.uniforms.microGridDivisions = microGridUniform;
+                    shader.fragmentShader = 'uniform float microGridDivisions;\n' + shader.fragmentShader;
+                    shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', `
+                        #include <map_fragment>
+                        #ifdef USE_MAP
+                            vec2 grid = vUv * microGridDivisions;
+                            vec2 pixelWidth = max(fwidth(grid), vec2(0.0001));
+                            vec2 edge = min(fract(grid), 1.0-fract(grid));
+                            vec2 lines = 1.0-smoothstep(vec2(0.018), vec2(0.018)+pixelWidth, edge);
+                            float visible = 1.0-smoothstep(0.3, 1.0, max(pixelWidth.x,pixelWidth.y));
+                            diffuseColor.rgb *= 1.0-0.16*max(lines.x,lines.y)*visible;
+                        #endif
+                    `);
+                };
                 if (base.map?.image) {
                     const pixels = document.createElement('canvas');
                     pixels.width = pixels.height = MICRO_BLOCK_DIVISIONS;
@@ -3674,24 +3906,46 @@
             const parent = microParentKey(x,y,z);
             const removed = microEdits.get(parent) || new Set();
             const placed = microPlacements.get(parent) || new Map();
-            const baseType = getBlock(x,y,z);
             const faces = new Map(), emitted = new Set();
-            function typeAt(mx,my,mz) {
-                if (mx>=0 && mx<n && my>=0 && my<n && mz>=0 && mz<n) {
-                    const index=microIndex(mx,my,mz);
-                    return placed.get(index) ?? (removed.has(index) ? 0 : baseType);
+            const renderedFine = new Set();
+            function renderFineCell(c) {
+                const key=detailKey(c);
+                if (renderedFine.has(key)) return;
+                renderedFine.add(key);
+                for (let dx=0;dx<10;dx++) for (let dy=0;dy<10;dy++) for (let dz=0;dz<10;dz++) {
+                    const child={x,y,z,mx:c.mx*10+dx,my:c.my*10+dy,mz:c.mz*10+dz,level:(c.level || 1)+1};
+                    if (refinedMicroCells.has(detailKey(child))) renderFineCell(child);
+                    else for (let face=0;face<6;face++) emitCell(child,face);
                 }
-                return getMicroType(microCell(x*n+mx,y*n+my,z*n+mz));
             }
             function emit(mx, my, mz, faceIndex) {
-                const index=microIndex(mx,my,mz), type=typeAt(mx,my,mz);
-                const isPlaced=placed.has(index);
+                emitCell({x,y,z,mx,my,mz,level:1},faceIndex);
+            }
+            function emitCell(c, faceIndex) {
+                const cellKey=detailKey(c);
+                if (refinedMicroCells.has(cellKey)) { renderFineCell(c); return; }
+                const type=getMicroType(c);
+                const coarse=microAncestor(c,1);
+                let isPlaced=placed.has(microIndex(coarse.mx,coarse.my,coarse.mz));
+                for (let level=2;level<=c.level;level++) {
+                    if (fineVoxelEdits.has(detailKey(microAncestor(c,level)))) isPlaced=true;
+                }
                 if (!type || !materials[type] || (!isPlaced && !isSolidType(type))) return;
                 const f = microFaces[faceIndex];
-                const neighbor=typeAt(mx+f.n[0],my+f.n[1],mz+f.n[2]);
+                const neighborCell=offsetMicroCell(c,...f.n);
+                if (refinedMicroCells.has(detailKey(neighborCell))) {
+                    const axis=f.n.findIndex(v=>v!==0), rest=[0,1,2].filter(v=>v!==axis);
+                    for (let a=0;a<10;a++) for (let b=0;b<10;b++) {
+                        const q=[c.mx*10,c.my*10,c.mz*10];
+                        q[axis]+=f.n[axis]>0 ? 9 : 0; q[rest[0]]+=a; q[rest[1]]+=b;
+                        emitCell({x,y,z,mx:q[0],my:q[1],mz:q[2],level:c.level+1},faceIndex);
+                    }
+                    return;
+                }
+                const neighbor=getMicroType(neighborCell);
                 if (isSolidType(neighbor) && ![6,47,48,49].includes(neighbor)) return;
                 if (neighbor===type && [6,24,43,47].includes(type)) return;
-                const key = index*6 + faceIndex;
+                const key = cellKey+':'+faceIndex;
                 if (emitted.has(key)) return;
                 emitted.add(key);
                 const materialKey=`${isPlaced?'placed':'natural'}:${type}:${faceIndex}`;
@@ -3701,11 +3955,12 @@
                         material:Array.isArray(source) ? source[faceIndex] : source});
                 }
                 const data = faces.get(materialKey);
-                const center = [mx,my,mz].map((v,i) => -0.5 + (v + 0.5 + f.n[i]*0.5)/n);
+                const divs=microDivisions(c.level);
+                const center = [c.mx,c.my,c.mz].map((v,i) => -0.5 + (v + 0.5 + f.n[i]*0.5)/divs);
                 const corners = [[-1,-1],[1,-1],[1,1],[-1,1]];
                 for (const index of [0,1,2,0,2,3]) {
                     const [u,v] = corners[index];
-                    const p = center.map((c,i) => c + (f.u[i]*u + f.v[i]*v)/(2*n));
+                    const p = center.map((c,i) => c + (f.u[i]*u + f.v[i]*v)/(2*divs));
                     data.positions.push(...p);
                     data.normals.push(...f.n);
                     if (isPlaced) data.uvs.push((u+1)/2,(v+1)/2);
@@ -3718,8 +3973,11 @@
                 emit(a,n-1,b,2); emit(a,0,b,3);
                 emit(a,b,n-1,4); emit(a,b,0,5);
             }
-            for (const index of new Set([...removed,...placed.keys()])) {
+            for (const index of new Set([...removed,...placed.keys(),...(fineRoots.get(parent) || [])])) {
                 const cell = [index % n, Math.floor(index/n)%n, Math.floor(index/(n*n))];
+                if (refinedMicroCells.has(detailKey({x,y,z,mx:cell[0],my:cell[1],mz:cell[2],level:1}))) {
+                    renderFineCell({x,y,z,mx:cell[0],my:cell[1],mz:cell[2],level:1});
+                }
                 microFaces.forEach((f,i) => {
                     if (placed.has(index)) emit(...cell,i);
                     const c = cell.map((v,axis) => v-f.n[axis]);
@@ -3739,6 +3997,12 @@
             geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals,3));
             geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs,2));
             geometry.userData.materials=meshMaterials;
+            const origin = isTinyMode() && getMicroLevel()>1 ? camera.position.clone().sub(new THREE.Vector3(x,y,z)) : new THREE.Vector3();
+            // Keep the smallest nearby faces near the mesh origin before Float32 conversion.
+            if (origin.lengthSq()) {
+                geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions.map((v,i)=>v-[origin.x,origin.y,origin.z][i%3]),3));
+            }
+            geometry.userData.origin=origin;
             geometry.computeBoundingSphere();
             return geometry;
         }
@@ -3762,7 +4026,7 @@
                 const loaded = dimension === currentDimension &&
                     chunkMeshes.has(`${Math.floor(x/CHUNK_SIZE)},${Math.floor(z/CHUNK_SIZE)}`);
                 const old = microMeshes.get(key);
-                if (!loaded || (!isSolid(x,y,z) && !microPlacements.has(key))) {
+                if (!loaded || (!isSolid(x,y,z) && !microPlacements.has(key) && !fineRoots.has(key))) {
                     if (old) { microVoxelGroup.remove(old); old.geometry.dispose(); microMeshes.delete(key); }
                     continue;
                 }
@@ -3770,7 +4034,7 @@
                 if (old) { microVoxelGroup.remove(old); old.geometry.dispose(); }
                 const geometry=createMicroBlockGeometry(x,y,z);
                 const mesh = new THREE.Mesh(geometry, geometry.userData.materials);
-                mesh.position.set(x,y,z);
+                mesh.position.set(x,y,z).add(geometry.userData.origin);
                 microMeshes.set(key,mesh);
                 microVoxelGroup.add(mesh);
                 hideMicroBlockInstance(x,y,z);
@@ -3780,7 +4044,9 @@
             if (isTinyMode() && controls.isLocked) {
                 const hit = findMicroBlockHit(camera.position, camera.getWorldDirection(new THREE.Vector3()));
                 if (hit) {
-                    microTarget.position.set(hit.x-0.5+(hit.mx+0.5)/20, hit.y-0.5+(hit.my+0.5)/20, hit.z-0.5+(hit.mz+0.5)/20);
+                    const size=microCellSize(hit);
+                    microTarget.scale.setScalar(size/MICRO_PLAYER_SCALE);
+                    microTarget.position.set(hit.x-0.5+(hit.mx+0.5)*size, hit.y-0.5+(hit.my+0.5)*size, hit.z-0.5+(hit.mz+0.5)*size);
                     microTarget.visible = true;
                 }
             }
@@ -4706,14 +4972,18 @@
         }
 
         function getPlayerRadius() {
+            if (activeMech) return activeMech.form === 'vehicle' ? 1.55 : 0.86;
             return PLAYER_RADIUS * playerScale;
         }
 
         function updatePlayerScaleView() {
-            camera.near = isTinyMode() ? 0.001 : 0.1;
+            microGridUniform.value=microDivisions(getMicroLevel());
+            camera.near = isTinyMode() ? playerScale*0.02 : 0.1;
             camera.updateProjectionMatrix();
             heldItemGroup.scale.setScalar(playerScale);
             heldItemGroup.position.set(0.4 * playerScale, -0.4 * playerScale, -0.8 * playerScale);
+            microTarget.scale.setScalar(microCellSize()/MICRO_PLAYER_SCALE);
+            for (const key of microRenderBlocks) microDirtyBlocks.add(key);
             for (const meshes of chunkMeshes.values()) {
                 for (const [type, mesh] of Object.entries(meshes)) {
                     if (mesh.geometry === boxGeo) mesh.material = isTinyMode() ? getMicroMaterials(Number(type)) : materials[type];
@@ -4725,11 +4995,11 @@
             if (!isTinyMode() || !checkTinyCollision(camera.position)) return;
             // Older full-size collision allowed feet below the surface. Lift clear before shrinking.
             for (let i=0; i<60 && checkTinyCollision(camera.position); i++) {
-                camera.position.y += MICRO_PLAYER_SCALE;
+                camera.position.y += microCellSize();
             }
             if (checkTinyCollision(camera.position)) {
                 camera.position.y = getSurfaceHeight(Math.floor(camera.position.x+0.5), Math.floor(camera.position.z+0.5)) + 0.5 + getPlayerHeight();
-                while (checkTinyCollision(camera.position)) camera.position.y += MICRO_PLAYER_SCALE;
+                while (checkTinyCollision(camera.position)) camera.position.y += microCellSize();
             }
             velocity.set(0,0,0);
         }
@@ -4740,10 +5010,12 @@
 
         document.addEventListener('keydown', (e) => {
             if (isTextEntryTarget(e.target)) return;
+            if (controls.isLocked && !e.repeat && e.code === 'KeyR' && activeMech) { transformMech(); return; }
+            if (controls.isLocked && !e.repeat && e.code === 'KeyX' && activeMech) { exitMech(); return; }
             if (e.code === 'KeyE') {
                 isThirdPerson = false;
                 if (localPlayerModel) scene.remove(localPlayerModel);
-                heldItemGroup.visible = true;
+                heldItemGroup.visible = !activeMech;
                 if (ridingMinecart) {
                     ridingMinecart.isRiding = false;
                     ridingMinecart = null;
@@ -4751,7 +5023,7 @@
                     return;
                 }
                 if (controls.isLocked) {
-                    for (let mc of minecarts) {
+                    for (let mc of activeMech ? [] : minecarts) {
                         if (mc.mesh.position.distanceTo(camera.position) < 2) {
                             mc.isRiding = true;
                             ridingMinecart = mc;
@@ -4839,6 +5111,7 @@
         }
 
         window.resetWorld = function() {
+            clearMech();
             // 清理旧区块
             for (let meshes of chunkMeshes.values()) {
                 for (const mesh of Object.values(meshes)) scene.remove(mesh);
@@ -4855,6 +5128,7 @@
             
             // 清理实体
             zombies.forEach(z => scene.remove(z.mesh)); zombies = [];
+            creepers.forEach(c => scene.remove(c.mesh)); creepers = [];
             villagers.forEach(v => scene.remove(v.mesh)); villagers = [];
             animals.forEach(a => scene.remove(a.mesh)); animals = [];
             minecarts.forEach(m => scene.remove(m.mesh)); minecarts = [];
@@ -4877,7 +5151,6 @@
             oxygen = 20;
             currentDimension = 'overworld';
             playerScale = 1;
-            shrinkTimer = 0;
             clearMicroVoxelOverlay();
             microVoxelGroup.visible = false;
             updatePlayerScaleView();
@@ -4902,7 +5175,7 @@
 
         let currentBlock = 2; 
         window.switchTab = function(tabId, btnElement) {
-            ['tab-build', 'tab-life', 'tab-weapon', 'tab-redstone'].forEach(id => {
+            ['tab-build', 'tab-life', 'tab-weapon', 'tab-redstone', 'tab-mods'].forEach(id => {
                 document.getElementById(id).style.display = 'none';
             });
             document.getElementById('tab-' + tabId).style.display = 'flex';
@@ -4945,7 +5218,7 @@
         initHotbar();
 
         window.selectSlot = function(id) {
-            for(let i=1; i<=53; i++) {
+            for(const i of Object.keys(getInventorySlotMapping())) {
                 document.getElementById(`inv-${i}`)?.classList.remove('selected');
             }
             document.getElementById(`inv-${id}`)?.classList.add('selected');
@@ -4990,16 +5263,47 @@
         }
 
         function checkTinyCollision(pos) {
-            const radius = getPlayerRadius(), epsilon = 1e-6, n = MICRO_BLOCK_DIVISIONS;
+            return checkScaledCollision(pos);
+        }
+
+        function microVolumeCollides(c, min, max) {
+            const size=microCellSize(c);
+            const corner=[c.x-0.5+c.mx*size,c.y-0.5+c.my*size,c.z-0.5+c.mz*size];
+            if (corner.some((v,i)=>v>=max[i] || v+size<=min[i])) return false;
+            if (!refinedMicroCells.has(detailKey(c))) return isSolidType(getMicroType(c));
+            const childSize=size/10;
+            const lo=corner.map((v,i)=>Math.max(0,Math.floor((min[i]-v)/childSize)));
+            const hi=corner.map((v,i)=>Math.min(9,Math.floor((max[i]-v)/childSize)));
+            for(let x=lo[0];x<=hi[0];x++) for(let y=lo[1];y<=hi[1];y++) for(let z=lo[2];z<=hi[2];z++) {
+                if (microVolumeCollides({x:c.x,y:c.y,z:c.z,mx:c.mx*10+x,my:c.my*10+y,mz:c.mz*10+z,level:(c.level || 1)+1},min,max)) return true;
+            }
+            return false;
+        }
+
+        function checkScaledCollision(pos) {
+            const radius = getPlayerRadius(), epsilon = Math.min(playerScale,1)*0.00002;
             const min = [pos.x-radius+epsilon, pos.y-getPlayerHeight()+epsilon, pos.z-radius+epsilon];
             const max = [pos.x+radius-epsilon, pos.y+0.2*playerScale-epsilon, pos.z+radius-epsilon];
+            const level=isTinyMode() ? getMicroLevel() : 0, n=level ? microDivisions(level) : 1;
             const lo = min.map(v => Math.floor((v+0.5)*n));
             const hi = max.map(v => Math.floor((v+0.5)*n));
             for (let x = lo[0]; x <= hi[0]; x++) {
                 for (let y = lo[1]; y <= hi[1]; y++) {
                     for (let z = lo[2]; z <= hi[2]; z++) {
-                        const c = microCell(x,y,z);
-                        if (isSolidType(getMicroType(c))) return true;
+                        if (level) {
+                            if (microVolumeCollides(microCell(x,y,z,level),min,max)) return true;
+                        } else {
+                            const parent=microParentKey(x,y,z);
+                            if (!microEdits.has(parent) && !microPlacements.has(parent) && !fineRoots.has(parent)) {
+                                if (isSolid(x,y,z)) return true;
+                                continue;
+                            }
+                            const low=[x,y,z].map((v,i)=>Math.max(0,Math.floor((min[i]-v+0.5)*20)));
+                            const high=[x,y,z].map((v,i)=>Math.min(19,Math.floor((max[i]-v+0.5)*20)));
+                            for(let mx=low[0];mx<=high[0];mx++) for(let my=low[1];my<=high[1];my++) for(let mz=low[2];mz<=high[2];mz++) {
+                                if (microVolumeCollides({x,y,z,mx,my,mz,level:1},min,max)) return true;
+                            }
+                        }
                     }
                 }
             }
@@ -5007,7 +5311,7 @@
         }
 
         function moveTinyAxis(axis, amount) {
-            const steps = Math.max(1, Math.ceil(Math.abs(amount)/(MICRO_PLAYER_SCALE*0.25)));
+            const steps = Math.max(1, Math.ceil(Math.abs(amount)/(Math.min(playerScale,1)*0.25)));
             const step = amount/steps;
             for (let i=0; i<steps; i++) {
                 const start = camera.position[axis];
@@ -5027,7 +5331,7 @@
         }
 
         function checkCollision(pos) {
-            if (isTinyMode()) return checkTinyCollision(pos);
+            if (isTinyMode() || playerScale>1 || activeMech) return checkScaledCollision(pos);
             const playerHeight = getPlayerHeight();
             const playerRadius = getPlayerRadius();
             const checkPoints = [
@@ -5203,6 +5507,291 @@
             return mesh;
         }
 
+        const MECH_TYPES = {
+            70: { name: 'Prime Truck', paint: 0xdb343b, trim: 0x285db4, vehicleScale: 0.9, speed: 8 },
+            71: { name: 'Bee Scout', paint: 0xf2c431, trim: 0x292e35, vehicleScale: 0.65, speed: 11 }
+        };
+
+        function createModItemModel(id) {
+            const group = new THREE.Group();
+            group.userData.modItem = true;
+            if (id <= 69) {
+                const colors = id === 67 ? [0xc49b70,0x694731] : id === 68 ? [0x88c855,0x275c25] : [0x477e52,0x364f83];
+                addModelBox(group,0.55,0.5,0.45,colors[0],0,0,0);
+                addModelBox(group,0.35,0.15,0.35,colors[0],0,0.325,0);
+                addModelBox(group,0.4,0.12,0.35,colors[0],0,-0.31,0);
+                for (const [x,y] of [[-0.12,0.13],[0.14,-0.1],[-0.11,-0.2]]) {
+                    addModelBox(group,0.12,0.12,0.02,colors[1],x,y,0.235);
+                }
+            } else {
+                addModelBox(group,0.6,0.6,0.22,MECH_TYPES[id].paint,0,0,0);
+                addModelBox(group,0.38,0.3,0.04,0x25333f,0,0,0.13);
+                addModelBox(group,0.28,0.07,0.04,0x86eaff,0,0.05,0.16);
+                addModelBox(group,0.22,0.12,0.04,0xbac7cc,0,-0.1,0.16);
+            }
+            return group;
+        }
+
+        function initModIcons() {
+            for (const img of document.querySelectorAll('[data-mod-icon]')) {
+                const id=Number(img.dataset.modIcon), canvas=document.createElement('canvas');
+                canvas.width=canvas.height=24;
+                const ctx=canvas.getContext('2d');
+                if (id<70) {
+                    ctx.fillStyle=id===67?'#c49b70':id===68?'#88c855':'#477e52';
+                    ctx.fillRect(8,2,8,3);ctx.fillRect(5,5,14,14);ctx.fillRect(8,19,8,3);
+                    ctx.fillStyle=id===67?'#694731':id===68?'#275c25':'#364f83';
+                    for(const [x,y] of [[8,7],[14,11],[7,16]]) ctx.fillRect(x,y,4,4);
+                } else {
+                    ctx.fillStyle=id===70?'#285db4':'#f2c431';ctx.fillRect(4,2,16,18);
+                    ctx.fillRect(2,0,3,9);ctx.fillRect(19,0,3,9);
+                    ctx.fillStyle='#25333f';ctx.fillRect(6,8,12,11);
+                    ctx.fillStyle='#86eaff';ctx.fillRect(7,9,4,3);ctx.fillRect(13,9,4,3);
+                    ctx.fillStyle='#bac7cc';ctx.fillRect(8,14,8,7);
+                }
+                img.src=canvas.toDataURL();
+            }
+        }
+
+        function createMechModel(id) {
+            const cfg=MECH_TYPES[id], truck=id===70, group=new THREE.Group();
+            const parts=[];
+            // Each solid panel has a robot pose and a folded vehicle pose.
+            function panel(size,color,robot,vehicle,scale=[1,1,1],rotation=[0,0,0],limb=0) {
+                const mesh=addModelBox(group,...size,color,...robot);
+                parts.push({mesh,robot:new THREE.Vector3(...robot),vehicle:new THREE.Vector3(...vehicle),
+                    scale:new THREE.Vector3(...scale),rotation:new THREE.Vector3(...rotation),limb});
+                return mesh;
+            }
+            const steel=0xb7c5cf, dark=0x232c36, glass=0x78cee9;
+            panel([1.05,0.88,0.62],cfg.paint,[0,2.32,0],[0,truck?1.02:0.55,0.48],[1.25,truck?1.1:0.58,1.7]);
+            panel([0.68,0.42,0.48],dark,[0,1.64,0],[0,0.37,-0.68],[1.8,0.8,2.6]);
+            for(const side of [-1,1]) {
+                panel([0.42,0.3,0.045],glass,[side*0.25,2.49,0.335],[side*0.31,truck?1.2:0.83,truck?1.03:0.13],[1.2,truck?1:0.8,1]);
+                panel([0.48,0.48,0.56],cfg.paint,[side*0.61,2.53,0],[side*0.52,0.54,0.8],[0.75,0.7,1.4]);
+                panel([0.32,0.74,0.38],cfg.paint,[side*0.66,1.91,0],[side*0.49,0.58,-0.3],[1,1,1],[-Math.PI/2,0,0],side);
+                panel([0.32,0.3,0.34],dark,[side*0.67,1.41,0.08],[side*0.49,0.5,-0.83]);
+                panel([0.38,0.55,0.4],steel,[side*0.3,1.14,0],[side*0.3,0.46,-0.43],[1,1,1],[Math.PI/2,0,0],-side);
+                panel([0.46,0.67,0.5],cfg.trim,[side*0.3,0.56,0],[side*0.3,0.5,-1.02],[1,0.85,1],[Math.PI/2,0,0],-side);
+                panel([0.5,0.2,0.76],cfg.trim,[side*0.3,0.12,0.15],[side*0.3,0.44,-1.15],[1,1,0.6]);
+                panel([0.17,0.17,0.06],0xfff0b0,[side*0.41,2.05,0.35],[side*0.46,0.61,1.25]);
+                if(truck) panel([0.1,0.75,0.12],steel,[side*0.76,2.9,-0.16],[side*0.72,1.18,0.15]);
+                for(const z of [-1,1]) {
+                    const wheel=panel([0.2,0.49,0.49],0x181b20,[side*0.54,z===1?2.58:0.6,-0.25],[side*0.7,0.27,z*0.97]);
+                    wheel.userData.wheel=true;
+                    panel([0.22,0.22,0.22],steel,[side*0.55,z===1?2.58:0.6,-0.25],[side*0.72,0.27,z*0.97]);
+                }
+            }
+            panel([0.5,0.52,0.46],truck?cfg.trim:cfg.paint,[0,3.05,0],[0,truck?0.96:0.78,0.05],[1,0.6,1]);
+            panel([0.32,0.19,0.07],steel,[0,2.96,0.26],[0,0.58,1.3],[2,1.5,1]);
+            for(const side of [-1,1]) {
+                panel([0.12,0.08,0.06],0x7ff5ff,[side*0.13,3.13,0.255],[side*0.2,0.6,1.3]);
+                panel([0.09,0.48,0.13],truck?cfg.trim:cfg.paint,[side*0.29,3.3,0],[side*0.4,0.66,-1.05],[1,0.2,3]);
+            }
+            panel([0.64,0.28,0.09],steel,[0,2.01,0.35],[0,0.35,1.32],[1.65,0.65,1.8]);
+            panel([1.15,0.16,2.5],cfg.paint,[0,2.3,-0.1],[0,0.47,0],[0.001,0.001,0.001]);
+            const chassis=parts[parts.length-1];
+            chassis.hiddenRobot=true;chassis.scale.set(1,1,1);
+            chassis.mesh.scale.setScalar(0.001);
+            if(!truck) {
+                panel([0.16,0.08,1.1],dark,[-0.17,2.4,-0.35],[-0.17,0.71,0.69]);
+                panel([0.16,0.08,1.1],dark,[0.17,2.4,-0.35],[0.17,0.71,0.69]);
+                panel([0.9,0.1,0.75],cfg.paint,[0,2.7,-0.37],[0,1.04,-0.02]);
+            }
+            group.userData.parts=parts;
+            return group;
+        }
+
+        function disposeModModel(model) {
+            if (!model) return;
+            scene.remove(model);
+            model.traverse(obj=>{if(obj.isMesh) {obj.geometry.dispose();obj.material.dispose();}});
+        }
+
+        function updateMechHUD() {
+            const status=document.getElementById('mech-status');
+            status.style.display=activeMech?'block':'none';
+            status.textContent=activeMech ? `${MECH_TYPES[activeMech.id].name} / ${activeMech.form==='robot'?'Robot':'Vehicle'}` : '';
+            document.getElementById('transform-btn').disabled=!activeMech;
+            document.getElementById('exit-mech-btn').disabled=!activeMech;
+            heldItemGroup.visible=!activeMech;
+            if(!activeMech) {
+                const crosshair=document.getElementById('crosshair');
+                crosshair.style.left='50%';crosshair.style.top='50%';crosshair.style.visibility='visible';
+            }
+        }
+
+        function clearMech() {
+            disposeModModel(mechVisual);mechVisual=null;activeMech=null;mechBlend=0;
+            updateMechHUD();
+        }
+
+        function restoreMech(saved) {
+            if(!saved || !MECH_TYPES[saved.id] || !['robot','vehicle'].includes(saved.form)) return;
+            activeMech={id:saved.id,form:saved.form,
+                previousScale:Math.max(MIN_PLAYER_SCALE,Math.min(MAX_PLAYER_SCALE,Number(saved.previousScale)||1))};
+            playerScale=saved.form==='robot'?2:MECH_TYPES[saved.id].vehicleScale;
+            mechBlend=saved.form==='vehicle'?1:0;
+            mechVisual=createMechModel(saved.id);scene.add(mechVisual);updateMechHUD();updateMechView(0);
+        }
+
+        function changeMechBody(next,scale) {
+            const previous=activeMech,previousScale=playerScale,position=camera.position.clone();
+            let feet=position.y-getPlayerHeight();
+            const floor=Math.round(feet);
+            if(!previous && previousScale===1 && isSolid(Math.round(position.x),floor,Math.round(position.z)) &&
+                floor+0.5-feet<=0.101) feet=floor+0.5;
+            activeMech=next;playerScale=scale;camera.position.y=feet+getPlayerHeight();
+            // Preserve contact when the new collider uses a smaller floor tolerance.
+            if(scale<previousScale && checkScaledCollision(camera.position)) {
+                camera.position.y+=Math.max(0,Math.min(previousScale,1)-Math.min(scale,1))*0.00002;
+            }
+            if(checkScaledCollision(camera.position)) {
+                activeMech=previous;playerScale=previousScale;camera.position.copy(position);
+                showToast('Not enough room. Move into an open space.');return false;
+            }
+            velocity.set(0,0,0);cancelMining();updatePlayerScaleView();updateMechHUD();
+            return true;
+        }
+
+        function enterMech(id) {
+            if(!MECH_TYPES[id] || !hasInventoryItem(id)) {showToast('Get a mech core from Mods first.');return false;}
+            if(ridingMinecart) {showToast('Leave the minecart first.');return false;}
+            const next={id,form:'robot',previousScale:activeMech?activeMech.previousScale:playerScale};
+            if(!changeMechBody(next,2)) return false;
+            disposeModModel(mechVisual);mechVisual=createMechModel(id);scene.add(mechVisual);
+            mechBlend=0;updateMechView(0);playSound('place');
+            showToast(MECH_TYPES[id].name+' activated.');return true;
+        }
+
+        function transformMech() {
+            if(!activeMech) return false;
+            const next={...activeMech,form:activeMech.form==='robot'?'vehicle':'robot'};
+            if(!changeMechBody(next,next.form==='robot'?2:MECH_TYPES[next.id].vehicleScale)) return false;
+            playSound('place');return true;
+        }
+
+        function exitMech() {
+            if(!activeMech) return false;
+            if(!changeMechBody(null,activeMech.previousScale)) return false;
+            clearMech();showToast('Player form restored.');return true;
+        }
+
+        function updateMechView(delta) {
+            if(!activeMech || !mechVisual) return camera;
+            const target=activeMech.form==='vehicle'?1:0;
+            mechBlend+=Math.sign(target-mechBlend)*Math.min(Math.abs(target-mechBlend),delta*1.8);
+            const t=mechBlend*mechBlend*(3-2*mechBlend);
+            const moving=controls.isLocked && (moveForward || moveBackward || moveLeft || moveRight);
+            if(moving) mechWalkTime+=delta*7;
+            for(const part of mechVisual.userData.parts) {
+                part.mesh.position.lerpVectors(part.robot,part.vehicle,t);
+                part.mesh.scale.set(1,1,1).lerp(part.scale,t);
+                if(part.hiddenRobot) part.mesh.scale.setScalar(Math.max(0.001,t));
+                part.mesh.rotation.set(part.rotation.x*t,part.rotation.y*t,part.rotation.z*t);
+                if(part.limb && moving) part.mesh.rotation.x+=Math.sin(mechWalkTime)*0.25*part.limb*(1-t);
+                if(part.mesh.userData.wheel && moving) part.mesh.rotation.x+=mechWalkTime*t;
+            }
+            const forward=new THREE.Vector3();camera.getWorldDirection(forward);
+            const yaw=Math.atan2(forward.x,forward.z);
+            mechVisual.rotation.y=yaw;
+            mechVisual.position.set(camera.position.x,camera.position.y-getPlayerHeight(),camera.position.z);
+            // Chase view is a separate camera: never move the physics / pointer-lock camera.
+            const focus=camera.position.clone();
+            const chaseDistance=(innerWidth<500?7.5:6.5)-1.5*t;
+            const desired=focus.clone().addScaledVector(forward,-chaseDistance);
+            desired.y+=1.1;
+            const offset=desired.clone().sub(focus), length=offset.length();offset.normalize();
+            let distance=length;
+            for(let d=0.12;d<=length;d+=0.12) {
+                const p=focus.clone().addScaledVector(offset,d);
+                if(isSolid(Math.round(p.x),Math.round(p.y),Math.round(p.z))) {distance=Math.max(0.08,d-0.25);break;}
+            }
+            mechCamera.position.copy(focus).addScaledVector(offset,distance);
+            const viewTarget=focus.clone().addScaledVector(forward,8);
+            viewTarget.y-=1.2*(1-t);
+            mechCamera.lookAt(viewTarget);
+            mechCamera.updateMatrixWorld(true);
+            mechVisual.visible=distance>0.6;
+            let aim=focus.clone().addScaledVector(forward,6);
+            for(let d=0.05;d<=6;d+=0.05) {
+                const p=focus.clone().addScaledVector(forward,d);
+                if(isSolid(Math.round(p.x),Math.round(p.y),Math.round(p.z))) {aim=p;break;}
+            }
+            aim.project(mechCamera);
+            const crosshair=document.getElementById('crosshair');
+            crosshair.style.left=`${(aim.x+1)*50}%`;crosshair.style.top=`${(1-aim.y)*50}%`;
+            crosshair.style.visibility=Math.abs(aim.x)>1 || Math.abs(aim.y)>1?'hidden':'visible';
+            return mechCamera;
+        }
+
+        let mechAttackTime=-Infinity;
+        function mechAttack() {
+            if(!activeMech || activeMech.form!=='robot' || performance.now()-mechAttackTime<500) return false;
+            mechAttackTime=performance.now();
+            const dir=new THREE.Vector3();camera.getWorldDirection(dir);
+            for(let d=0.2;d<=7;d+=0.15) {
+                const p=camera.position.clone().addScaledVector(dir,d);
+                if(isSolid(Math.round(p.x),Math.round(p.y),Math.round(p.z))) return false;
+                for(const mob of [...zombies,...creepers,...villagers,...animals]) {
+                    if(!mob.dying && p.distanceTo(mob.mesh.position)<1) {damageMob(mob,2);playSound('stone');return true;}
+                }
+            }
+            return false;
+        }
+
+        function createCreeperModel() {
+            const group=new THREE.Group();
+            addModelBox(group,0.56,0.56,0.56,0x6cab45,0,0.88,0,'head');
+            addModelBox(group,0.42,0.68,0.38,0x79b851,0,0.3,0,'body');
+            for(const x of [-0.14,0.14]) addModelBox(group,0.12,0.14,0.03,0x162516,x,0.94,0.3);
+            addModelBox(group,0.13,0.2,0.03,0x162516,0,0.76,0.3);
+            for(const x of [-0.1,0.1]) addModelBox(group,0.08,0.15,0.03,0x162516,x,0.67,0.3);
+            for(const x of [-0.2,0.2]) for(const z of [-0.2,0.2]) addModelBox(group,0.23,0.42,0.27,0x4c8735,x,-0.29,z);
+            for(const [x,y] of [[-0.12,0.23],[0.1,0.48],[-0.18,1.06]]) addModelBox(group,0.09,0.09,0.025,0xa3ca73,x,y,0.3);
+            rememberOriginalMaterials(group);return group;
+        }
+
+        function spawnMobFromEgg(id,x,y,z) {
+            let mob;
+            if(id===67) {spawnVillagerAt(x,y,z);mob=villagers[villagers.length-1];}
+            else {
+                const mesh=id===68?createCreeperModel():createZombieModel();
+                mesh.position.set(x,y,z);scene.add(mesh);
+                mob={mesh,kind:id===68?'creeper':'zombie',vx:0,vy:0,vz:0,onGround:false,fuseTimer:0,
+                    soundTimer:3,hp:3,hurtTimer:0,dying:false,deathTimer:0,walkTime:0};
+                (id===68?creepers:zombies).push(mob);
+            }
+            mob.eggId=id;return mob;
+        }
+
+        function useSpawnEgg(id) {
+            if(![67,68,69].includes(id) || !hasInventoryItem(id)) {showToast('No spawn eggs left.');return false;}
+            if(zombies.length+creepers.length+villagers.length+animals.length>=80) {showToast('Mob limit reached.');return false;}
+            const dir=new THREE.Vector3();camera.getWorldDirection(dir);
+            let previous=null;
+            for(let d=0;d<=7;d+=0.04) {
+                const p=camera.position.clone().addScaledVector(dir,d);
+                const cell={x:Math.round(p.x),y:Math.round(p.y),z:Math.round(p.z)};
+                const type=getBlock(cell.x,cell.y,cell.z);
+                if(isSolidType(type)) {
+                    if(!previous) break;
+                    const {x,y,z}=previous;
+                    const clear=[0,42];
+                    if(!isSolid(x,y-1,z) || !clear.includes(getBlock(x,y,z)) || !clear.includes(getBlock(x,y+1,z))) break;
+                    if(Math.hypot(x-camera.position.x,z-camera.position.z)<getPlayerRadius()+0.45 &&
+                        y+1.5>camera.position.y-getPlayerHeight() && y-0.5<camera.position.y+0.2*playerScale) break;
+                    if([...zombies,...creepers,...villagers,...animals].some(m=>m.mesh.position.distanceTo(new THREE.Vector3(x,y,z))<0.8)) break;
+                    if(!consumeInventoryItem(id)) return false;
+                    if(getBlock(x,y,z)===42) setBlock(x,y,z,0);
+                    spawnMobFromEgg(id,x,y,z);updateInventoryCounts();playSound('place');
+                    return true;
+                }
+                previous=cell;
+            }
+            showToast('Aim at open ground with two blocks of headroom.');return false;
+        }
+
         function createZombieModel() {
             const group = new THREE.Group();
             addModelBox(group, 0.55, 0.45, 0.28, 0x2f7d42, 0, 0.68, 0, 'head');
@@ -5216,6 +5805,7 @@
             rightArm.rotation.x = -0.18;
             addModelBox(group, 0.22, 0.7, 0.22, 0x52318c, -0.15, -0.62, 0, 'leftLeg');
             addModelBox(group, 0.22, 0.7, 0.22, 0x52318c, 0.15, -0.62, 0, 'rightLeg');
+            group.children.forEach(part=>part.position.y+=0.47);
             rememberOriginalMaterials(group);
             return group;
         }
@@ -5231,6 +5821,7 @@
             addModelBox(group, 0.46, 0.12, 0.08, 0x8d6e63, 0, 0.12, 0.24, 'rightArm').rotation.z = 0.24;
             addModelBox(group, 0.22, 0.7, 0.22, 0x5d4037, -0.14, -0.62, 0, 'leftLeg');
             addModelBox(group, 0.22, 0.7, 0.22, 0x5d4037, 0.14, -0.62, 0, 'rightLeg');
+            group.children.forEach(part=>part.position.y+=0.47);
             rememberOriginalMaterials(group);
             return group;
         }
@@ -5433,7 +6024,7 @@
         }
 
         function spawnCreeper() {
-            const mesh = new THREE.Mesh(mobGeo, matCreeper);
+            const mesh = createCreeperModel();
             const angle = Math.random() * Math.PI * 2;
             const dist = 25 + Math.random() * 15;
             const x = camera.position.x + Math.cos(angle) * dist;
@@ -5441,7 +6032,8 @@
             const y = getSurfaceHeight(x, z) + 2;
             mesh.position.set(x, y, z);
             scene.add(mesh);
-            creepers.push({ mesh, vx: 0, vy: 0, vz: 0, onGround: false, fuseTimer: 0 });
+            creepers.push({ mesh, kind:'creeper', vx: 0, vy: 0, vz: 0, onGround: false, fuseTimer: 0,
+                hp:3, hurtTimer:0, dying:false, deathTimer:0 });
         }
 
         function spawnZombie() {
@@ -5595,6 +6187,8 @@
             // 更新苦力怕
             for (let i = creepers.length - 1; i >= 0; i--) {
                 let c = creepers[i];
+                if(updateMobDamageState(c,delta)) {scene.remove(c.mesh);creepers.splice(i,1);continue;}
+                if(c.dying) continue;
                 let dx = camera.position.x - c.mesh.position.x;
                 let dz = camera.position.z - c.mesh.position.z;
                 let len = Math.sqrt(dx*dx + dz*dz);
@@ -5630,7 +6224,7 @@
 
                 // 靠近玩家自爆
                 let distToPlayer = c.mesh.position.distanceTo(camera.position);
-                if (distToPlayer < 3.0) {
+                if (!isCreativeMode() && distToPlayer < 3.0 && hasClearLineBetween(c.mesh.position,camera.position)) {
                     c.vx = 0;
                     c.vz = 0;
                     c.fuseTimer += delta;
@@ -5649,6 +6243,7 @@
                     c.fuseTimer = 0;
                     c.mesh.scale.set(1, 1, 1);
                 }
+                c.mesh.rotation.y=Math.atan2(dx,dz);
             }
 
             // 更新动物
@@ -6148,6 +6743,18 @@
             e.preventDefault();
             if (!controls.isLocked) return;
             if (e.button !== 0) cancelMining();
+            if (currentBlock >= 67 && currentBlock <= 71) {
+                if (e.button === 2) {
+                    if (currentBlock <= 69) useSpawnEgg(currentBlock);
+                    else if (activeMech && activeMech.id === currentBlock) transformMech();
+                    else enterMech(currentBlock);
+                } else if (e.button === 0 && activeMech) mechAttack();
+                return;
+            }
+            if (e.button===0 || e.button===2) {
+                if (currentBlock===SHRINK_POTION_ID) { drinkShrinkPotion(); return; }
+                if (currentBlock===GROW_POTION_ID) { drinkGrowPotion(); return; }
+            }
 
             if (isTinyMode() && (e.button === 0 || e.button === 2)) {
                 cancelMining();
@@ -6818,7 +7425,9 @@
                 builder: [[59, 32], [60, 32], [61, 32], [62, 16], [63, 32], [51, 32], [47, 12], [48, 8]],
                 redstone: [[28, 32], [30, 16], [52, 12], [53, 12], [26, 24], [27, 24], [29, 6]],
                 weapons: [[33, 1], [54, 1], [55, 1], [56, 1], [57, 1], [58, 1], [35, 1]],
-                nature: [[1, 32], [2, 32], [4, 24], [5, 24], [23, 24], [24, 8], [25, 12], [42, 32]]
+                nature: [[1, 32], [2, 32], [4, 24], [5, 24], [23, 24], [24, 8], [25, 12], [42, 32]],
+                mobs: [[67, 8], [68, 8], [69, 8]],
+                mechs: [[70, 1], [71, 1]]
             };
             const pack = packs[type] || packs.builder;
             for (let [id, count] of pack) {
@@ -6826,8 +7435,13 @@
             }
             updateHotbarUI();
             updateInventoryCounts();
-            showToast("Mod pack summoned: " + type);
-            window.closeUI();
+            if (type === 'mobs' || type === 'mechs') {
+                document.getElementById('toast-msg').style.display='none';
+                document.getElementById('mod-ui').style.display = 'none';
+                isInventoryOpen = true;
+                inventoryUI.style.display = 'block';
+                switchTab('mods', document.querySelector("[onclick=\"switchTab('mods', this)\"]"));
+            } else { showToast("Mod pack summoned: " + type); window.closeUI(); }
         };
 
         window.doAutoBuild = function(type) {
@@ -7249,23 +7863,6 @@
                 resetFoodTimers();
             }
 
-            if (shrinkTimer > 0) {
-                shrinkTimer = Math.max(0, shrinkTimer - delta);
-                if (shrinkTimer === 0 && playerScale !== 1) {
-                    const feetY = camera.position.y - getPlayerHeight();
-                    playerScale = 1;
-                    camera.position.y = feetY + getPlayerHeight();
-                    if (checkCollision(camera.position)) {
-                        playerScale = MICRO_PLAYER_SCALE;
-                        camera.position.y = feetY + getPlayerHeight();
-                        shrinkTimer = 1;
-                    } else {
-                        velocity.set(0,0,0);
-                        updatePlayerScaleView();
-                        showToast("Shrink potion wore off.");
-                    }
-                }
-            }
             if (portalCooldown > 0) portalCooldown = Math.max(0, portalCooldown - delta);
 
             // Daylight lasts exactly 10 minutes. Night lasts another 10 minutes if the player does not sleep.
@@ -7370,11 +7967,11 @@
                 if (isDay) {
                     dirLight.intensity = Math.max(0.1, sunHeight * 0.8);
                     
-                    // 白天烧死僵尸和苦力怕
-                    for(let z of zombies) scene.remove(z.mesh);
-                    zombies = [];
-                    for(let c of creepers) scene.remove(c.mesh);
-                    creepers = [];
+                    // Keep deliberately spawned mod mobs available during daytime.
+                    for(let z of zombies) if(!z.eggId) scene.remove(z.mesh);
+                    zombies = zombies.filter(z=>z.eggId);
+                    for(let c of creepers) if(!c.eggId) scene.remove(c.mesh);
+                    creepers = creepers.filter(c=>c.eggId);
                     
                     // 白天偶尔生成村民
                     if (Math.random() < 0.005 && villagers.length < 5) spawnVillager();
@@ -7434,9 +8031,9 @@
                 let bz = Math.round(camera.position.z);
                 let onLadder = (getBlock(bx, by, bz) === 7 || getBlock(bx, Math.round(camera.position.y - getPlayerHeight()), bz) === 7);
                 let inWaterPhys = (getBlock(bx, by, bz) === 24 || getBlock(bx, Math.round(camera.position.y - getPlayerHeight()), bz) === 24);
-                const physicsScale = isTinyMode() ? MICRO_PLAYER_SCALE : 1;
-                let onGroundPhys = isTinyMode()
-                    ? checkTinyCollision(camera.position.clone().add(new THREE.Vector3(0,-0.0002,0)))
+                const physicsScale = activeMech ? 1 : playerScale;
+                let onGroundPhys = isTinyMode() || playerScale>1 || activeMech
+                    ? checkScaledCollision(camera.position.clone().add(new THREE.Vector3(0,-0.004*Math.min(playerScale,1),0)))
                     : isSolid(bx, Math.round(camera.position.y - getPlayerHeight() - Math.max(0.01, 0.1 * physicsScale)), bz);
 
                 // --- 物理引擎 ---
@@ -7458,7 +8055,7 @@
                     velocity.y -= 5.0 * physicsScale * playerDelta; // 水中下沉慢
                     if (holdingSpace) velocity.y = 4 * physicsScale; // 水中游泳上升
                 } else if (holdingSpace) {
-                    if (onGroundPhys) velocity.y = 8 * physicsScale; // 正常跳跃，只跳一下，不再一直飞
+                    if (onGroundPhys && (!activeMech || activeMech.form==='robot')) velocity.y = 8 * physicsScale;
                     holdingSpace = false;
                 } else {
                     velocity.y -= 25.0 * physicsScale * playerDelta; // 正常重力
@@ -7470,6 +8067,7 @@
 
                 const tiredMultiplier = playerTired ? TIRED_WALK_MULTIPLIER : 1;
                 let moveSpeed = (inWaterPhys ? 25.0 : 50.0) * tiredMultiplier * physicsScale; // 水中移动慢
+                if(activeMech && !inWaterPhys) moveSpeed=activeMech.form==='vehicle'?MECH_TYPES[activeMech.id].speed*10:45;
                 if (moveForward || moveBackward) {
                     velocity.z -= direction.z * moveSpeed * playerDelta;
                     isMoving = true;
@@ -7479,7 +8077,8 @@
                     isMoving = true;
                 }
 
-                const maxSpeed = (inWaterPhys ? MAX_WATER_WALK_SPEED : MAX_WALK_SPEED) * tiredMultiplier * physicsScale;
+                const maxSpeed = activeMech && !inWaterPhys ? (activeMech.form==='vehicle'?MECH_TYPES[activeMech.id].speed:4.5)
+                    : (inWaterPhys ? MAX_WATER_WALK_SPEED : MAX_WALK_SPEED) * tiredMultiplier * physicsScale;
                 const horizontalSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
                 if (horizontalSpeed > maxSpeed) {
                     const scale = maxSpeed / horizontalSpeed;
@@ -7502,7 +8101,7 @@
                 
                 updatePlayerAnimation(playerDelta, isMoving);
 
-                if (isTinyMode()) {
+                if (isTinyMode() || playerScale>1 || activeMech) {
                     const before = camera.position.clone();
                     controls.moveRight(-velocity.x * playerDelta);
                     controls.moveForward(-velocity.z * playerDelta);
@@ -7557,9 +8156,10 @@
                     if (c.position.z < camera.position.z - 150) c.position.z += 300;
                 }
 
-                renderer.render(scene, camera);
+                renderer.render(scene, updateMechView(delta));
         }
 
+        initModIcons();
         animate();
     </script>
 </body>
