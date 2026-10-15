@@ -1967,6 +1967,7 @@
 
         function setGameModeChoice(mode) {
             gameMode = mode === 'creative' ? 'creative' : 'survival';
+            if (!isCreativeMode()) resetPlayerFlight();
             const modeSelect = document.getElementById('mode-select');
             if (modeSelect) modeSelect.value = gameMode;
             document.querySelectorAll('.mode-btn').forEach(btn => {
@@ -2039,6 +2040,7 @@
                 oxygen: oxygen,
                 currentDimension: currentDimension,
                 playerScale: playerScale,
+                creativeFlying: creativeFlying,
                 activeMech: activeMech,
                 spawnedMobs: [...villagers,...creepers,...zombies].filter(m=>m.eggId && !m.dying).map(m=>({
                     id:m.eggId,x:m.mesh.position.x,y:m.mesh.position.y,z:m.mesh.position.z,hp:m.hp
@@ -2069,6 +2071,7 @@
                     const data = JSON.parse(e.target.result);
                     clearMech();
                     clearCombatState();
+                    resetPlayerFlight();
                     
                     // 清理旧区块
                     for (let [key, meshes] of chunkMeshes) {
@@ -2135,6 +2138,7 @@
                     restoreMicroEdits(data.microMinedBlocks || [], data.microPlacedBlocks || []);
                     restoreFineVoxelEdits(data.fineVoxelEdits || []);
                     restoreMech(data.activeMech);
+                    creativeFlying = data.creativeFlying === true && canCreativeFly();
                     for(const mob of (Array.isArray(data.spawnedMobs)?data.spawnedMobs:[]).slice(0,80)) {
                         if([67,68,69].includes(mob.id) && [mob.x,mob.y,mob.z].every(Number.isFinite)) {
                             const entity=spawnMobFromEgg(mob.id,mob.x,mob.y,mob.z);
@@ -2863,6 +2867,7 @@
         }
 
         function respawnPlayer() {
+            resetPlayerFlight();
             if(activeMech) {playerScale=activeMech.previousScale;clearMech();updatePlayerScaleView();}
             isRespawning = true;
             showToast("You died. Respawning...");
@@ -4201,6 +4206,7 @@
 
         function teleportToDimension(nextDimension) {
             clearCombatState();
+            resetPlayerFlight();
             currentDimension = nextDimension;
             heightCache.clear();
             chunkMeshes.forEach(meshes => {
@@ -4940,7 +4946,7 @@
         });
         
         controls.addEventListener('unlock', () => {
-            holdingSpace = false;
+            clearMovementInput();
             let ui1 = document.getElementById('autobuild-ui');
             let ui2 = document.getElementById('trade-ui');
             let ui3 = document.getElementById('cooked-meat-ui');
@@ -4961,7 +4967,10 @@
         // updateChunks(camera.position);
 
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
-        let holdingSpace = false; // 跳跃/水中上浮
+        let holdingSpace = false, holdingDescend = false;
+        let creativeFlying = false;
+        let lastSpaceTapAt = -Infinity;
+        const FLIGHT_DOUBLE_TAP_MS = 350;
         const velocity = new THREE.Vector3();
         const direction = new THREE.Vector3();
         const MAX_PLAYER_STEP = 1 / 45;
@@ -4971,6 +4980,66 @@
 
         const PLAYER_HEIGHT = 1.6;
         const PLAYER_RADIUS = 0.2; 
+
+        function clearMovementInput() {
+            moveForward = moveBackward = moveLeft = moveRight = false;
+            holdingSpace = holdingDescend = false;
+            lastSpaceTapAt = -Infinity;
+            velocity.set(0, 0, 0);
+        }
+
+        function resetPlayerFlight() {
+            creativeFlying = false;
+            clearMovementInput();
+        }
+
+        function canCreativeFly() {
+            return isCreativeMode() && !ridingMinecart && (!activeMech || activeMech.form === 'robot');
+        }
+
+        function resolveFlightFloorContact() {
+            // Normal walking has a small floor tolerance; clear it before using precise flying collision.
+            if (playerScale !== 1 || activeMech || checkCollision(camera.position) || !checkScaledCollision(camera.position)) return;
+            const start = camera.position.y;
+            camera.position.y += 0.11;
+            if (checkScaledCollision(camera.position)) { camera.position.y = start; return; }
+            let low = start, high = camera.position.y;
+            for (let i=0; i<12; i++) {
+                camera.position.y = (low+high)/2;
+                if (checkScaledCollision(camera.position)) low = camera.position.y;
+                else high = camera.position.y;
+            }
+            camera.position.y = high;
+        }
+
+        window.addEventListener('blur', clearMovementInput);
+
+        function getEnvironmentTypeAt(x, y, z) {
+            return isTinyMode() ? getMicroType(microCellAt(x, y, z))
+                : getBlock(Math.floor(x + 0.5), Math.floor(y + 0.5), Math.floor(z + 0.5));
+        }
+
+        function getPlayerEnvironment(pos = camera.position) {
+            const radius = getPlayerRadius(), epsilon = Math.min(playerScale, 1) * 0.00002;
+            const min = [pos.x-radius+epsilon, pos.y-getPlayerHeight()+epsilon, pos.z-radius+epsilon];
+            const max = [pos.x+radius-epsilon, pos.y+0.2*playerScale-epsilon, pos.z+radius-epsilon];
+            const level = isTinyMode() ? getMicroLevel() : 0;
+            const n = level ? microDivisions(level) : 1, size = 1 / n;
+            const lo = min.map(v => Math.floor((v+0.5)*n));
+            const hi = max.map(v => Math.floor((v+0.5)*n));
+            let waterVolume = 0, onLadder = false;
+            // Read the same voxel grid as collision, including placed miniature water and ladders.
+            for (let x=lo[0]; x<=hi[0]; x++) for (let y=lo[1]; y<=hi[1]; y++) for (let z=lo[2]; z<=hi[2]; z++) {
+                const type = level ? getMicroType(microCell(x,y,z,level)) : getBlock(x,y,z);
+                if (type === 7) onLadder = true;
+                if (type !== 24) continue;
+                const corner = [x/n-0.5, y/n-0.5, z/n-0.5];
+                waterVolume += corner.reduce((volume,v,i) => volume * Math.max(0, Math.min(max[i],v+size)-Math.max(min[i],v)), 1);
+            }
+            const volume = max.reduce((v,edge,i) => v * (edge-min[i]), 1);
+            return { onLadder, waterFraction: Math.min(1, waterVolume / volume),
+                headInWater: getEnvironmentTypeAt(pos.x,pos.y,pos.z) === 24 };
+        }
 
         function getPlayerHeight() {
             return PLAYER_HEIGHT * playerScale;
@@ -5052,11 +5121,28 @@
             }
 
             switch (e.code) {
-                case 'KeyW': moveForward = true; break;
-                case 'KeyS': moveBackward = true; break;
-                case 'KeyA': moveLeft = true; break;
-                case 'KeyD': moveRight = true; break;
-                case 'Space': holdingSpace = true; break; // 按下空格跳跃，水里是上浮
+                case 'KeyW': moveForward = controls.isLocked; break;
+                case 'KeyS': moveBackward = controls.isLocked; break;
+                case 'KeyA': moveLeft = controls.isLocked; break;
+                case 'KeyD': moveRight = controls.isLocked; break;
+                case 'Space': {
+                    if (!controls.isLocked || !isGameStarted || isSleeping) break;
+                    e.preventDefault();
+                    if (e.repeat) break;
+                    const now = performance.now();
+                    if (canCreativeFly() && now-lastSpaceTapAt <= FLIGHT_DOUBLE_TAP_MS) {
+                        creativeFlying = !creativeFlying;
+                        if (creativeFlying) resolveFlightFloorContact();
+                        holdingSpace = false;
+                        velocity.y = 0;
+                        lastSpaceTapAt = -Infinity;
+                    } else {
+                        holdingSpace = true;
+                        lastSpaceTapAt = now;
+                    }
+                    break;
+                }
+                case 'KeyB': if (controls.isLocked) { holdingDescend = true; e.preventDefault(); } break;
                 case 'Digit1': selectSlot(1); break;
                 case 'Digit2': selectSlot(2); break;
                 case 'Digit3': selectSlot(3); break;
@@ -5075,16 +5161,141 @@
         });
 
         document.addEventListener('keyup', (e) => {
-            if (isTextEntryTarget(e.target)) return;
             switch (e.code) {
                 case 'KeyW': moveForward = false; break;
                 case 'KeyS': moveBackward = false; break;
                 case 'KeyA': moveLeft = false; break;
                 case 'KeyD': moveRight = false; break;
                 case 'Space': holdingSpace = false; break; // 松开空格停止上浮
+                case 'KeyB': holdingDescend = false; break;
             }
         });
         
+        function updatePlayerMovement(playerDelta) {
+            if (!controls.isLocked || !isGameStarted || isSleeping) return;
+            if (creativeFlying && !canCreativeFly()) resetPlayerFlight();
+            const bx = Math.round(camera.position.x), bz = Math.round(camera.position.z);
+            const environment = getPlayerEnvironment();
+            const onLadder = environment.onLadder;
+            const inWaterPhys = environment.waterFraction > 0.00001;
+            const physicsScale = activeMech ? 1 : playerScale;
+            let onGroundPhys = isTinyMode() || playerScale>1 || activeMech
+                ? checkScaledCollision(camera.position.clone().add(new THREE.Vector3(0,-0.004*Math.min(playerScale,1),0)))
+                : isSolid(bx, Math.round(camera.position.y - getPlayerHeight() - Math.max(0.01, 0.1 * physicsScale)), bz);
+
+            // --- 物理引擎 ---
+            if (inWaterPhys && !creativeFlying) {
+                velocity.x -= velocity.x * 5.0 * playerDelta; // 水中阻力大
+                velocity.z -= velocity.z * 5.0 * playerDelta;
+            } else {
+                velocity.x -= velocity.x * 10.0 * playerDelta;
+                velocity.z -= velocity.z * 10.0 * playerDelta;
+            }
+
+            let isMoving = false;
+
+            if (creativeFlying) {
+                velocity.y = (Number(holdingSpace) - Number(holdingDescend)) * 5.2 * physicsScale;
+            } else if (onLadder) {
+                velocity.y = 0;
+                if (moveForward || holdingSpace) velocity.y = 4 * physicsScale;
+                if (moveBackward) velocity.y = -4 * physicsScale;
+            } else if (inWaterPhys) {
+                // Buoyancy balances at the surface; drag prevents a long fall from carrying through the water.
+                velocity.y += (environment.waterFraction - 0.65) * 24 * physicsScale * playerDelta;
+                velocity.y *= Math.exp(-5 * playerDelta);
+                velocity.y = Math.max(-3*physicsScale, Math.min(3*physicsScale, velocity.y));
+                if (holdingSpace) velocity.y = 4 * physicsScale; // 水中游泳上升
+            } else if (holdingSpace) {
+                if (onGroundPhys && (!activeMech || activeMech.form==='robot')) velocity.y = 8 * physicsScale;
+                holdingSpace = false;
+            } else {
+                velocity.y -= 25.0 * physicsScale * playerDelta; // 正常重力
+            }
+
+            direction.z = Number(moveForward) - Number(moveBackward);
+            direction.x = Number(moveRight) - Number(moveLeft);
+            direction.normalize();
+
+            const tiredMultiplier = playerTired && !creativeFlying ? TIRED_WALK_MULTIPLIER : 1;
+            const waterSlowsMovement = inWaterPhys && !creativeFlying;
+            let moveSpeed = (waterSlowsMovement ? 25.0 : 50.0) * tiredMultiplier * physicsScale;
+            if(activeMech && !waterSlowsMovement && !creativeFlying) moveSpeed=activeMech.form==='vehicle'?MECH_TYPES[activeMech.id].speed*10:45;
+            if (moveForward || moveBackward) {
+                velocity.z -= direction.z * moveSpeed * playerDelta;
+                isMoving = true;
+            }
+            if (moveLeft || moveRight) {
+                velocity.x -= direction.x * moveSpeed * playerDelta;
+                isMoving = true;
+            }
+
+            const maxSpeed = activeMech && !waterSlowsMovement && !creativeFlying ? (activeMech.form==='vehicle'?MECH_TYPES[activeMech.id].speed:4.5)
+                : (waterSlowsMovement ? MAX_WATER_WALK_SPEED : MAX_WALK_SPEED) * tiredMultiplier * physicsScale;
+            const horizontalSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
+            if (horizontalSpeed > maxSpeed) {
+                const scale = maxSpeed / horizontalSpeed;
+                velocity.x *= scale;
+                velocity.z *= scale;
+            }
+
+            if (isMoving) {
+                // 视角呼吸摇晃 - 移除累加，避免摇摇晃晃卡死
+                walkTime += playerDelta * 10;
+
+                // 手持物品摇晃
+                heldItemGroup.position.y = (-0.4 + Math.sin(walkTime) * 0.05) * playerScale;
+                heldItemGroup.position.x = (0.4 + Math.cos(walkTime) * 0.02) * playerScale;
+            } else {
+                walkTime = 0;
+                heldItemGroup.position.y = -0.4 * playerScale;
+                heldItemGroup.position.x = 0.4 * playerScale;
+            }
+
+            updatePlayerAnimation(playerDelta, isMoving);
+
+            if (isTinyMode() || playerScale>1 || activeMech || creativeFlying || onLadder) {
+                const before = camera.position.clone();
+                controls.moveRight(-velocity.x * playerDelta);
+                controls.moveForward(-velocity.z * playerDelta);
+                const motion = camera.position.clone().sub(before);
+                camera.position.copy(before);
+                const hitX = moveTinyAxis('x', motion.x);
+                const hitZ = moveTinyAxis('z', motion.z);
+                if (hitX || hitZ) { velocity.x = 0; velocity.z = 0; }
+                if (moveTinyAxis('y', velocity.y * playerDelta)) velocity.y = 0;
+            } else {
+                controls.moveRight(-velocity.x * playerDelta);
+                if (checkCollision(camera.position)) {
+                    controls.moveRight(velocity.x * playerDelta);
+                    velocity.x = 0;
+                }
+
+                controls.moveForward(-velocity.z * playerDelta);
+                if (checkCollision(camera.position)) {
+                    controls.moveForward(velocity.z * playerDelta);
+                    velocity.z = 0;
+                }
+
+                camera.position.y += velocity.y * playerDelta;
+                if (checkCollision(camera.position)) {
+                    camera.position.y -= velocity.y * playerDelta;
+                    velocity.y = 0;
+                }
+            }
+
+            if (creativeFlying && holdingDescend && velocity.y === 0 &&
+                checkScaledCollision(camera.position.clone().add(new THREE.Vector3(0,-0.004*Math.min(playerScale,1),0)))) {
+                creativeFlying = false;
+                holdingDescend = false;
+            }
+
+            if (camera.position.y < -100000) { // 取消 -100 层的掉落限制，满足无底洞挖掘需求
+                camera.position.y = 50;
+                velocity.y = 0;
+            }
+        }
+
         // 游戏启动入口
         document.getElementById('start-menu').style.display = 'block';
         document.getElementById('pause-menu').style.display = 'none';
@@ -5119,6 +5330,7 @@
         window.resetWorld = function() {
             clearMech();
             clearCombatState();
+            resetPlayerFlight();
             // 清理旧区块
             for (let meshes of chunkMeshes.values()) {
                 for (const mesh of Object.values(meshes)) scene.remove(mesh);
@@ -7877,7 +8089,7 @@
             document.getElementById('coord-y').innerText = `Y: ${Math.round(camera.position.y)}`;
             document.getElementById('coord-z').innerText = `Z: ${Math.round(camera.position.z)}`;
             document.getElementById('terrain-display').innerText = `Terrain: ${getTerrainName(selectedTerrain)}`;
-            document.getElementById('mode-display').innerText = `Mode: ${isCreativeMode() ? 'Creative' : 'Survival'}`;
+            document.getElementById('mode-display').innerText = `Mode: ${isCreativeMode() ? (creativeFlying ? 'Creative / Flying' : 'Creative') : 'Survival'}`;
             updateRoomCodeFloat();
 
             // 第三人称摄像机跟随逻辑
@@ -7952,11 +8164,12 @@
             let headX = Math.round(camera.position.x);
             let headY = Math.round(camera.position.y);
             let headZ = Math.round(camera.position.z);
-            let inWater = getBlock(headX, headY, headZ) === 24;
+            let inWater = getEnvironmentTypeAt(camera.position.x, camera.position.y, camera.position.z) === 24;
             let feetX = Math.round(camera.position.x);
-            let feetY = Math.round(camera.position.y - getPlayerHeight() + 0.15);
+            let feetY = Math.round(camera.position.y - getPlayerHeight() + 0.15 * playerScale);
             let feetZ = Math.round(camera.position.z);
-            let inLava = getBlock(headX, headY, headZ) === LAVA_ID || getBlock(feetX, feetY, feetZ) === LAVA_ID;
+            let inLava = getEnvironmentTypeAt(camera.position.x,camera.position.y,camera.position.z) === LAVA_ID ||
+                getEnvironmentTypeAt(camera.position.x,camera.position.y-getPlayerHeight()+0.15*playerScale,camera.position.z) === LAVA_ID;
             if (portalCooldown === 0 && (isNetherPortalCenter(feetX, feetY, feetZ) || isNetherPortalCenter(headX, headY, headZ))) {
                 portalCooldown = 3;
                 teleportToDimension(currentDimension === 'nether' ? 'overworld' : 'nether');
@@ -8097,115 +8310,7 @@
             }
 
             if (controls.isLocked) {
-                let bx = Math.round(camera.position.x);
-                let by = Math.round(camera.position.y - getPlayerHeight()/2);
-                let bz = Math.round(camera.position.z);
-                let onLadder = (getBlock(bx, by, bz) === 7 || getBlock(bx, Math.round(camera.position.y - getPlayerHeight()), bz) === 7);
-                let inWaterPhys = (getBlock(bx, by, bz) === 24 || getBlock(bx, Math.round(camera.position.y - getPlayerHeight()), bz) === 24);
-                const physicsScale = activeMech ? 1 : playerScale;
-                let onGroundPhys = isTinyMode() || playerScale>1 || activeMech
-                    ? checkScaledCollision(camera.position.clone().add(new THREE.Vector3(0,-0.004*Math.min(playerScale,1),0)))
-                    : isSolid(bx, Math.round(camera.position.y - getPlayerHeight() - Math.max(0.01, 0.1 * physicsScale)), bz);
-
-                // --- 物理引擎 ---
-                if (inWaterPhys) {
-                    velocity.x -= velocity.x * 5.0 * playerDelta; // 水中阻力大
-                    velocity.z -= velocity.z * 5.0 * playerDelta;
-                } else {
-                    velocity.x -= velocity.x * 10.0 * playerDelta;
-                    velocity.z -= velocity.z * 10.0 * playerDelta;
-                }
-
-                let isMoving = false;
-                
-                if (onLadder) {
-                    velocity.y = 0; 
-                    if (moveForward) velocity.y = 4 * physicsScale; 
-                    if (moveBackward) velocity.y = -4 * physicsScale; 
-                } else if (inWaterPhys) {
-                    velocity.y -= 5.0 * physicsScale * playerDelta; // 水中下沉慢
-                    if (holdingSpace) velocity.y = 4 * physicsScale; // 水中游泳上升
-                } else if (holdingSpace) {
-                    if (onGroundPhys && (!activeMech || activeMech.form==='robot')) velocity.y = 8 * physicsScale;
-                    holdingSpace = false;
-                } else {
-                    velocity.y -= 25.0 * physicsScale * playerDelta; // 正常重力
-                }
-
-                direction.z = Number(moveForward) - Number(moveBackward);
-                direction.x = Number(moveRight) - Number(moveLeft);
-                direction.normalize(); 
-
-                const tiredMultiplier = playerTired ? TIRED_WALK_MULTIPLIER : 1;
-                let moveSpeed = (inWaterPhys ? 25.0 : 50.0) * tiredMultiplier * physicsScale; // 水中移动慢
-                if(activeMech && !inWaterPhys) moveSpeed=activeMech.form==='vehicle'?MECH_TYPES[activeMech.id].speed*10:45;
-                if (moveForward || moveBackward) {
-                    velocity.z -= direction.z * moveSpeed * playerDelta;
-                    isMoving = true;
-                }
-                if (moveLeft || moveRight) {
-                    velocity.x -= direction.x * moveSpeed * playerDelta;
-                    isMoving = true;
-                }
-
-                const maxSpeed = activeMech && !inWaterPhys ? (activeMech.form==='vehicle'?MECH_TYPES[activeMech.id].speed:4.5)
-                    : (inWaterPhys ? MAX_WATER_WALK_SPEED : MAX_WALK_SPEED) * tiredMultiplier * physicsScale;
-                const horizontalSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
-                if (horizontalSpeed > maxSpeed) {
-                    const scale = maxSpeed / horizontalSpeed;
-                    velocity.x *= scale;
-                    velocity.z *= scale;
-                }
-
-                if (isMoving) {
-                    // 视角呼吸摇晃 - 移除累加，避免摇摇晃晃卡死
-                    walkTime += playerDelta * 10;
-                    
-                    // 手持物品摇晃
-                    heldItemGroup.position.y = (-0.4 + Math.sin(walkTime) * 0.05) * playerScale;
-                    heldItemGroup.position.x = (0.4 + Math.cos(walkTime) * 0.02) * playerScale;
-                } else {
-                    walkTime = 0;
-                    heldItemGroup.position.y = -0.4 * playerScale;
-                    heldItemGroup.position.x = 0.4 * playerScale;
-                }
-                
-                updatePlayerAnimation(playerDelta, isMoving);
-
-                if (isTinyMode() || playerScale>1 || activeMech) {
-                    const before = camera.position.clone();
-                    controls.moveRight(-velocity.x * playerDelta);
-                    controls.moveForward(-velocity.z * playerDelta);
-                    const motion = camera.position.clone().sub(before);
-                    camera.position.copy(before);
-                    const hitX = moveTinyAxis('x', motion.x);
-                    const hitZ = moveTinyAxis('z', motion.z);
-                    if (hitX || hitZ) { velocity.x = 0; velocity.z = 0; }
-                    if (moveTinyAxis('y', velocity.y * playerDelta)) velocity.y = 0;
-                } else {
-                    controls.moveRight(-velocity.x * playerDelta);
-                    if (checkCollision(camera.position)) {
-                        controls.moveRight(velocity.x * playerDelta);
-                        velocity.x = 0;
-                    }
-
-                    controls.moveForward(-velocity.z * playerDelta);
-                    if (checkCollision(camera.position)) {
-                        controls.moveForward(velocity.z * playerDelta);
-                        velocity.z = 0;
-                    }
-
-                    camera.position.y += velocity.y * playerDelta;
-                    if (!onLadder && checkCollision(camera.position)) {
-                        camera.position.y -= velocity.y * playerDelta;
-                        velocity.y = 0;
-                    }
-                }
-
-                if (camera.position.y < -100000) { // 取消 -100 层的掉落限制，满足无底洞挖掘需求
-                    camera.position.y = 50;
-                    velocity.y = 0;
-                }
+                updatePlayerMovement(playerDelta);
 
                 updateEntities(delta);
                 updateMinecarts(delta);
