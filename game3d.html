@@ -4997,8 +4997,8 @@
             return isCreativeMode() && !ridingMinecart && (!activeMech || activeMech.form === 'robot');
         }
 
-        function resolveFlightFloorContact() {
-            // Normal walking has a small floor tolerance; clear it before using precise flying collision.
+        function resolvePreciseFloorContact() {
+            // Clear normal walking's floor tolerance before precise climbing/flying collision.
             if (playerScale !== 1 || activeMech || checkCollision(camera.position) || !checkScaledCollision(camera.position)) return;
             const start = camera.position.y;
             camera.position.y += 0.11;
@@ -5132,7 +5132,7 @@
                     const now = performance.now();
                     if (canCreativeFly() && now-lastSpaceTapAt <= FLIGHT_DOUBLE_TAP_MS) {
                         creativeFlying = !creativeFlying;
-                        if (creativeFlying) resolveFlightFloorContact();
+                        if (creativeFlying) resolvePreciseFloorContact();
                         holdingSpace = false;
                         velocity.y = 0;
                         lastSpaceTapAt = -Infinity;
@@ -5177,6 +5177,7 @@
             const bx = Math.round(camera.position.x), bz = Math.round(camera.position.z);
             const environment = getPlayerEnvironment();
             const onLadder = environment.onLadder;
+            if (onLadder) resolvePreciseFloorContact();
             const inWaterPhys = environment.waterFraction > 0.00001;
             const physicsScale = activeMech ? 1 : playerScale;
             let onGroundPhys = isTinyMode() || playerScale>1 || activeMech

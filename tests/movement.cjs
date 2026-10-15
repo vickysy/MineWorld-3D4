@@ -110,6 +110,9 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
             reset();gameMode='creative';worldMap.set('0,0,0',3);camera.position.set(0,2.01,0);
             tap();tap();key('Space');tick(12);key('Space','keyup');
             check(creativeFlying && camera.position.y>2.5 && !checkScaledCollision(camera.position),'Instant double tap takes off from the legacy walking floor contact');
+            reset();worldMap.set('0,0,0',3);worldMap.set('0,1,0',7);worldMap.set('0,2,0',7);worldMap.set('0,3,0',7);
+            camera.position.set(0,2.01,0);holdingSpace=true;tick(12);
+            check(camera.position.y>2.5 && !checkScaledCollision(camera.position),'Normal-size ladder climbing also clears legacy floor tolerance');
 
             for(const scale of [1,0.05,0.005]) {
                 reset(scale);gameMode='creative';creativeFlying=true;
