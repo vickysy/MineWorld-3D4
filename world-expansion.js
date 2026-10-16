@@ -1,6 +1,11 @@
 const ENDER_EGG_ID = 72, FRIDGE_ID = 73, CONSOLE_ID = 74, HANDHELD_ID = 75;
 const TV_ID = 76, COMPUTER_ID = 77, KEYBOARD_ID = 78, CHAIR_ID = 79;
 const FRIDGE_TOP_ID = 80, NETHER_PORTAL_ID = 81;
+const HIDDEN_BLOCKS = {
+    132:{name:'Hidden Grass',base:1},
+    133:{name:'Hidden Dirt',base:2},
+    134:{name:'Hidden Stone',base:3}
+};
 const HOME_ITEMS = {73:'Refrigerator',74:'Game Console',75:'Handheld Console',76:'Television',77:'Desktop Computer',78:'Keyboard',79:'Office Chair'};
 const waterAmounts = new Map(), activePortals = new Map(), dimensionWorlds = new Map();
 const furnitureData = new Map(), furnitureMeshes = new Map();
@@ -569,6 +574,9 @@ function handleExpansionClick(e) {
 }
 
 function initWorldExpansion() {
+    for(const [id,block] of Object.entries(HIDDEN_BLOCKS)) materials[id]=materials[block.base];
+    recipes.push({ing:{2:2,5:1,38:1},out:132,count:4},
+        {ing:{2:2,38:1},out:133,count:4},{ing:{3:2,38:1},out:134,count:4});
     for(const id of Object.keys(HOME_ITEMS)) materials[id]=new THREE.MeshLambertMaterial({color:0xd4d9da});
     materials[ENDER_EGG_ID]=new THREE.MeshLambertMaterial({color:0x30263f});
     materials[FRIDGE_TOP_ID]=materials[FRIDGE_ID];
@@ -582,6 +590,8 @@ function initWorldExpansion() {
     homeRecipes.push(...extraHomeRecipes());recipes.push(...homeRecipes);
     const style=document.createElement('style');style.textContent=`
         #inventory-tabs{flex-wrap:wrap} #tab-home .slot{width:108px;height:100px;flex-direction:column;gap:4px;box-sizing:border-box}
+        #tab-build .hidden-block-slot{width:100px;height:104px;box-sizing:border-box;flex-direction:column;gap:4px;padding:5px;font-size:13px;color:white}
+        .hidden-block-slot img{width:52px;height:52px;object-fit:contain}
         #tab-home .slot img{width:54px;height:54px;object-fit:contain} #tab-home .recipes{flex-basis:100%;text-align:left;font-size:13px}
         #tab-home .recipe{display:flex;gap:8px;align-items:center;justify-content:space-between;border-top:1px solid #555;padding:9px 0}
         #inventory-ui{z-index:10020;background:#101414} #toast-msg{z-index:10060} #sleep-ui{z-index:10100!important}
@@ -607,7 +617,17 @@ function initWorldExpansion() {
         iconScene.add(model);iconRenderer.render(iconScene,iconCamera);const img=document.createElement('img');img.alt='';img.src=iconRenderer.domElement.toDataURL();slot.append(img,document.createTextNode(name));
         (id===ENDER_EGG_ID?document.getElementById('tab-mods'):items).appendChild(slot);iconScene.remove(model);disposeModModel(model);
     }
-    iconRenderer.dispose();
+    const hiddenGeometry=new THREE.BoxGeometry(1,1,1);
+    for(const [idText,block] of Object.entries(HIDDEN_BLOCKS)) {
+        const id=Number(idText),slot=document.createElement('button');
+        slot.className='slot hidden-block-slot';slot.id=`inv-${id-12}`;slot.onclick=()=>selectSlot(id-12);
+        const model=new THREE.Mesh(hiddenGeometry,materials[id]);
+        iconScene.add(model);iconRenderer.render(iconScene,iconCamera);
+        const img=document.createElement('img');img.alt='';img.src=iconRenderer.domElement.toDataURL();
+        const label=document.createElement('span');label.textContent=block.name;
+        slot.append(img,label);document.getElementById('tab-build').appendChild(slot);iconScene.remove(model);
+    }
+    hiddenGeometry.dispose();iconRenderer.dispose();
     homeRecipes.push({ing:{2:1,4:1},out:14,count:1});
     for(const id of Object.keys(CAR_ITEMS))homeRecipes.push({ing:{36:6,6:2,28:1},out:Number(id),count:1});
     const list=document.createElement('details');list.className='recipes';const summary=document.createElement('summary');summary.textContent='Recipes';list.appendChild(summary);items.appendChild(list);
@@ -691,6 +711,7 @@ function generateCityChunk(cx,cz) {
 }
 
 const COMMAND_ITEMS = {
+    '隐藏草块':132,'隐藏土块':133,'隐藏泥土':133,'隐藏石头':134,'隐藏石块':134,
     '冰箱':73,'游戏机':74,'ps5':74,'switch':75,'掌机':75,'电视':76,'电脑':77,'苹果电脑':77,'显示器':77,'键盘':78,'椅子':79,'转椅':79,
     '末影人':72,'村民':67,'苦力怕':68,'僵尸':69,'擎天柱':70,'大黄蜂':71,'变形金刚':70,'水':24,'水桶':65,'海绵':64,
     '附魔台':32,'黑曜石':44,'缩小药水':46,'变大药水':66,'梯子':7,'玻璃':6,'白砖':51,'砖块':59,'火把':16,'床':14

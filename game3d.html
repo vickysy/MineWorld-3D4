@@ -380,7 +380,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
     <script src="three-reflector-r128.js"></script>
-    <script src="world-expansion.js?v=20261016a"></script>
+    <script src="world-expansion.js?v=20261016b"></script>
     <script src="home-city.js?v=20261016a"></script>
     <script src="kitchen-home.js?v=20261016a"></script>
     <script src="city-life.js?v=20261016a"></script>
@@ -2672,7 +2672,7 @@
                 64:'Dry Sponge', 65:'Water Bucket', 67:'Villager Egg', 68:'Creeper Egg', 69:'Zombie Egg',
                 70:'Prime Truck Core', 71:'Bee Scout Core', 127:'Netherrack'
             };
-            return HOME_ITEMS[id] || (CAR_ITEMS[id]?CAR_MODELS[CAR_ITEMS[id]].name:id===ENDER_EGG_ID?'Enderman Egg':names[id]) || '';
+            return HIDDEN_BLOCKS[id]?.name || HOME_ITEMS[id] || (CAR_ITEMS[id]?CAR_MODELS[CAR_ITEMS[id]].name:id===ENDER_EGG_ID?'Enderman Egg':names[id]) || '';
         }
 
         function checkRecipes() {
@@ -2783,7 +2783,7 @@
                  60:72, 61:73, 62:74, 63:75, 64:76, 65:77, 66:78, 67:79,
                  70:82, 71:83, 72:84, 73:85, 74:86, 75:87, 76:88, 77:89, 78:90, 79:91, 80:92,
                  81:93, 82:94, 83:95, 84:96, 85:97, 86:98, 88:100, 89:101, 90:102, 91:103,
-                 ...Object.fromEntries(Object.keys({...KITCHEN_ITEMS,...CITY_LIFE_ITEMS,127:'Netherrack'}).map(id=>[Number(id)-12,Number(id)]))
+                 ...Object.fromEntries(Object.keys({...KITCHEN_ITEMS,...CITY_LIFE_ITEMS,...HIDDEN_BLOCKS,127:'Netherrack'}).map(id=>[Number(id)-12,Number(id)]))
              };
         }
 
@@ -3095,6 +3095,7 @@
         }
 
         function getBlockParticleColor(blockType) {
+            blockType=HIDDEN_BLOCKS[blockType]?.base || blockType;
             const colors = {
                 1: 0x5fa83d, 2: 0x8b5a32, 3: 0x777777, 4: 0x8a5a2b, 5: 0x2f8f3a,
                 6: 0xbbeeff, 12: 0x8a5a2b, 13: 0x666666, 14: 0xaa3333, 16: 0xffcc55,
@@ -3474,7 +3475,8 @@
             const key = `${bx},${by},${bz}`;
             if (worldMap.has(key)) {
                 const t = worldMap.get(key);
-                if(HOME_ITEMS[t] || t===FRIDGE_TOP_ID || t===FURNITURE_PART_ID || t===NETHER_PORTAL_ID) return true;
+                // Pass-through walls must not hide the room's adjacent solid faces.
+                if(HIDDEN_BLOCKS[t] || HOME_ITEMS[t] || t===FRIDGE_TOP_ID || t===FURNITURE_PART_ID || t===NETHER_PORTAL_ID) return true;
                 return [0, 6, 7, 8, 9, 10, 11, 16, 17, 18, 19, 20, 24, 25, 26, 27, 28, 30, 31, 42, LAVA_ID, BARRIER_ID, GLASS_SENSOR_DOOR_BOTTOM_ID, GLASS_SENSOR_DOOR_TOP_ID, GLASS_SENSOR_DOOR_OPEN_ID].includes(t);
             }
             // 海平面下的天然地形如果没生成，可能是水或者沙子
@@ -3959,7 +3961,7 @@
                 for (let level=2;level<=c.level;level++) {
                     if (fineVoxelEdits.has(detailKey(microAncestor(c,level)))) isPlaced=true;
                 }
-                if (!type || !materials[type] || (!isPlaced && !isSolidType(type))) return;
+                if (!type || !materials[type] || (!isPlaced && !isSolidType(type) && !HIDDEN_BLOCKS[type])) return;
                 const f = microFaces[faceIndex];
                 const neighborCell=offsetMicroCell(c,...f.n);
                 if (refinedMicroCells.has(detailKey(neighborCell))) {
@@ -3974,6 +3976,7 @@
                 const neighbor=getMicroType(neighborCell);
                 if (isSolidType(neighbor) && ![6,47,48,49].includes(neighbor)) return;
                 if (neighbor===type && [6,24,43,47].includes(type)) return;
+                if (neighbor===type && HIDDEN_BLOCKS[type]) return;
                 const key = cellKey+':'+faceIndex;
                 if (emitted.has(key)) return;
                 emitted.add(key);
@@ -4037,7 +4040,7 @@
         }
 
         function hideMicroBlockInstance(x, y, z) {
-            if (!isSolid(x,y,z)) return;
+            if (!isSolid(x,y,z) && !HIDDEN_BLOCKS[getBlock(x,y,z)]) return;
             const meshes = chunkMeshes.get(`${Math.floor(x/CHUNK_SIZE)},${Math.floor(z/CHUNK_SIZE)}`);
             if (!meshes) return;
             const mesh = meshes[getBlock(x,y,z)];
@@ -4055,7 +4058,7 @@
                 const loaded = dimension === currentDimension &&
                     chunkMeshes.has(`${Math.floor(x/CHUNK_SIZE)},${Math.floor(z/CHUNK_SIZE)}`);
                 const old = microMeshes.get(key);
-                if (!loaded || (!isSolid(x,y,z) && !microPlacements.has(key) && !fineRoots.has(key))) {
+                if (!loaded || (!isSolid(x,y,z) && !HIDDEN_BLOCKS[getBlock(x,y,z)] && !microPlacements.has(key) && !fineRoots.has(key))) {
                     if (old) { microVoxelGroup.remove(old); old.geometry.dispose(); microMeshes.delete(key); }
                     continue;
                 }
@@ -4307,6 +4310,7 @@
         }
 
         function playMineSound(blockType) {
+            blockType=HIDDEN_BLOCKS[blockType]?.base || blockType;
             if (blockType === 6) playSound('glass');
             else if (blockType === 3 || blockType === 13) playSound('stone');
             else playSound('dig');
@@ -4606,7 +4610,7 @@
                         let type = getBlock(x, y, z);
                         if(HOME_ITEMS[type] || type===FRIDGE_TOP_ID || type===FURNITURE_PART_ID) continue;
                         if (type !== 0) {
-                            if (microRenderBlocks.has(microParentKey(x,y,z)) && isSolid(x,y,z)) continue;
+                            if (microRenderBlocks.has(microParentKey(x,y,z)) && (isSolid(x,y,z) || HIDDEN_BLOCKS[type])) continue;
                             let exposed = true;
                             if(type===24) {
                                 exposed=waterAmount(x,y,z)<8 || [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]].some(([dx,dy,dz])=>waterAmount(x+dx,y+dy,z+dz)<8);
@@ -5411,7 +5415,7 @@
         }
 
         function isSolidType(b) {
-            if(b===NETHER_PORTAL_ID || b===92) return false;
+            if(HIDDEN_BLOCKS[b] || b===NETHER_PORTAL_ID || b===92) return false;
             // Ladders, open doors, water, rails, redstone, levers, and grass are passable. Leaves are solid.
             if (b === 0 || b === 7 || b === 10 || b === 11 || b === 19 || b === 20 || b === 24 || b === 25 || b === 26 || b === 27 || b === 28 || b === 30 || b === 31 || b === 42 || b === LAVA_ID || b === GLASS_SENSOR_DOOR_OPEN_ID || b === PRESSURE_PLATE_ID) return false;
             return true;
@@ -6766,6 +6770,7 @@
         let miningState = null;
 
         function getMiningDuration(blockType, heldItem) {
+            blockType=HIDDEN_BLOCKS[blockType]?.base || blockType;
             if (blockType === 5 || blockType === 42) return 0.05;
             if (blockType === 6) return 0.35;
             if (blockType === 2 || blockType === 23) return 0.55;
