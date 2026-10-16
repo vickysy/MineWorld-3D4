@@ -166,6 +166,7 @@ function restoreDimension(data={}) {
 function travelThroughPortal(next) {
     if(next===currentDimension) return;
     if(commandJob) {showToast('Wait for the command to finish.');return;}
+    if(multiplayerRoom)leaveMultiplayerRoom('Left room before changing dimension.');
     closeFurniturePanel(false);if(!leaveCityCar() || !standFromChair()) return;clearCombatState();resetPlayerFlight();
     dimensionWorlds.set(currentDimension,snapshotDimension());
     currentDimension=next;const saved=dimensionWorlds.get(next);

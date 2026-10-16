@@ -82,6 +82,10 @@
         #mech-status { display: none; position: absolute; top: 14px; left: 14px; max-width: 45vw; color: white; background: #20272de0; padding: 9px; font-size: 14px; z-index: 5; pointer-events: none; }
         #toast-msg { max-width: calc(100vw - 48px); box-sizing: border-box; width: max-content; text-align: center; pointer-events: none; }
         #craft-grid .slot { font-size: 9px; overflow-wrap: anywhere; }
+        #multiplayer-menu {box-sizing:border-box;max-width:calc(100vw - 24px);max-height:calc(100dvh - 24px);overflow:auto}
+        #multiplayer-menu input {min-width:0;box-sizing:border-box}
+        #multiplayer-menu button:disabled {opacity:0.5;cursor:wait}
+        #multiplayer-menu #leave-room-btn[hidden],#pause-room-btn[hidden] {display:none}
         @media (max-width: 500px) {
             #inventory-ui { padding: 10px; }
             #inventory-ui h2 { font-size: 21px; }
@@ -320,10 +324,9 @@
                 <p style="margin: 0 0 8px 0; font-size: 16px; color: #ccc;">My room code</p>
                 <div style="display: flex; gap: 8px; align-items: center;">
                     <input type="text" id="room-code-display" readonly value="Click Create Room" style="flex: 1; padding: 12px; font-size: 20px; font-weight: bold; color: #FFEB3B; background: rgba(0,0,0,0.45); border: 2px solid #777; border-radius: 5px; user-select: all;">
-                    <button onclick="copyRoomCode()" style="padding: 12px 14px; cursor: pointer; background: #666; border: none; border-radius: 5px; color: white; font-weight: bold;">Copy</button>
+                    <button id="copy-room-btn" onclick="copyRoomCode()" style="padding: 12px 14px; cursor: pointer; background: #666; border: none; border-radius: 5px; color: white; font-weight: bold;">Copy</button>
                 </div>
                 <button id="create-room-btn" onclick="createRoom()" style="margin: 12px auto 0; padding: 15px; width: 100%; font-size: 20px; cursor: pointer; background-color: #4CAF50; border: none; border-radius: 5px; color: white; font-weight: bold; display: block; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">Create Room</button>
-                <button id="enter-room-btn" onclick="enterCreatedRoom()" style="margin: 10px auto 0; padding: 14px; width: 100%; font-size: 18px; cursor: pointer; background-color: #2196F3; border: none; border-radius: 5px; color: white; font-weight: bold; display: none;">Enter Room</button>
                 <p style="margin: 12px 0 0 0; color: #bbb; font-size: 14px;">Copy this room code and send it to your friend. They can paste it into Join Room.</p>
             </div>
 
@@ -333,20 +336,16 @@
                 <button id="join-room-btn" onclick="joinRoom()" style="margin: 12px auto 0; padding: 15px; width: 100%; font-size: 20px; cursor: pointer; background-color: #2196F3; border: none; border-radius: 5px; color: white; font-weight: bold; display: block; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">Join Room</button>
             </div>
             
-            <p id="multiplayer-status" style="min-height: 24px; color: #ddd; font-size: 15px; margin: 12px 0;">Create a room, copy the code, and send it to your friend.</p>
+            <p id="multiplayer-status" role="status" aria-live="polite" style="min-height: 24px; color: #ddd; font-size: 15px; margin: 12px 0;">No room created.</p>
+            <button id="enter-room-btn" onclick="enterCreatedRoom()" style="margin: 10px auto 0; padding: 14px; width: 100%; font-size: 18px; cursor: pointer; background-color: #2196F3; border: none; border-radius: 5px; color: white; font-weight: bold; display: none;">Enter Room</button>
+            <button id="leave-room-btn" onclick="leaveMultiplayerRoom()" hidden style="margin: 10px auto 0; padding: 12px; width: 100%; color:white; background:#555; border:1px solid #888; border-radius:5px; cursor:pointer">Leave Room</button>
             <button onclick="hideMultiplayerMenu()" style="margin: 10px auto 0; padding: 12px; width: 100%; font-size: 18px; cursor: pointer; background-color: #f44336; border: none; border-radius: 5px; color: white; font-weight: bold; display: block;">Back</button>
         </div>
 
-        <div id="invite-ui" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(15,15,15,0.95); padding: 26px; border-radius: 8px; color: white; text-align: center; border: 4px solid #4CAF50; z-index: 90; width: 420px; box-shadow: 0 10px 24px rgba(0,0,0,0.6);">
-            <h2 style="margin-top: 0; color: #4CAF50;">Game Invite</h2>
-            <p id="invite-message" style="font-size: 18px; line-height: 1.4;">A guest wants to join your game.</p>
-            <p id="invite-countdown" style="font-size: 16px; color: #FFEB3B;">60 seconds left</p>
-            <button onclick="answerGameInvite(true)" style="margin: 8px auto; padding: 14px; width: 90%; font-size: 18px; cursor: pointer; background-color: #4CAF50; border: none; border-radius: 5px; color: white; font-weight: bold; display: block;">Enter Game</button>
-            <button onclick="answerGameInvite(false)" style="margin: 8px auto; padding: 12px; width: 90%; font-size: 17px; cursor: pointer; background-color: #f44336; border: none; border-radius: 5px; color: white; font-weight: bold; display: block;">Do Not Enter</button>
-        </div>
         <div id="pause-menu" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0,0,0,0.85); padding: 30px; border-radius: 10px; color: white; text-align: center; border: 4px solid #555; z-index: 20; width: 350px; box-shadow: 0 10px 20px rgba(0,0,0,0.5);">
             <div style="position: absolute; top: 10px; right: 15px; font-size: 28px; cursor: pointer; color: #ff5555; font-weight: bold;" onclick="resumeGame()">✖</div>
             <h2 style="margin-top: 0;">Paused</h2>
+            <button id="pause-room-btn" onclick="showMultiplayerMenu()" hidden style="padding:12px;width:90%;background:#356b46;color:white;border:1px solid #87b38c;border-radius:5px;cursor:pointer">Room</button>
             <p style="margin-bottom: 30px; font-size: 16px;">Download and save this world?</p>
             <button onclick="downloadSave()" style="margin: 10px auto; padding: 12px; width: 90%; font-size: 18px; cursor: pointer; background-color: #FF9800; border: none; border-radius: 5px; color: white; font-weight: bold; display: block;">Download Save</button>
 	            <select id="pause-terrain-select" onchange="setTerrainChoice(this.value)" style="margin: 10px auto; padding: 12px; width: 90%; font-size: 18px; border-radius: 5px; border: 2px solid #4CAF50; background: #333; color: white; cursor: pointer; display: block;">
@@ -380,11 +379,13 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
     <script src="three-reflector-r128.js"></script>
-    <script src="world-expansion.js?v=20261016c"></script>
+    <script src="world-expansion.js?v=20261016-roomfix"></script>
     <script src="home-city.js?v=20261016c"></script>
     <script src="kitchen-home.js?v=20261016c"></script>
     <script src="city-life.js?v=20261016a"></script>
     <script src="surveillance.js?v=20261016c"></script>
+    <script src="peerjs-1.5.5.min.js"></script>
+    <script src="multiplayer.js?v=roomfix1"></script>
 
     <script>
         // --- 场景、相机、渲染器 ---
@@ -1436,257 +1437,9 @@
             }
         };
         
-        let myServerAddress = '';
-        let inviteSocket = null;
-        let listenSocket = null;
-        let pendingInvite = null;
-        let pendingInviteTimer = null;
-        let incomingInvite = null;
-        let incomingInviteTimer = null;
-        let multiplayerMode = 'host';
-
-        function setMyServerAddress(value) {
-            myServerAddress = value || '';
-            const el = document.getElementById('my-ip-display');
-            if (el) el.value = myServerAddress || 'Failed to load';
-        }
-
-        function setMultiplayerStatus(message) {
-            const el = document.getElementById('multiplayer-status');
-            if (el) el.innerText = message;
-        }
-
-        window.setMultiplayerMode = function(mode) {
-            multiplayerMode = mode === 'guest' ? 'guest' : 'host';
-            const hostPanel = document.getElementById('host-panel');
-            const guestPanel = document.getElementById('guest-panel');
-            const hostBtn = document.getElementById('host-mode-btn');
-            const guestBtn = document.getElementById('guest-mode-btn');
-            if (hostPanel) hostPanel.style.display = multiplayerMode === 'host' ? 'block' : 'none';
-            if (guestPanel) guestPanel.style.display = multiplayerMode === 'guest' ? 'block' : 'none';
-            if (hostBtn) {
-                hostBtn.style.background = multiplayerMode === 'host' ? '#4CAF50' : '#333';
-                hostBtn.style.borderColor = multiplayerMode === 'host' ? '#fff' : '#777';
-            }
-            if (guestBtn) {
-                guestBtn.style.background = multiplayerMode === 'guest' ? '#2196F3' : '#333';
-                guestBtn.style.borderColor = multiplayerMode === 'guest' ? '#fff' : '#777';
-            }
-            if (multiplayerMode === 'host') {
-                setMultiplayerStatus("Host mode: share your address and wait for a guest request.");
-            } else {
-                setMultiplayerStatus("Guest mode: type the host address and ask to join.");
-                const input = document.getElementById('server-ip');
-                if (input) setTimeout(() => input.focus(), 0);
-            }
-        };
-
-        function buildWsUrl(address) {
-            const clean = (address || '').trim().replace(/^wss?:\/\//, '').replace(/\/$/, '');
-            if (!clean) return '';
-            return `ws://${clean.includes(':') ? clean : clean + ':8081'}`;
-        }
-
-        function sendSocketMessage(socket, data) {
-            if (socket && socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify(data));
-                return true;
-            }
-            return false;
-        }
-
-        function clearPendingInvite(message) {
-            if (pendingInviteTimer) clearTimeout(pendingInviteTimer);
-            pendingInviteTimer = null;
-            pendingInvite = null;
-            const btn = document.getElementById('connect-friend-btn');
-            if (btn) btn.disabled = false;
-            if (message) setMultiplayerStatus(message);
-        }
-
-        function hideIncomingInvite() {
-            const ui = document.getElementById('invite-ui');
-            if (ui) ui.style.display = 'none';
-            if (incomingInviteTimer) clearInterval(incomingInviteTimer);
-            incomingInviteTimer = null;
-            incomingInvite = null;
-        }
-
-        function attachMultiplayerSocket(socket) {
-            socket.onmessage = (event) => {
-                let data;
-                try { data = JSON.parse(event.data); } catch (err) { return; }
-
-                if (data.type === 'invite') {
-                    showIncomingInvite(socket, data);
-                } else if (data.type === 'invite_response') {
-                    handleInviteResponse(socket, data);
-                } else if (data.type === 'join') {
-                    showToast("A new player joined!");
-                } else if (data.type === 'leave') {
-                    showToast("A player left.");
-                    if (remotePlayers[data.id]) {
-                        scene.remove(remotePlayers[data.id]);
-                        delete remotePlayers[data.id];
-                    }
-                } else if (data.type === 'pos') {
-                    if (!remotePlayers[data.id]) {
-                        remotePlayers[data.id] = createRemotePlayer();
-                    }
-                    const p = remotePlayers[data.id];
-                    p.position.set(data.x, data.y+0.75, data.z);
-                    p.rotation.y = data.ry;
-                } else if (data.type === 'block') {
-                    if (data.action === 'place') {
-                        setBlock(data.x, data.y, data.z, data.blockType);
-                        playSound('place');
-                    } else if (data.action === 'break') {
-                        setBlock(data.x, data.y, data.z, 0);
-                        playSound('dig');
-                    }
-                }
-            };
-        }
-
-        function startMultiplayerGame(socket) {
-            ws = socket;
-            clearPendingInvite();
-            hideIncomingInvite();
-            document.getElementById('multiplayer-menu').style.display = 'none';
-            document.getElementById('start-menu').style.display = 'none';
-                showToast("Host accepted. Entering game.");
-            window.startNewGame(false);
-        }
-
-        function handleInviteResponse(socket, data) {
-            if (!pendingInvite || data.requestId !== pendingInvite.requestId) return;
-            if (data.accepted) {
-                startMultiplayerGame(socket);
-            } else {
-                if (socket && socket !== listenSocket) socket.close();
-                clearPendingInvite("Host did not enter the game.");
-                showToast("Host did not enter the game.");
-            }
-        }
-
-        function showIncomingInvite(socket, data) {
-            hideIncomingInvite();
-            incomingInvite = {
-                socket,
-                requestId: data.requestId,
-                from: data.from || 'Guest',
-                secondsLeft: 60
-            };
-            document.getElementById('invite-message').innerText = `${incomingInvite.from} wants to join as guest.`;
-            document.getElementById('invite-countdown').innerText = '60 seconds left';
-            document.getElementById('invite-ui').style.display = 'block';
-            incomingInviteTimer = setInterval(() => {
-                if (!incomingInvite) return;
-                incomingInvite.secondsLeft--;
-                document.getElementById('invite-countdown').innerText = `${incomingInvite.secondsLeft} seconds left`;
-                if (incomingInvite.secondsLeft <= 0) {
-                    answerGameInvite(false);
-                }
-            }, 1000);
-        }
-
-        window.answerGameInvite = function(accepted) {
-            if (!incomingInvite) return;
-            const invite = incomingInvite;
-            sendSocketMessage(invite.socket, {
-                type: 'invite_response',
-                requestId: invite.requestId,
-                accepted
-            });
-            if (accepted) {
-                startMultiplayerGame(invite.socket);
-            } else {
-                hideIncomingInvite();
-                showToast("Invite declined.");
-            }
-        };
-
-        function openListenSocket(address) {
-            const url = buildWsUrl(address);
-            if (!url) return;
-            if (listenSocket && listenSocket.readyState === WebSocket.OPEN) return;
-            try {
-                listenSocket = new WebSocket(url);
-                attachMultiplayerSocket(listenSocket);
-                listenSocket.onopen = () => setMultiplayerStatus("Ready. Share your server address with a guest.");
-                listenSocket.onerror = () => setMultiplayerStatus("Your server is not listening yet. You can still send an invite.");
-                listenSocket.onclose = () => {
-                    if (!isGameStarted) setMultiplayerStatus("Host listener closed.");
-                };
-            } catch (err) {
-                setMultiplayerStatus("Could not listen on your server address.");
-            }
-        }
-
-        window.showMultiplayerMenu = function() {
-            document.getElementById('start-menu').style.display = 'none';
-            document.getElementById('multiplayer-menu').style.display = 'block';
-            setupServerInput();
-            setMultiplayerMode('host');
-            setMultiplayerStatus("Loading your server address...");
-            setMyServerAddress("Loading...");
-
-            fetch('https://api.ipify.org?format=json')
-                .then(res => res.json())
-                .then(data => {
-                    setMyServerAddress(data.ip);
-                    openListenSocket(data.ip);
-                })
-                .catch(err => {
-                    setMyServerAddress('Use your LAN IP');
-                    setMultiplayerStatus("Could not load public IP. Type or share your LAN IP.");
-                });
-        };
-
-        window.hideMultiplayerMenu = function() {
-            clearPendingInvite();
-            if (inviteSocket && inviteSocket !== ws) inviteSocket.close();
-            inviteSocket = null;
-            document.getElementById('multiplayer-menu').style.display = 'none';
-            document.getElementById('start-menu').style.display = 'flex';
-        };
-
-        window.copyMyServerAddress = function() {
-            const input = document.getElementById('my-ip-display');
-            if (!input) return;
-            input.select();
-            navigator.clipboard?.writeText(input.value).then(() => {
-                setMultiplayerStatus("Server address copied.");
-            }).catch(() => {
-                setMultiplayerStatus("Address selected. Press Copy on your keyboard.");
-            });
-        };
-
         function isTextEntryTarget(target) {
-            return target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+            return target && (['INPUT','TEXTAREA','SELECT'].includes(target.tagName) || target.isContentEditable);
         }
-
-        function setupServerInput() {
-            const input = document.getElementById('server-ip');
-            if (!input || input.dataset.ready === 'true') return;
-            input.dataset.ready = 'true';
-            input.addEventListener('pointerdown', (e) => e.stopPropagation());
-            input.addEventListener('mousedown', (e) => e.stopPropagation());
-            input.addEventListener('click', (e) => {
-                e.stopPropagation();
-                input.focus();
-                if (!input.value) return;
-                input.select();
-            });
-            input.addEventListener('keydown', (e) => e.stopPropagation());
-            input.addEventListener('keyup', (e) => e.stopPropagation());
-            input.addEventListener('input', () => {
-                input.value = input.value.trim();
-            });
-        }
-
-        let ws = null;
-        let remotePlayers = {};
 
         function createRemotePlayer() {
             const group = new THREE.Group();
@@ -1721,246 +1474,6 @@
             return group;
         }
 
-        window.connectToServer = function() {
-            const address = document.getElementById('server-ip').value.trim();
-            if (!address) {
-                setMultiplayerStatus("Type the host server address first.");
-                return;
-            }
-            const url = buildWsUrl(address);
-            const requestId = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
-            clearPendingInvite();
-            const btn = document.getElementById('connect-friend-btn');
-            if (btn) btn.disabled = true;
-            pendingInvite = { requestId };
-            setMultiplayerStatus("Sending invite. Waiting up to 60 seconds...");
-
-            try {
-                inviteSocket = new WebSocket(url);
-                attachMultiplayerSocket(inviteSocket);
-                inviteSocket.onopen = () => {
-                    sendSocketMessage(inviteSocket, {
-                        type: 'invite',
-                        requestId,
-                        from: myServerAddress || 'Guest'
-                    });
-                    pendingInviteTimer = setTimeout(() => {
-                        if (inviteSocket && inviteSocket !== ws) inviteSocket.close();
-                        clearPendingInvite("Host did not answer in 1 minute.");
-                        showToast("Host did not enter the game.");
-                    }, 60000);
-                };
-                inviteSocket.onerror = () => {
-                    clearPendingInvite("Could not reach the host server.");
-                    showToast("Could not reach the host server.");
-                };
-                inviteSocket.onclose = () => {
-                    if (pendingInvite) {
-                        clearPendingInvite("Host connection closed.");
-                    }
-                    if (isGameStarted && inviteSocket === ws) {
-                        showToast("Disconnected from server.");
-                    }
-                };
-            } catch (err) {
-                clearPendingInvite("Could not create the connection.");
-            }
-        };
-
-        let currentRoomCode = '';
-        let currentRoomUrl = '';
-
-        function normalizeRoomDigits(value) {
-            return (value || '').replace(/\D/g, '');
-        }
-
-        function makeRoomCodeFromAddress(address) {
-            const clean = (address || '').trim().replace(/^wss?:\/\//, '').replace(/\/$/, '');
-            const [hostPart, portPart] = clean.split(':');
-            const port = String(portPart || '8081').padStart(5, '0');
-            const octets = hostPart.split('.');
-            if (octets.length === 4 && octets.every(n => /^\d+$/.test(n))) {
-                return `${octets.map(n => String(Math.max(0, Math.min(255, Number(n)))).padStart(3, '0')).join('.')}.${port}`;
-            }
-            return clean;
-        }
-
-        function parseRoomCodeToAddress(code) {
-            const raw = (code || '').trim();
-            if (!raw) return '';
-            if (/^wss?:\/\//.test(raw) || raw.includes(':') || /[a-zA-Z]/.test(raw)) {
-                return raw;
-            }
-
-            const digits = normalizeRoomDigits(raw);
-            if (digits.length < 12) return raw;
-            const ipParts = [
-                Number(digits.slice(0, 3)),
-                Number(digits.slice(3, 6)),
-                Number(digits.slice(6, 9)),
-                Number(digits.slice(9, 12))
-            ];
-            if (ipParts.some(n => !Number.isFinite(n) || n < 0 || n > 255)) return raw;
-            const portDigits = digits.slice(12);
-            const port = portDigits ? Number(portDigits) : 8081;
-            return `${ipParts.join('.')}:${Number.isFinite(port) && port > 0 ? port : 8081}`;
-        }
-
-        function setRoomCode(value) {
-            currentRoomCode = value || '';
-            const el = document.getElementById('room-code-display');
-            if (el) el.value = currentRoomCode || 'Click Create Room';
-            updateRoomCodeFloat();
-        }
-
-        function updateRoomCodeFloat() {
-            const el = document.getElementById('room-code-float');
-            if (!el) return;
-            if (isGameStarted && currentRoomCode) {
-                el.style.display = 'block';
-                el.innerText = `Room Code Above Head: ${currentRoomCode}`;
-                el.title = 'Click to copy room code';
-            } else {
-                el.style.display = 'none';
-            }
-        }
-
-        function setupRoomCodeInput() {
-            const input = document.getElementById('room-code-input');
-            if (!input || input.dataset.ready === 'true') return;
-            input.dataset.ready = 'true';
-            input.addEventListener('pointerdown', (e) => e.stopPropagation());
-            input.addEventListener('mousedown', (e) => e.stopPropagation());
-            input.addEventListener('click', (e) => {
-                e.stopPropagation();
-                input.focus();
-            });
-            input.addEventListener('keydown', (e) => e.stopPropagation());
-            input.addEventListener('keyup', (e) => e.stopPropagation());
-            input.addEventListener('input', () => {
-                input.value = input.value.trim();
-            });
-        }
-
-        function beginRoomConnection(url, role) {
-            if (!url) {
-                setMultiplayerStatus("Room code is empty.");
-                return;
-            }
-            if (ws && ws.readyState === WebSocket.OPEN) ws.close();
-            const socket = new WebSocket(url);
-            attachMultiplayerSocket(socket);
-            const buttonId = role === 'host' ? 'create-room-btn' : 'join-room-btn';
-            const btn = document.getElementById(buttonId);
-            if (btn) btn.disabled = true;
-            setMultiplayerStatus(role === 'host' ? "Creating room..." : "Joining room...");
-
-            socket.onopen = () => {
-                ws = socket;
-                if (btn) btn.disabled = false;
-                document.getElementById('multiplayer-menu').style.display = 'none';
-                document.getElementById('start-menu').style.display = 'none';
-                showToast(role === 'host' ? "Room created. Your code is above your head." : "Joined room. Look for your friend in game.");
-                window.startNewGame(false);
-                updateRoomCodeFloat();
-            };
-            socket.onerror = () => {
-                if (btn) btn.disabled = false;
-                setMultiplayerStatus("Could not connect. Make sure the room server is running.");
-                showToast("Could not connect to room.");
-            };
-            socket.onclose = () => {
-                if (btn) btn.disabled = false;
-                if (ws === socket && isGameStarted) showToast("Disconnected from room.");
-            };
-        }
-
-        window.setMultiplayerMode = function(mode) {
-            multiplayerMode = mode === 'guest' ? 'guest' : 'host';
-            const hostPanel = document.getElementById('host-panel');
-            const guestPanel = document.getElementById('guest-panel');
-            const hostBtn = document.getElementById('host-mode-btn');
-            const guestBtn = document.getElementById('guest-mode-btn');
-            if (hostPanel) hostPanel.style.display = multiplayerMode === 'host' ? 'block' : 'none';
-            if (guestPanel) guestPanel.style.display = multiplayerMode === 'guest' ? 'block' : 'none';
-            if (hostBtn) {
-                hostBtn.style.background = multiplayerMode === 'host' ? '#4CAF50' : '#333';
-                hostBtn.style.borderColor = multiplayerMode === 'host' ? '#fff' : '#777';
-            }
-            if (guestBtn) {
-                guestBtn.style.background = multiplayerMode === 'guest' ? '#2196F3' : '#333';
-                guestBtn.style.borderColor = multiplayerMode === 'guest' ? '#fff' : '#777';
-            }
-            setMultiplayerStatus(multiplayerMode === 'host'
-                ? "Create a room, copy the code, and send it to your friend."
-                : "Paste your friend's room code, then join.");
-            if (multiplayerMode === 'guest') setTimeout(setupRoomCodeInput, 0);
-        };
-
-        window.showMultiplayerMenu = function() {
-            document.getElementById('start-menu').style.display = 'none';
-            document.getElementById('multiplayer-menu').style.display = 'block';
-            setupRoomCodeInput();
-            setMultiplayerMode('host');
-            setRoomCode(currentRoomCode);
-        };
-
-        window.hideMultiplayerMenu = function() {
-            document.getElementById('multiplayer-menu').style.display = 'none';
-            document.getElementById('start-menu').style.display = 'flex';
-        };
-
-        window.copyRoomCode = function() {
-            const input = document.getElementById('room-code-display');
-            if (!input) return;
-            input.select();
-            const code = input.value;
-            navigator.clipboard?.writeText(code).then(() => {
-                setMultiplayerStatus("Room code copied.");
-            }).catch(() => {
-                setMultiplayerStatus("Room code selected. Press Copy on your keyboard.");
-            });
-        };
-
-        window.createRoom = function() {
-            setMultiplayerMode('host');
-            setMultiplayerStatus("Making room code...");
-            const enterBtn = document.getElementById('enter-room-btn');
-            if (enterBtn) enterBtn.style.display = 'none';
-            const fallbackHost = location.hostname && location.hostname !== 'localhost' ? location.hostname : '127.0.0.1';
-            fetch('https://api.ipify.org?format=json')
-                .then(res => res.json())
-                .then(data => data.ip || fallbackHost)
-                .catch(() => fallbackHost)
-                .then(host => {
-                    const address = `${host}:8081`;
-                    currentRoomUrl = buildWsUrl(address);
-                    setRoomCode(makeRoomCodeFromAddress(address));
-                    if (enterBtn) enterBtn.style.display = 'block';
-                    setMultiplayerStatus("Room code ready. It will also float above your head after you enter.");
-                });
-        };
-
-        window.enterCreatedRoom = function() {
-            if (!currentRoomUrl) {
-                setMultiplayerStatus("Create a room first.");
-                return;
-            }
-            beginRoomConnection(currentRoomUrl, 'host');
-        };
-
-        window.joinRoom = function() {
-            setMultiplayerMode('guest');
-            const input = document.getElementById('room-code-input');
-            const code = input ? input.value.trim() : '';
-            if (!code) {
-                setMultiplayerStatus("Paste a room code first.");
-                return;
-            }
-            const address = parseRoomCodeToAddress(code);
-            const url = buildWsUrl(address);
-            beginRoomConnection(url, 'guest');
-        };
 
         function getTerrainFromSelect(selectId) {
             const el = document.getElementById(selectId);
@@ -1991,17 +1504,20 @@
         };
 
         window.startGameFromMenu = function() {
+            if(multiplayerRoom)leaveMultiplayerRoom();
             setTerrainChoice(getTerrainFromSelect('terrain-select'));
             setGameModeChoice(document.getElementById('mode-select')?.value || gameMode);
             window.startNewGame(true, terrainChoice);
         };
 
         window.restartGameWithTerrain = function() {
+            if(multiplayerRoom)leaveMultiplayerRoom('Room closed before restarting the world.');
             setTerrainChoice(getTerrainFromSelect('pause-terrain-select'));
             window.startNewGame(true, terrainChoice);
         };
 
         window.startNewGame = function(forceReset, terrainOverride) {
+            if(forceReset&&multiplayerRoom?.worldReady)leaveMultiplayerRoom('Room closed before restarting the world.');
             const nextTerrain = terrainOverride || terrainChoice || readTerrainSelection();
             selectedTerrain = nextTerrain;
             setTerrainChoice(nextTerrain);
@@ -2023,8 +1539,8 @@
             controls.lock();
         };
 
-        window.downloadSave = function() {
-            const saveData = {
+        function getWorldSaveData() {
+            return {
                 seed: seed,
                 camera: { 
                     x: (seatedAt?.returnPosition||drivingCar?.returnPosition||camera.position).x, y: (seatedAt?.returnPosition||drivingCar?.returnPosition||camera.position).y, z: (seatedAt?.returnPosition||drivingCar?.returnPosition||camera.position).z,
@@ -2054,6 +1570,10 @@
                 selectedTerrain: selectedTerrain,
                 gameMode: gameMode
             };
+        }
+
+        window.downloadSave = function() {
+            const saveData = getWorldSaveData();
             const blob = new Blob([JSON.stringify(saveData)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -2065,11 +1585,13 @@
             URL.revokeObjectURL(url);
         };
 
-        window.loadSaveFile = function(event) {
+        window.loadSaveFile = function(event, onLoaded, shouldApply) {
+            if(!onLoaded&&multiplayerRoom)leaveMultiplayerRoom('Left room before loading a different save.');
             const file = event.target.files[0];
             if (!file) return;
             const reader = new FileReader();
             reader.onload = function(e) {
+                if(shouldApply&&!shouldApply())return;
                 try {
                     const data = JSON.parse(e.target.result);
                     clearMech();
@@ -2206,10 +1728,12 @@
                     document.getElementById('start-menu').style.display = 'none';
                     document.getElementById('pause-menu').style.display = 'block';
                     document.getElementById('blocker').style.display = 'flex';
+                    if(onLoaded) onLoaded(null);
                     
                 } catch (err) {
                     console.error("Failed to load save", err);
-                    alert("Save file is broken or has the wrong format.");
+                    if(onLoaded) onLoaded(err);
+                    else alert("Save file is broken or has the wrong format.");
                 }
             };
             reader.readAsText(file);
@@ -4088,6 +3612,7 @@
             let key = `${x},${y},${z}`;
             worldMap.set(key, type);
             expansionBlockChanged(x,y,z,oldType,type);
+            queueRoomBlockChange(x,y,z);
             
             if (type === 16) {
                 if (!torchLights.has(key)) {
@@ -4135,6 +3660,7 @@
             const key = `${x},${y},${z}`;
             worldMap.set(key, type);
             expansionBlockChanged(x,y,z,oldType,type);
+            queueRoomBlockChange(x,y,z);
             const chunkKey=`${Math.floor(x/CHUNK_SIZE)},${Math.floor(z/CHUNK_SIZE)}`;
             chunkMaxY.set(chunkKey,Math.max(chunkMaxY.get(chunkKey)||-999,y));
 
@@ -4411,9 +3937,6 @@
             if (targetType === 26 || targetType === 27) updateRailsAround(hit.x, hit.y, hit.z);
             playMineSound(targetType);
 
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'block', action: 'break', x: hit.x, y: hit.y, z: hit.z }));
-            }
         }
 
         function igniteTNT(x, y, z) {
@@ -4872,9 +4395,8 @@
             let ui2 = document.getElementById('trade-ui');
             let ui3 = document.getElementById('cooked-meat-ui');
             let ui4 = document.getElementById('multiplayer-menu');
-            let ui5 = document.getElementById('invite-ui');
             
-	            if (!isInventoryOpen && (ui1 && ui1.style.display === 'none') && (ui2 && ui2.style.display === 'none') && (ui3 && ui3.style.display === 'none') && (ui4 && ui4.style.display === 'none') && (ui5 && ui5.style.display === 'none')) {
+	            if (!isInventoryOpen && (ui1 && ui1.style.display === 'none') && (ui2 && ui2.style.display === 'none') && (ui3 && ui3.style.display === 'none') && (ui4 && ui4.style.display === 'none')) {
                 blocker.style.display = 'flex';
                 setTerrainChoice(selectedTerrain);
                 document.getElementById('start-menu').style.display = 'none';
@@ -7557,10 +7079,6 @@
                             playSound('place'); 
                         }
                         
-                        // 同步到服务器
-                        if (ws && ws.readyState === WebSocket.OPEN) {
-                            ws.send(JSON.stringify({ type: 'block', action: 'place', x: placePos.x, y: placePos.y, z: placePos.z, blockType: currentBlock }));
-                        }
                         if (matId === 8) { 
                             if (getBlock(placePos.x, placePos.y, placePos.z) === 0 && 
                                 getBlock(placePos.x, placePos.y + 1, placePos.z) === 0) {
@@ -8004,7 +7522,6 @@
         let frames = 0;
         let lastFpsTime = performance.now();
 
-        let lastSyncTime = 0;
         let hungerTimer = 0;
         let starvationTimer = 0;
         let foodProtectionTimer = 0;
@@ -8019,20 +7536,7 @@
         function animate() {
             requestAnimationFrame(animate);
 
-            // 联机坐标同步 (每秒约 15 次)
-            if (ws && ws.readyState === WebSocket.OPEN && isGameStarted) {
-                const nowMs = performance.now();
-                if (nowMs - lastSyncTime > 66) {
-                    ws.send(JSON.stringify({
-                        type: 'pos',
-                        x: camera.position.x,
-                        y: camera.position.y - 1.5, // 玩家模型的脚底位置
-                        z: camera.position.z,
-                        ry: camera.rotation.y
-                    }));
-                    lastSyncTime = nowMs;
-                }
-            }
+            updateMultiplayer();
 
             // FPS 与坐标计算
             frames++;
@@ -8303,6 +7807,7 @@
         }
 
         initWorldExpansion();
+        initMultiplayer();
         initModIcons();
         animate();
     </script>
