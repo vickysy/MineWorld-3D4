@@ -15,7 +15,7 @@ function extraHomeRecipes() {
         {ing:{6:4,36:3,28:2},out:93,count:1},{ing:{6:2,36:2,28:1},out:94,count:1},
         {ing:{36:3,28:3,38:1},out:95,count:1},{ing:{36:2,6:2,28:2},out:96,count:1},
         {ing:{5:2},out:97,count:2},{ing:{36:2,6:1},out:98,count:4}];
-    return list.concat(kitchenRecipes(),cityLifeRecipes());
+    return list.concat(kitchenRecipes(),cityLifeRecipes(),surveillanceRecipes());
 }
 
 function buildExtraFurniture(group,id,data) {
@@ -40,7 +40,10 @@ function buildExtraFurniture(group,id,data) {
         box(0.25,0.08,0.02,0xe6edeb,-0.16,0.15,-0.36);
     } else if(id===85) {
         box(0.36,0.35,0.44,white,0,-0.3,0.08);box(0.64,0.17,0.67,white,0,-0.06,0.07);
-        box(0.38,0.02,0.39,0x7298a2,0,0.035,0.12);
+        box(0.38,0.02,0.39,0x8ac7d8,0,0.035,0.12,'bowlWater');
+        group.userData.flushDrops=new THREE.Group();group.add(group.userData.flushDrops);
+        for(let i=0;i<8;i++)addModelBox(group.userData.flushDrops,0.045,0.012,0.045,0xc2eaf4,0,0.05,0);
+        group.userData.flushDrops.visible=false;
         for(const x of [-0.27,0.27])box(0.1,0.045,0.6,white,x,0.07,0.08);
         box(0.64,0.53,0.22,white,0,0.22,-0.31);box(0.14,0.02,0.08,metal,0.17,0.5,-0.31);
         const lid=box(0.56,0.04,0.57,white,0,0.12,0.06,'lid');lid.rotation.x=-1.35;lid.position.set(0,0.34,-0.17);
@@ -50,29 +53,36 @@ function buildExtraFurniture(group,id,data) {
         for(const x of [-0.4,0.4])box(0.1,0.08,0.72,white,x,0.42,0);
         box(0.06,0.26,0.06,metal,0,0.54,-0.24);box(0.06,0.06,0.25,metal,0,0.64,-0.15);
         const stream=box(0.035,0.22,0.035,0x66bbec,0,0.5,-0.03,'stream');stream.visible=!!data.on;
+        stream.material.transparent=true;stream.material.opacity=0.3;stream.material.depthWrite=false;
+        box(0.1,0.008,0.1,metal,0,0.423,0.05);addWaterDroplets(group,'tap');
         box(0.18,0.035,0.04,dark,0,-0.05,0.33);
     } else if(id===87) {
-        box(0.86,0.98,0.065,metal,0,0,-0.44);
+        box(0.9,1,0.065,0xe2e7e8,0,0,-0.44);
         if(data.live && THREE.Reflector) {
-            const mirror=new THREE.Reflector(new THREE.PlaneGeometry(0.73,0.85),{textureWidth:256,textureHeight:256,color:0x8d9b9e,clipBias:0.003});
+            const mirror=new THREE.Reflector(new THREE.PlaneGeometry(0.82,0.92),{textureWidth:256,textureHeight:256,color:0x808080,clipBias:0.003});
             mirror.getRenderTarget().texture.format=THREE.RGBAFormat;
             mirror.position.z=-0.398;group.add(mirror);group.userData.mirror=mirror;
             const render=mirror.onBeforeRender;
             mirror.onBeforeRender=function(renderer,scene,view) {
-                if(reflecting || camera.position.distanceTo(group.position)>12) return;
+                if(reflecting||surveillanceRendering)return;
+                const near=camera.position.distanceTo(group.position)<=12;
+                const resolution=near?(innerWidth<600?512:1024):256,target=mirror.getRenderTarget();
+                if(target.width!==resolution)target.setSize(resolution,resolution);
+                if(!near)return;
                 reflecting=true;
                 const held=heldItemGroup.visible;heldItemGroup.visible=false;
                 if(!reflectionAvatar) {
                     reflectionAvatar=createRemotePlayer();scene.add(reflectionAvatar);
-                    for(const x of [-0.11,0.11])addModelBox(reflectionAvatar,0.065,0.055,0.025,0x283640,x,0.69,-0.26);
-                    addModelBox(reflectionAvatar,0.11,0.025,0.025,0x825a49,0,0.54,-0.26);
-                    addModelBox(reflectionAvatar,0.52,0.1,0.52,0x5b4637,0,0.88,0);
                 }
                 reflectionAvatar.scale.setScalar(playerScale);reflectionAvatar.position.copy(camera.position);reflectionAvatar.position.y-=0.75*playerScale;
                 reflectionAvatar.rotation.y=camera.rotation.y;reflectionAvatar.visible=true;
+                reflectionAvatar.children[0].rotation.x=camera.rotation.x;
+                const step=controls.isLocked&&(moveForward||moveBackward||moveLeft||moveRight)?Math.sin(walkTime)*0.35:0;
+                for(let i=2;i<6;i++)reflectionAvatar.children[i].rotation.x=step*(i===2||i===5?1:-1);
+                reflectionAvatar.updateMatrixWorld(true);
                 try {render.call(mirror,renderer,scene,view);} finally {reflectionAvatar.visible=false;heldItemGroup.visible=held;reflecting=false;}
             };
-        } else box(0.73,0.85,0.01,0xb6d4dc,0,0,-0.398);
+        } else box(0.82,0.92,0.01,0xd0e2e6,0,0,-0.398);
     } else if(id===88) {
         box(0.95,1.95,0.82,wood,0,0.47,0);
         for(const x of [-0.23,0.23]) {box(0.43,1.77,0.04,0xc3a77c,x,0.49,0.435);box(0.025,0.25,0.04,dark,x<0?-0.06:0.06,0.47,0.47);}
@@ -107,6 +117,7 @@ function buildExtraFurniture(group,id,data) {
     }
     if(KITCHEN_ITEMS[id])buildKitchenModel(group,id,data);
     if(CITY_LIFE_ITEMS[id])buildCityLifeModel(group,id,data);
+    if(SURVEILLANCE_ITEMS[id])buildSurveillanceModel(group,id,data);
 }
 
 function openExtraFurniture(record,content,button) {
@@ -123,10 +134,18 @@ function openExtraFurniture(record,content,button) {
         button('Store',()=>{const id=Number(select.value);if((data.storage?.[id]||0)>=64||!hasInventoryItem(id))return;consumeInventoryItem(id);data.storage??={};data.storage[id]=(data.storage[id]||0)+1;refresh();updateInventoryCounts();});
         button('Take',()=>{const id=Number(select.value);if(!(data.storage?.[id]>0))return;data.storage[id]--;playerInventory[id]=(playerInventory[id]||0)+1;refresh();updateInventoryCounts();});
     } else if(record.id===85) {
+        button('Use Toilet',()=>{
+            sitInChair(record);if(seatedAt?.key!==record.key)return;
+            data.using=3;closeFurniturePanel();showToast('Using toilet...');
+        });
+        if(seatedAt?.key===record.key)button('Stand Up',()=>{if(standFromChair())closeFurniturePanel();});
         button('Flush',()=>{data.flushing=1.6;playSound('swim');showToast('Flushed.');});
     } else if(record.id===86 || record.id===89) {
         const label=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.checked=!!data.on;
         input.onchange=()=>data.on=input.checked;label.append(input,document.createTextNode(record.id===86?' Tap':' Light'));content.appendChild(label);
+        if(record.id===86)button('Fill Bucket',()=>fillHomeWaterBucket(data));
+    } else if(record.id===91) {
+        openBookEditor(record,content,button);
     } else {
         const name=document.createElement('p');name.textContent=HOME_ITEMS[record.id];content.appendChild(name);
     }
@@ -136,7 +155,16 @@ function updateExtraFurniture(model,data,delta) {
     updateKitchenFurniture(model,data,delta);
     if(model.userData.stream)model.userData.stream.visible=!!data.on;
     if(model.userData.light) {model.userData.light.intensity=data.on?1.2:0;model.userData.shade.material.emissive.setHex(data.on?0x9a6725:0);}
-    if(data.flushing>0) {data.flushing=Math.max(0,data.flushing-0.15);if(model.userData.lid)model.userData.lid.rotation.x=-1.35+Math.sin(data.flushing*14)*0.04;}
+    if(data.using>0) {
+        if(seatedAt?.key!==`${currentDimension}|${model.position.toArray().join(',')}`)data.using=0;
+        else {data.using=Math.max(0,data.using-delta);if(!data.using){data.flushing=1.6;playSound('swim');showToast('Finished.');}}
+    }
+    if(data.flushing>0)data.flushing=Math.max(0,data.flushing-delta);
+    if(model.userData.flushDrops) {
+        model.userData.flushDrops.visible=data.flushing>0;
+        model.userData.flushDrops.children.forEach((drop,i)=>{const a=data.flushing*10+i*Math.PI/4;drop.position.set(Math.cos(a)*0.12,0.05,0.12+Math.sin(a)*0.12);});
+        model.userData.bowlWater.scale.setScalar(data.flushing?0.7+Math.sin(data.flushing*10)*0.1:1);
+    }
 }
 
 function createCityCar(color,model='tai3') {

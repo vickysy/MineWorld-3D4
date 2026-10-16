@@ -202,7 +202,7 @@ function travelThroughPortal(next) {
 }
 
 function saveWorldExpansion() {
-    return {city:saveHomeCity(),flood:worldFloodHeight,water:Array.from(waterAmounts),portals:Array.from(activePortals),dimensions:Array.from(dimensionWorlds),furniture:Array.from(furnitureData),
+    return {nextSecurityCameraNumber,city:saveHomeCity(),flood:worldFloodHeight,water:Array.from(waterAmounts),portals:Array.from(activePortals),dimensions:Array.from(dimensionWorlds),furniture:Array.from(furnitureData),
         endermen:endermen.filter(m=>!m.dying).map(m=>({x:m.mesh.position.x,y:m.mesh.position.y,z:m.mesh.position.z,eggId:m.eggId,hp:m.hp}))};
 }
 
@@ -214,6 +214,7 @@ function clearExpansionWorld() {
     for(const map of [waterAmounts,activePortals,dimensionWorlds,furnitureData]) map.clear();
     waterFlowQueue.length=0;queuedWaterFlow.clear();portalExitRequired=false;
     worldFloodHeight=null;commandJob=commandUndo=commandPreview=null;
+    nextSecurityCameraNumber=1;
 }
 
 function restoreWorldExpansion(data={}) {
@@ -223,6 +224,7 @@ function restoreWorldExpansion(data={}) {
     }
     for(const m of data.endermen||[]) if([m.x,m.y,m.z].every(Number.isFinite)) spawnEnderman(m.x,m.y,m.z,m.eggId===ENDER_EGG_ID,m.hp);
     restoreHomeCity(data.city);
+    restoreSurveillanceNumber(data.nextSecurityCameraNumber);
     for(const [key,type] of worldMap) if(type===24) queueFluidNeighbors(...key.split(',').map(Number));
     furnitureTick=1;
 }
@@ -400,12 +402,18 @@ function syncFurnitureMeshes() {
     for(const [xyz,id] of worldMap) {
         if(!HOME_ITEMS[id]) continue;
         const [x,y,z]=xyz.split(',').map(Number),key=`${currentDimension}|${xyz}`;
-        if(Math.abs(x-camera.position.x)>64 || Math.abs(z-camera.position.z)>64) continue;
+        if((Math.abs(x-camera.position.x)>64 || Math.abs(z-camera.position.z)>64) && !nearSurveillanceCamera(x,z)) continue;
         visible.add(key);
         if(!furnitureData.has(key)) furnitureData.set(key,{id,yaw:0,on:false,food:{},note:''});
         const data=furnitureData.get(key);
+        if(id===SECURITY_CAMERA_ID)ensureSecurityCameraNumber(data);
         if(!furnitureMeshes.has(key)) {
             const model=createFurnitureModel(id,{...data,live:true});model.position.set(x,y,z);model.rotation.y=data.yaw||0;scene.add(model);furnitureMeshes.set(key,model);
+        }
+        if(id===SECURITY_CAMERA_ID) {
+            const model=furnitureMeshes.get(key);model.rotation.y=data.yaw||0;
+            model.userData.securityHead.rotation.x=-(data.pitch??-12)*Math.PI/180;
+            model.userData.securityLight.material.color.setHex(data.on===false?0x954c43:0x59d780);
         }
     }
     for(const [key,model] of furnitureMeshes) if(!visible.has(key)) {disposeModModel(model);furnitureMeshes.delete(key);}
@@ -424,12 +432,14 @@ function furnitureRecord(x,y,z) {
 }
 
 function closeFurniturePanel(resume=true) {
+    stopSurveillance();
     furnitureFocus=null;
     const panel=document.getElementById('home-panel');if(panel) panel.hidden=true;
     if(resume && isGameStarted) controls.lock();
 }
 
 function openFurniturePanel(record) {
+    stopSurveillance();
     furnitureFocus=record.key;
     const panel=document.getElementById('home-panel');panel.hidden=false;
     document.getElementById('home-title').textContent=HOME_ITEMS[record.id];
@@ -438,7 +448,11 @@ function openFurniturePanel(record) {
     blocker.style.display='none';
     const button=(label,action,parent=content)=>{const b=document.createElement('button');b.textContent=label;b.onclick=action;parent.appendChild(b);return b;};
     const data=record.data;
-    if(record.id===FRIDGE_ID) {
+    if(record.id===SECURITY_CAMERA_ID) {
+        openSecurityCameraPanel(record,content,button);
+    } else if([COMPUTER_ID,94,96,SURVEILLANCE_TABLET_ID].includes(record.id)) {
+        openSurveillanceComputer(record,content,button);
+    } else if(record.id===FRIDGE_ID) {
         for(const id of [39,40,...Object.keys(KITCHEN_FOOD).map(Number)]) {
             const row=document.createElement('div');row.className='home-row';content.appendChild(row);
             const label=document.createElement('span');label.textContent=`${getBlockName(id)}: ${data.food?.[id]||0} / 64`;row.appendChild(label);
@@ -501,11 +515,17 @@ function expansionRay(includeWater=false) {
 
 function placeFurniture(id,x,y,z) {
     if(!HOME_ITEMS[id] || ![0,42].includes(getBlock(x,y,z))) return false;
-    const height=[FRIDGE_ID,CHAIR_ID,88,112].includes(id)?2:1;
+    const height=[FRIDGE_ID,CHAIR_ID,88,112,SHOWER_ID,SHOWER_DOOR_ID].includes(id)?2:1;
     let yaw=Math.round(Math.atan2(camera.position.x-x,camera.position.z-z)/(Math.PI/2))*(Math.PI/2);
     if(id===83||id===126) for(const [dx,dz] of [[-1,0],[1,0],[0,-1],[0,1]]) {
         const neighbor=furnitureRecord(x+dx,y,z+dz);
         if(neighbor && [83,126].includes(neighbor.id)) {yaw=neighbor.data.yaw||0;break;}
+    }
+    if([112,SHOWER_DOOR_ID].includes(id))for(const [dx,dz] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+        const neighbor=furnitureRecord(x+dx,y,z+dz);
+        if(!neighbor||![112,SHOWER_DOOR_ID].includes(neighbor.id))continue;
+        const a=neighbor.data.yaw||0;
+        if(Math.abs(dx*Math.cos(a)-dz*Math.sin(a))>0.99){yaw=a;break;}
     }
     const parts=kitchenParts(id).map(([dx,dy,dz])=>[x+Math.round(dx*Math.cos(yaw)+dz*Math.sin(yaw)),y+dy,z+Math.round(-dx*Math.sin(yaw)+dz*Math.cos(yaw))]);
     for(const [px,py,pz] of parts) if(![0,42].includes(getBlock(px,py,pz)) ||
@@ -519,12 +539,22 @@ function placeFurniture(id,x,y,z) {
     const key=`${currentDimension}|${x},${y},${z}`,dirty=new Set();
     setBlockNoRebuild(x,y,z,id,dirty);if(height===2) setBlockNoRebuild(x,y+1,z,FRIDGE_TOP_ID,dirty);
     furnitureData.set(key,{id,yaw,parts,food:{},on:false,note:''});
+    if(id===SECURITY_CAMERA_ID) {
+        const data=furnitureData.get(key);data.on=true;data.pitch=-12;
+        showToast(`Camera ${ensureSecurityCameraNumber(data)} placed.`);
+    }
     for(const p of parts) setBlockNoRebuild(...p,FURNITURE_PART_ID,dirty);
     addDirtyChunksToQueue(dirty);syncFurnitureMeshes();updateInventoryCounts();playSound('place');return true;
 }
 
 function handleExpansionClick(e) {
     if(drivingCar) return true;
+    if(e.button===2 && currentBlock===SURVEILLANCE_TABLET_ID && !e.shiftKey) {
+        if(hasInventoryItem(SURVEILLANCE_TABLET_ID))openFurniturePanel({key:'held-surveillance-tablet',id:SURVEILLANCE_TABLET_ID,data:{}});
+        else showToast('No surveillance tablet.');
+        return true;
+    }
+    if(e.button===0 && KITCHEN_FOOD[currentBlock]) {offerHeldFood(currentBlock);return true;}
     if(e.button===2 && !isToolItem(currentBlock) && tryTradeWithMerchant()) return true;
     if(CAR_ITEMS[currentBlock]) {if(e.button===2) placeCityCarItem(currentBlock);return true;}
     if(e.button===2 && !isToolItem(currentBlock) && tryEnterCityCar()) return true;
@@ -553,7 +583,9 @@ function handleExpansionClick(e) {
         }
     }
     const record=furnitureRecord(hit.x,hit.y,hit.z);
-    if(record && !HOME_ITEMS[currentBlock] && !isToolItem(currentBlock)) {
+    const usableHome=record && ([COMPUTER_ID,94,96,SECURITY_CAMERA_ID,SURVEILLANCE_TABLET_ID,85,86,89,91,104,105,106,SHOWER_ID,SHOWER_DOOR_ID,BOOKSHELF_ID].includes(record.id)||KITCHEN_FOOD[record.id]||record.id===119&&record.data.foodItem);
+    const joiningGlass=[112,SHOWER_DOOR_ID].includes(currentBlock);
+    if(record && !e.shiftKey && !isToolItem(currentBlock) && (!HOME_ITEMS[currentBlock] || usableHome&&!joiningGlass)) {
         if([CHAIR_ID,83,126].includes(record.id)) sitInChair(record);
         else {
             if(record.id===KEYBOARD_ID) {
@@ -603,6 +635,8 @@ function initWorldExpansion() {
         .world-dialog textarea,.world-dialog input[type=text]{box-sizing:border-box;width:100%;font:16px sans-serif;background:#11191d;color:white;border:1px solid #9cbbbf;padding:12px;margin:10px 0}
         .home-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0}.home-row span{flex:1;min-width:120px}
         #home-content{display:grid;gap:12px}.home-game{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.home-game button{height:70px;font-size:26px}.home-game button.lit{background:#cf933e;color:#fff7ca}
+        .surveillance-body{display:grid;gap:12px;min-width:0}.surveillance-body select{max-width:100%;margin-top:6px}
+        .home-row button[aria-pressed=true]{background:#406f49;border-color:#b0d5a4}.surveillance-body output{font:13px monospace;color:#a5d9af}
     `;document.head.appendChild(style);
     const tab=document.createElement('button');tab.className='tab-btn';tab.textContent='Home';tab.onclick=()=>switchTab('home',tab);document.getElementById('inventory-tabs').appendChild(tab);
     const items=document.createElement('div');items.id='tab-home';items.className='slot-container';items.style.display='none';inventoryUI.appendChild(items);
@@ -652,6 +686,12 @@ function updateWorldExpansion(delta) {
     matWater.map.offset.x=(matWater.map.offset.x+delta*0.025)%1;
     matWater.map.offset.y=(matWater.map.offset.y+delta*0.018)%1;
     materials[NETHER_PORTAL_ID].opacity=0.5+Math.sin(performance.now()*0.003)*0.13;
+    for(const [key,model] of furnitureMeshes) {
+        if(!model.userData.waterDrops&&!model.userData.glassPanel)continue;
+        const data=furnitureData.get(key)||{};
+        updateWaterDroplets(model,data,delta);
+        if(model.userData.glassPanel)updateShowerGlass(model,data,delta);
+    }
     furnitureTick+=delta;
     if(furnitureTick<0.15) return;
     const elapsed=Math.min(0.5,furnitureTick);furnitureTick=0;
@@ -717,38 +757,73 @@ const COMMAND_ITEMS = {
     '附魔台':32,'黑曜石':44,'缩小药水':46,'变大药水':66,'梯子':7,'玻璃':6,'白砖':51,'砖块':59,'火把':16,'床':14
 };
 
+function normalizeWorldCommand(text) {
+    const digits={'零':0,'〇':0,'一':1,'二':2,'两':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9};
+    return text.normalize('NFKC').trim().toLowerCase().replace(/[零〇一二两三四五六七八九十百千]+/g,word=>{
+        let sum=0,number=0;
+        for(const char of word){if(char in digits)number=digits[char];else {sum+=(number||1)*({'十':10,'百':100,'千':1000}[char]);number=0;}}
+        return String(sum+number);
+    }).replace(/乘以|乘|[＊*xX]/g,'×').replace(/\s/g,'').replace(/(\d+)(?:个)?(?:格|米|方块)/g,'$1');
+}
+
+function commandDimensions(text) {
+    if(/[-+−]\d|\d[.．]\d/.test(text))throw new Error('尺寸请使用正整数，例如 20×20×20。');
+    const runs=text.match(/\d+(?:×\d+)+/g)||[];
+    if(runs.length>1||runs.some(s=>s.split('×').length>3))throw new Error('请只填写一组长、宽、高。');
+    const named=['长','宽','高'].map(axis=>{
+        const matches=Array.from(text.matchAll(new RegExp(axis+'(?:度)?(?:为|是|等于)?(\\d+)','g')));
+        if(matches.length>1)throw new Error('每个方向的尺寸只能定义一次。');
+        return matches[0]?.[1];
+    });
+    const cube=text.match(/(?:边长|边为)(\d+)/);
+    if(cube&&!runs.length&&!named[1]&&!named[2]&&/(正方体|立方体|正方形)/.test(text))return Array(3).fill(Number(cube[1]));
+    if(runs.length && named.some(Boolean))throw new Error('请使用一组尺寸，避免重复定义长、宽、高。');
+    if(named.some(Boolean)) {
+        if(!named.every(Boolean))throw new Error('请写完整的长、宽、高，例如长20、宽20、高20。');
+        return named.map(Number);
+    }
+    if(runs.length)return runs[0].split('×').map(Number);
+    return null;
+}
+
 function parseWorldCommand(text) {
-    const normalized=text.trim().toLowerCase().replace(/[＊*xX乘]/g,'×').replace(/\s/g,'');
-    if(/^(撤销|取消上一个命令)/.test(normalized)) return {kind:'undo',label:'撤销上一个命令'};
+    const normalized=normalizeWorldCommand(text);
+    if(/不要|别帮|别建|别做|不需要|不想|禁止/.test(normalized))throw new Error('这句话包含否定意思，请明确写出你要执行的操作。');
+    if(/然后|接着|再帮|并且/.test(normalized))throw new Error('请一次输入一个操作，每次检查后再执行。');
+    if(/^(?:请|帮我|请帮我|我想)?(?:撤销|取消上1个命令)(?:上1个命令|上1次操作|吧|1下)?$/.test(normalized)) return {kind:'undo',label:'撤销上一个命令'};
     if(/(取消|撤掉|清除).*(全世界|整个世界|全游戏|城市).*水/.test(normalized)) return {kind:'flood',height:null,label:'取消全世界统一水位'};
-    if(/^(去|到|找到|寻找|传送到)(学校|市场|地摊|足球场)$/.test(normalized)) {
+    if(/(?:去|到|找到|寻找|传送到)(学校|市场|地摊|足球场)(?:吧|一下|1下)?$/.test(normalized)) {
         const landmark=normalized.includes('学校')?'school':normalized.includes('足球场')?'football':'market';
         return {kind:'landmark',landmark,label:'前往城市出生点附近的'+(landmark==='school'?'学校':landmark==='market'?'市场':'足球场')+'，不会重建或删除现有建筑。'};
     }
     if(/(找|查找|寻找|搜索)/.test(normalized)) {
-        const entry=Object.entries(COMMAND_ITEMS).sort((a,b)=>b[0].length-a[0].length).find(([name])=>normalized.includes(name));
+        const entry=Object.entries(COMMAND_ITEMS).sort((a,b)=>b[0].length-a[0].length).find(([name])=>normalized.includes(normalizeWorldCommand(name)));
         if(entry) return {kind:'find',id:entry[1],label:`找到 ${getBlockName(entry[1])}`};
         const match=Object.entries(getInventorySlotMapping()).find(([,id])=>normalized.includes(getBlockName(id).toLowerCase().replace(/\s/g,'')));
         if(match) return {kind:'find',id:match[1],label:`找到 ${getBlockName(match[1])}`};
         throw new Error('没有找到这个物品。可以输入“查找冰箱”或“查找末影人”。');
     }
-    if(/(创建|生成|建造|做一个|做个).*(城市)/.test(normalized)) return {kind:'city',label:'生成新的城市世界。当前世界会重建，请先下载存档。'};
+    if(/(创建|生成|建造|搭建|做1个|做个).*(城市)/.test(normalized)) return {kind:'city',label:'生成新的城市世界。当前世界会重建，请先下载存档。'};
     if(/(水)/.test(normalized) && /(全世界|整个世界|全游戏|城市)/.test(normalized) && /(填|淹|灌)/.test(normalized)) {
         const height=Math.max(48,Math.ceil(camera.position.y)+16);
         return {kind:'flood',height,label:`将整个主世界的水位升到 ${height} 格，保留建筑和地形。新生成的区域也会填水。`};
     }
-    const sizes=normalized.match(/(\d+)×(\d+)(?:×(\d+))?/);
-    if(sizes && /(空间|房间|区域|水)/.test(normalized)) {
-        const width=Number(sizes[1]),depth=Number(sizes[2]),height=Number(sizes[3]||6);
-        if(width<2||depth<2||height<3||width>64||depth>64||height>32||width*depth*(height+1)>60000) throw new Error('范围需为 2–64 格，层高 3–32 格，总量不超过 60000 格。');
-        const kind=/水/.test(normalized)?'water':/房间/.test(normalized)?'room':'space';
-        return {kind,width,depth,height,label:`${kind==='water'?'填水':kind==='room'?'建房间':'清理空间'}：${width} × ${depth} × ${height}。可以撤销。`};
+    const sizes=commandDimensions(normalized);
+    if(sizes && /(空间|房间|区域|水|正方体|立方体|房子)/.test(normalized)) {
+        const [width,depth,givenHeight]=sizes,height=givenHeight??6;
+        const clear=/清理|清空|挖空/.test(normalized);
+        const kind=/水/.test(normalized)?'water':!clear&&(/房间|房子|搭建|建造|正方体|立方体/.test(normalized)||sizes.length===3)?'room':'space';
+        const layers=kind==='room'?height:height+1;
+        if(![width,depth,height].every(Number.isSafeInteger)||width<(kind==='room'?3:2)||depth<(kind==='room'?3:2)||height<(kind==='room'?4:3)||width>64||depth>64||height>32||width*depth*layers>60000) throw new Error('长宽最多64格，高最多32格，总量不超过60000格。房间最小3×3×4。');
+        const label=kind==='room'?`建空心房间，外部长×宽×高：${width} × ${depth} × ${height} 格；内有地板、屋顶和门。`:`${kind==='water'?'填水':'清理空间'}：${width} × ${depth} × ${height} 格，底部保留地板。`;
+        return {kind,width,depth,height,layers,label:label+'会修改你周围的方块，确认后执行，可以撤销。'};
     }
     throw new Error('暂不支持这条命令。可用：创建20×20空间、建20×20×6房间、用水把20×20区域填满、用水把全世界填满、查找物品、生成城市、撤销。');
 }
 
 function openCommandPanel() {
     if(!isGameStarted) return;
+    if(!standFromChair() || !leaveCityCar())return;
     closeFurniturePanel(false);document.getElementById('command-panel').hidden=false;
     if(controls.isLocked) controls.unlock();blocker.style.display='none';
     document.getElementById('world-command').focus();
@@ -787,11 +862,13 @@ function executeWorldCommand(plan) {
     }
     const {width,depth,height}=plan,x0=Math.round(camera.position.x)-Math.floor(width/2),z0=Math.round(camera.position.z)-Math.floor(depth/2);
     const y0=Math.round(camera.position.y-getPlayerHeight()-0.5),changes=[];
+    const layers=plan.layers||(plan.kind==='room'?height:height+1);
+    if(plan.kind==='room' && height-2<getPlayerHeight()+0.2*playerScale) {showCommandStatus('房间太矮，请先变小或增加高度。');return false;}
     for(let cx=Math.floor(x0/CHUNK_SIZE);cx<=Math.floor((x0+width-1)/CHUNK_SIZE);cx++)
         for(let cz=Math.floor(z0/CHUNK_SIZE);cz<=Math.floor((z0+depth-1)/CHUNK_SIZE);cz++) {generateHouseData(cx,cz);generateTrees(cx,cz);}
-    for(let x=0;x<width;x++) for(let z=0;z<depth;z++) for(let y=0;y<=height;y++) {
+    for(let x=0;x<width;x++) for(let z=0;z<depth;z++) for(let y=0;y<layers;y++) {
         let type=y===0?63:plan.kind==='water'?24:0;
-        if(plan.kind==='room' && (x===0||z===0||x===width-1||z===depth-1||y===height)) type=51;
+        if(plan.kind==='room' && (x===0||z===0||x===width-1||z===depth-1||y===layers-1)) type=51;
         if(plan.kind==='room' && z===0 && x===Math.floor(width/2) && y>=1 && y<=2) type=y===1?8:9;
         changes.push([x0+x,y0+y,z0+z,type]);
     }
@@ -856,7 +933,7 @@ function initWorldCommands() {
     document.getElementById('command-form').onsubmit=e=>{e.preventDefault();preview();};
     document.getElementById('execute-command').onclick=()=>{if(commandPreview) executeWorldCommand(commandPreview);};
     document.getElementById('world-command').oninput=()=>{commandPreview=null;document.getElementById('execute-command').disabled=true;};
-    for(const label of ['创建20×20空间','用水把全世界填满','查找冰箱','生成城市','撤销']) {
+    for(const label of ['搭建20×20×20空间','创建20×20空间','用水把全世界填满','查找冰箱','生成城市','撤销']) {
         const b=document.createElement('button');b.textContent=label;b.onclick=()=>{document.getElementById('world-command').value=label;preview();};document.getElementById('command-presets').appendChild(b);
     }
 }

@@ -1,12 +1,15 @@
 const KITCHEN_ITEMS={104:'Fire Hydrant',105:'Microwave',106:'Stove',107:'Cooking Pot',108:'Bowl',109:'Frying Pan',110:'Ladle',111:'Cup Rack',112:'Shower Glass',113:'Flower Vase',114:'Prime Figurine',115:'Buzz Figurine',116:'Model Car',117:'Doll',118:'Dining Table',119:'Plate',120:'Doughnut',121:'Crab Cake',122:'Ice Cream',123:'Layer Cake',124:'Pizza',125:'Fruit Bowl',126:'Large Sofa'};
 const KITCHEN_FOOD={120:true,121:true,122:true,123:true,124:true,125:true};
+const SHOWER_ID=135, SHOWER_DOOR_ID=136, BOOKSHELF_ID=137;
+Object.assign(KITCHEN_ITEMS,{135:'Shower',136:'Glass Shower Door',137:'Bookshelf'});
 Object.assign(EXTRA_HOME_ITEMS,KITCHEN_ITEMS);Object.assign(HOME_ITEMS,KITCHEN_ITEMS);
 
 function kitchenRecipes() {
     const combinations=[];
     for(let iron=1;iron<=5;iron++)for(let wood=0;wood<=6-iron;wood++)combinations.push({51:2,6:1,36:iron,...(wood?{4:wood}:{})});
     let decor=0;
-    return Object.keys(KITCHEN_ITEMS).map(id=>({ing:KITCHEN_FOOD[id]?{40:1,5:Number(id)-119}:combinations[decor++],out:Number(id),count:1}));
+    const bathroomRecipes={135:{36:3,65:1},136:{6:4,36:1},137:{4:3,91:2}};
+    return Object.keys(KITCHEN_ITEMS).map(id=>({ing:bathroomRecipes[id]||(KITCHEN_FOOD[id]?{40:1,5:Number(id)-119}:combinations[decor++]),out:Number(id),count:1}));
 }
 
 function kitchenParts(id) {
@@ -44,9 +47,31 @@ function buildKitchenModel(group,id,data) {
     } else if(id===111) {
         box(0.85,0.06,0.45,0x9f7952,0,-0.45,0);box(0.06,0.55,0.06,steel,0,-0.16,0);box(0.75,0.035,0.05,steel,0,0.1,0);
         for(const x of [-0.28,0.28])for(const z of [-0.12,0.12]) {box(0.16,0.2,0.16,white,x,-0.05,z);box(0.09,0.025,0.09,0x728e9b,x,0.061,z);}
-    } else if(id===112) {
-        const glass=box(0.91,1.88,0.045,0x9bcbd4,0,0.46,0);glass.material.transparent=true;glass.material.opacity=0.25;glass.material.depthWrite=false;
-        for(const x of [-0.47,0.47])box(0.035,1.96,0.055,steel,x,0.47,0);box(0.98,0.035,0.055,steel,0,1.44,0);
+    } else if(id===112 || id===SHOWER_DOOR_ID) {
+        const panel=new THREE.Group();group.add(panel);group.userData.glassPanel=panel;
+        const glass=addModelBox(panel,0.96,1.88,0.035,0xc3e3e8,0,0.46,0);
+        glass.material.transparent=true;glass.material.opacity=0.18;glass.material.depthWrite=false;
+        group.userData.glassPosts=[-0.49,0.49].map(x=>box(0.025,1.98,0.055,steel,x,0.49,0));
+        box(1,0.025,0.055,steel,0,1.47,0);box(1,0.025,0.055,steel,0,-0.49,0);
+        if(id===SHOWER_DOOR_ID) {
+            addModelBox(panel,0.035,0.32,0.055,steel,0.33,0.45,0.07);
+            addModelBox(panel,0.035,0.32,0.055,steel,0.33,0.45,-0.07);
+        }
+    } else if(id===SHOWER_ID) {
+        box(0.08,1.7,0.08,steel,0,0.36,-0.35);box(0.08,0.08,0.48,steel,0,1.18,-0.15);
+        box(0.48,0.07,0.4,steel,0,1.1,0.04);box(0.4,0.025,0.32,dark,0,1.05,0.04);
+        for(const x of [-0.15,0.15])box(0.09,0.09,0.12,x<0?0x7bbfd4:0xd87a71,x,0.1,-0.3);
+        box(0.36,0.12,0.13,steel,0,0.1,-0.35);box(0.23,0.025,0.23,dark,0,-0.48,0.04);
+        addWaterDroplets(group,'shower');
+    } else if(id===BOOKSHELF_ID) {
+        for(const x of [-0.46,0.46])box(0.08,1,0.85,0x9a7853,x,0,0);
+        for(const y of [-0.46,0,0.46])box(0.92,0.08,0.85,0x9a7853,0,y,0);
+        box(0.84,0.92,0.06,0x775638,0,0,-0.4);
+        for(let row=0;row<2;row++)for(let i=0;i<6;i++) {
+            const x=-0.35+i*0.14,y=-0.23+row*0.46;
+            box(0.11,0.31-(i%2)*0.04,0.55,[0x568ca7,0xc45f55,0xd6b755,0x659479][i%4],x,y,0.06);
+            box(0.07,0.022,0.01,white,x,y+0.05,0.34);
+        }
     } else if(id===113) {
         box(0.32,0.36,0.32,0xacc9dc,0,-0.3,0);box(0.19,0.12,0.19,0xacc9dc,0,-0.06,0);
         for(const [x,y,z,c] of [[-0.16,0.32,0,0xe78da3],[0.1,0.46,0.04,0xebc55a],[0.17,0.23,-0.13,0xcda5df]]){box(0.025,y+0.08,0.025,0x4a8550,x/2,y/2-0.04,z/2);box(0.23,0.1,0.16,c,x,y,z);box(0.12,0.1,0.25,c,x,y,z);}
@@ -96,6 +121,7 @@ function buildKitchenModel(group,id,data) {
         group.userData.sofaSections=[];
         for(let i=0;i<2;i++){const section=createFurnitureModel(83,data);section.position.x=i;group.add(section);group.userData.sofaSections.push(section);}
     }
+    if(id===104)addWaterDroplets(group,'hydrant');
 }
 
 function openKitchenFurniture(record,content,button) {
@@ -110,9 +136,13 @@ function openKitchenFurniture(record,content,button) {
             health=maxHealth;hunger=maxHunger;resetFoodTimers();updateHUD();showToast('Health and hunger restored.');controls.lock();
         });
         if(id===119)button('Take',()=>{const food=data.foodItem;if(!food)return;delete data.foodItem;playerInventory[food]=(playerInventory[food]||0)+1;updateInventoryCounts();closeFurniturePanel();});
-    } else if(id===104) {
+    } else if(id===SHOWER_DOOR_ID) {
+        button(data.open?'Close':'Open',()=>{if(toggleShowerDoors(record))openFurniturePanel(record);});
+    } else if(id===BOOKSHELF_ID) {
+        openBookEditor(record,content,button);
+    } else if(id===104 || id===SHOWER_ID) {
         const label=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.checked=!!data.on;input.onchange=()=>data.on=input.checked;label.append(input,document.createTextNode(' Water'));content.appendChild(label);
-        button('Fill Bucket',()=>{if(!consumeInventoryItem(BUCKET_ID))return;playerInventory[WATER_BUCKET_ID]=(playerInventory[WATER_BUCKET_ID]||0)+1;updateInventoryCounts();showToast('Water bucket filled.');});
+        if(id===104)button('Fill Bucket',()=>fillHomeWaterBucket(data));
     } else {const p=document.createElement('p');p.textContent=HOME_ITEMS[id];content.appendChild(p);}
 }
 
@@ -130,6 +160,88 @@ function updateKitchenFurniture(model,data,delta) {
         if(KITCHEN_FOOD[data.foodItem]) {const food=createFurnitureModel(data.foodItem,{});food.scale.setScalar(0.7);food.position.y=-0.08;model.add(food);model.userData.foodMesh=food;}
     }
     if(model.userData.itemId===83||model.userData.itemId===126)updateSofaConnections(model,data);
+}
+
+function fillHomeWaterBucket(data) {
+    if(!data.on){showToast('Turn on the water first.');return false;}
+    if(!consumeInventoryItem(BUCKET_ID))return false;
+    playerInventory[WATER_BUCKET_ID]=(playerInventory[WATER_BUCKET_ID]||0)+1;updateInventoryCounts();showToast('Water bucket filled.');return true;
+}
+
+function addWaterDroplets(model,kind) {
+    const water=new THREE.Group();water.visible=false;model.add(water);model.userData.waterDrops=water;water.userData.kind=kind;
+    const count=kind==='shower'?24:kind==='hydrant'?18:10;
+    for(let i=0;i<count;i++) {
+        const drop=addModelBox(water,0.024,kind==='shower'?0.065:0.025,0.024,0x9ad9ef,0,0,0);
+        drop.material.transparent=true;drop.material.opacity=0.6;drop.material.depthWrite=false;
+    }
+}
+
+function updateWaterDroplets(model,data,delta) {
+    const water=model.userData.waterDrops;if(!water)return;
+    water.visible=!!data.on;if(!data.on)return;
+    water.userData.time=(water.userData.time||0)+delta;
+    water.children.forEach((drop,i)=>{
+        const t=(water.userData.time*1.7+i/water.children.length)%1;
+        if(water.userData.kind==='shower')drop.position.set(((i%4)-1.5)*0.09,1.03-t*1.5,Math.floor(i%12/4)*0.1-0.06);
+        else if(water.userData.kind==='hydrant')drop.position.set(0.33+t*0.85,0.04-0.48*t*t,Math.sin(i*2.4)*t*0.1);
+        else drop.position.set(Math.sin(i*2.4)*t*0.025,0.6-t*0.19,-0.03+Math.cos(i*2.4)*t*0.025);
+    });
+}
+
+function isPassableHomeCell(x,y,z,type=getBlock(x,y,z)) {
+    if(type===SHOWER_ID || type===FRIDGE_TOP_ID&&getBlock(x,y-1,z)===SHOWER_ID)return true;
+    if(type===FRIDGE_TOP_ID && getBlock(x,y-1,z)===SHOWER_DOOR_ID)y--;
+    else if(type!==SHOWER_DOOR_ID)return false;
+    return !!furnitureData.get(`${currentDimension}|${x},${y},${z}`)?.open;
+}
+
+function showerNeighbors(record,doorsOnly=false) {
+    const yaw=record.data.yaw||0,dx=Math.round(Math.cos(yaw)),dz=-Math.round(Math.sin(yaw));
+    return [-1,1].map(side=>furnitureRecord(record.x+dx*side,record.y,record.z+dz*side))
+        .map(r=>r && (doorsOnly?r.id===SHOWER_DOOR_ID:[112,SHOWER_DOOR_ID].includes(r.id)) && Math.cos((r.data.yaw||0)-yaw)>0.99?r:null);
+}
+
+function toggleShowerDoors(record) {
+    const connected=new Map([[record.key,record]]),queue=[record];
+    while(queue.length && connected.size<64)for(const r of showerNeighbors(queue.shift(),true))if(r&&!connected.has(r.key)){connected.set(r.key,r);queue.push(r);}
+    const open=!record.data.open;
+    if(!open)for(const r of connected.values()) {
+        const touches=(p,radius,low,high)=>Math.abs(p.x-r.x)<0.5+radius&&Math.abs(p.z-r.z)<0.5+radius&&high>r.y-0.5&&low<r.y+1.5;
+        const occupied=touches(camera.position,getPlayerRadius(),camera.position.y-getPlayerHeight(),camera.position.y+0.2*playerScale)||
+            [...villagers,...zombies,...creepers,...animals,...endermen].some(m=>!m.dying&&touches(m.mesh.position,0.35,m.mesh.position.y-0.8,m.mesh.position.y+1));
+        if(occupied){showToast('Doorway is occupied.');return false;}
+    }
+    for(const r of connected.values())r.data.open=open;
+    playSound('door');return true;
+}
+
+function updateShowerGlass(model,data,delta) {
+    const record={x:model.position.x,y:model.position.y,z:model.position.z,data};
+    const neighbors=showerNeighbors(record);
+    model.userData.glassPosts.forEach((post,i)=>post.visible=!neighbors[i]);
+    if(model.userData.itemId!==SHOWER_DOOR_ID)return;
+    const side=neighbors[0]?.id===SHOWER_DOOR_ID?1:-1;
+    const panel=model.userData.glassPanel;
+    // Rotate around the outer edge so adjoining doors open away from their shared center.
+    const target=data.open?-side*Math.PI/2:0;
+    panel.rotation.y+=Math.sign(target-panel.rotation.y)*Math.min(Math.abs(target-panel.rotation.y),delta*5);
+    panel.position.set(side*0.48*(1-Math.cos(panel.rotation.y)),0,side*0.48*Math.sin(panel.rotation.y));
+}
+
+function openBookEditor(record,content,button) {
+    const input=document.createElement('textarea');input.rows=8;input.maxLength=2000;input.value=record.data.note||'';input.setAttribute('aria-label','Book text');content.appendChild(input);
+    button('Save',()=>{record.data.note=input.value;showToast('Book saved.');});
+}
+
+function offerHeldFood(id) {
+    if(!hasInventoryItem(id)){showToast('No food left.');return;}
+    furnitureFocus=null;const panel=document.getElementById('home-panel');panel.hidden=false;
+    document.getElementById('home-title').textContent=getBlockName(id);
+    if(controls.isLocked)controls.unlock();blocker.style.display='none';
+    const content=document.getElementById('home-content');content.replaceChildren();
+    const eat=document.createElement('button');eat.textContent='Eat';content.appendChild(eat);
+    eat.onclick=()=>{if(!consumeInventoryItem(id))return;eat.disabled=true;health=maxHealth;hunger=maxHunger;resetFoodTimers();updateHUD();updateInventoryCounts();closeFurniturePanel();};
 }
 
 function updateSofaConnections(model,data) {
@@ -151,12 +263,13 @@ function placeFoodOnPlate(hit,id) {
 }
 
 function initKitchenHome() {
+    Object.assign(COMMAND_ITEMS,{'淋浴':SHOWER_ID,'喷头':SHOWER_ID,'花洒':SHOWER_ID,'浴室玻璃门':SHOWER_DOOR_ID,'淋浴门':SHOWER_DOOR_ID,'玻璃门':SHOWER_DOOR_ID,'书架':BOOKSHELF_ID,'书本方块':BOOKSHELF_ID,'书本':91});
     Object.assign(COMMAND_ITEMS,{'消防栓':104,'微波炉':105,'灶台':106,'锅':107,'碗':108,'平底锅':109,'勺子':110,'瓢':110,'杯架':111,'浴室玻璃墙':112,'玻璃墙':112,'花瓶':113,'擎天柱摆件':114,'巴斯光年':115,'汽车摆件':116,'玩偶':117,'饭桌':118,'餐桌':118,'盘子':119,'甜甜圈':120,'螃蟹蛋糕':121,'冰淇淋':122,'蛋糕':123,'披萨':124,'水果':125,'大沙发':126,'特大沙发':126});
     const controls=document.createElement('div');controls.className='home-row';controls.style.cssText='flex-basis:100%;margin:0';
     const category=document.createElement('select');category.setAttribute('aria-label','Home category');category.style.maxWidth='130px';
     for(const name of ['All','Living','Kitchen','Bathroom','Decor','Cars']) {const o=document.createElement('option');o.textContent=name;category.appendChild(o);}
     const search=document.createElement('input');search.type='search';search.placeholder='Search Home';search.setAttribute('aria-label','Search Home');search.style.cssText='min-width:100px;flex:1;width:100px;padding:8px';
-    const groupFor=id=>CAR_ITEMS[id]?'Cars':[73,105,106,107,108,109,110,111,118,119,120,121,122,123,124,125].includes(id)?'Kitchen':[85,86,87,112].includes(id)?'Bathroom':[84,90,91,104,113,114,115,116,117].includes(id)?'Decor':'Living';
+    const groupFor=id=>CAR_ITEMS[id]?'Cars':[73,105,106,107,108,109,110,111,118,119,120,121,122,123,124,125].includes(id)?'Kitchen':[85,86,87,112,SHOWER_ID,SHOWER_DOOR_ID].includes(id)?'Bathroom':[84,90,91,104,113,114,115,116,117,BOOKSHELF_ID].includes(id)?'Decor':'Living';
     const filter=()=>{for(const el of document.querySelectorAll('#tab-home > .slot')) {const id=el.id==='home-bed'?14:Number(el.id.replace('inv-',''))+12;el.style.display=(category.value==='All'||groupFor(id)===category.value)&&getBlockName(id).toLowerCase().includes(search.value.toLowerCase())?'flex':'none';}};
     category.onchange=filter;search.oninput=filter;controls.append(category,search);document.getElementById('tab-home').prepend(controls);
 }

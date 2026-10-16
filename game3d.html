@@ -380,10 +380,11 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
     <script src="three-reflector-r128.js"></script>
-    <script src="world-expansion.js?v=20261016b"></script>
-    <script src="home-city.js?v=20261016a"></script>
-    <script src="kitchen-home.js?v=20261016a"></script>
+    <script src="world-expansion.js?v=20261016c"></script>
+    <script src="home-city.js?v=20261016c"></script>
+    <script src="kitchen-home.js?v=20261016c"></script>
     <script src="city-life.js?v=20261016a"></script>
+    <script src="surveillance.js?v=20261016c"></script>
 
     <script>
         // --- 场景、相机、渲染器 ---
@@ -1533,7 +1534,7 @@
                         remotePlayers[data.id] = createRemotePlayer();
                     }
                     const p = remotePlayers[data.id];
-                    p.position.set(data.x, data.y, data.z);
+                    p.position.set(data.x, data.y+0.75, data.z);
                     p.rotation.y = data.ry;
                 } else if (data.type === 'block') {
                     if (data.action === 'place') {
@@ -1688,42 +1689,34 @@
         let remotePlayers = {};
 
         function createRemotePlayer() {
-            // 用村民的模型代表其他玩家，简单又好认
             const group = new THREE.Group();
-            
-            const headGeo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
-            const bodyGeo = new THREE.BoxGeometry(0.5, 0.8, 0.3);
-            const armGeo = new THREE.BoxGeometry(0.2, 0.8, 0.2);
-            armGeo.translate(0, -0.3, 0);
-            const legGeo = new THREE.BoxGeometry(0.2, 0.8, 0.2);
-            legGeo.translate(0, -0.4, 0);
-            
-            const mat = new THREE.MeshLambertMaterial({ color: 0x2196F3 }); // 蓝色衣服的玩家
-            
-            const head = new THREE.Mesh(headGeo, new THREE.MeshLambertMaterial({ color: 0xFFCCBC }));
-            head.position.y = 0.65;
-            group.add(head);
-            
-            const body = new THREE.Mesh(bodyGeo, mat);
-            body.position.y = 0;
-            group.add(body);
-            
-            const leftArm = new THREE.Mesh(armGeo, mat);
-            leftArm.position.set(0.35, 0.3, 0);
-            group.add(leftArm);
-            
-            const rightArm = new THREE.Mesh(armGeo, mat);
-            rightArm.position.set(-0.35, 0.3, 0);
-            group.add(rightArm);
-            
-            const leftLeg = new THREE.Mesh(legGeo, mat);
-            leftLeg.position.set(0.15, -0.4, 0);
-            group.add(leftLeg);
-            
-            const rightLeg = new THREE.Mesh(legGeo, mat);
-            rightLeg.position.set(-0.15, -0.4, 0);
-            group.add(rightLeg);
-            
+            // Keep the first six parts stable for existing walking animations.
+            const head=addModelBox(group,0.46,0.46,0.46,0xe7b99a,0,0.57,0,'head');
+            const body=addModelBox(group,0.48,0.62,0.28,0x397c9d,0,0,0,'body');
+            const limb=(x,y,w,h,color,name)=>{
+                const geometry=new THREE.BoxGeometry(w,h,w);geometry.translate(0,-h/2,0);
+                const part=new THREE.Mesh(geometry,new THREE.MeshLambertMaterial({color}));part.position.set(x,y,0);part.name=name;group.add(part);return part;
+            };
+            const arms=[limb(0.34,0.27,0.19,0.63,0x397c9d,'leftArm'),limb(-0.34,0.27,0.19,0.63,0x397c9d,'rightArm')];
+            const legs=[limb(0.13,-0.31,0.21,0.54,0x384659,'leftLeg'),limb(-0.13,-0.31,0.21,0.54,0x384659,'rightLeg')];
+            const detail=(parent,w,h,d,c,x,y,z)=>addModelBox(parent,w,h,d,c,x,y,z);
+            detail(head,0.48,0.11,0.48,0x493b32,0,0.21,0);
+            detail(head,0.48,0.22,0.06,0x493b32,0,0.08,0.22);
+            detail(head,0.17,0.09,0.025,0x493b32,-0.13,0.14,-0.24);
+            for(const x of [-0.1,0.1]) {
+                detail(head,0.1,0.065,0.016,0xf6f0e4,x,0.04,-0.238);
+                detail(head,0.04,0.055,0.02,0x34535d,x,0.04,-0.252);
+                detail(head,0.11,0.023,0.018,0x614437,x,0.1,-0.24);
+                detail(head,0.055,0.095,0.16,0xd9a786,Math.sign(x)*0.25,-0.035,0);
+            }
+            detail(head,0.075,0.07,0.06,0xd09a79,0,-0.055,-0.255);
+            detail(head,0.115,0.022,0.018,0x955f50,0,-0.14,-0.24);
+            detail(body,0.18,0.055,0.02,0xe6c6a7,0,0.29,-0.15);
+            detail(body,0.035,0.54,0.02,0x82b5c3,0,-0.015,-0.15);
+            detail(body,0.13,0.14,0.02,0x2d647e,-0.13,0.08,-0.15);
+            detail(body,0.49,0.06,0.3,0x273540,0,-0.28,0);
+            for(const arm of arms)detail(arm,0.19,0.22,0.2,0xe7b99a,0,-0.52,0);
+            for(const leg of legs){detail(leg,0.22,0.1,0.3,0x202c32,0,-0.49,-0.035);detail(leg,0.22,0.025,0.31,0xc7d0cf,0,-0.535,-0.035);}
             scene.add(group);
             return group;
         }
@@ -2783,7 +2776,7 @@
                  60:72, 61:73, 62:74, 63:75, 64:76, 65:77, 66:78, 67:79,
                  70:82, 71:83, 72:84, 73:85, 74:86, 75:87, 76:88, 77:89, 78:90, 79:91, 80:92,
                  81:93, 82:94, 83:95, 84:96, 85:97, 86:98, 88:100, 89:101, 90:102, 91:103,
-                 ...Object.fromEntries(Object.keys({...KITCHEN_ITEMS,...CITY_LIFE_ITEMS,...HIDDEN_BLOCKS,127:'Netherrack'}).map(id=>[Number(id)-12,Number(id)]))
+                 ...Object.fromEntries(Object.keys({...KITCHEN_ITEMS,...CITY_LIFE_ITEMS,...HIDDEN_BLOCKS,...SURVEILLANCE_ITEMS,127:'Netherrack'}).map(id=>[Number(id)-12,Number(id)]))
              };
         }
 
@@ -4845,7 +4838,7 @@
                 
                 for (let [key, meshes] of chunkMeshes.entries()) {
                     let [kx, kz] = key.split(',').map(Number);
-                    if (Math.abs(kx - cx) > RENDER_DISTANCE + 1 || Math.abs(kz - cz) > RENDER_DISTANCE + 1) {
+                    if ((Math.abs(kx - cx) > RENDER_DISTANCE + 1 || Math.abs(kz - cz) > RENDER_DISTANCE + 1) && !isSurveillanceChunk(kx,kz)) {
                         for (let type in meshes) {
                             let mesh = meshes[type];
                             scene.remove(mesh);
@@ -5411,11 +5404,12 @@
         }
 
         function isSolid(bx, by, bz) {
-            return isSolidType(getBlock(bx, by, bz));
+            const type=getBlock(bx,by,bz);
+            return isSolidType(type) && !isPassableHomeCell(bx,by,bz,type);
         }
 
         function isSolidType(b) {
-            if(HIDDEN_BLOCKS[b] || b===NETHER_PORTAL_ID || b===92) return false;
+            if(HIDDEN_BLOCKS[b] || b===SHOWER_ID || b===NETHER_PORTAL_ID || b===92) return false;
             // Ladders, open doors, water, rails, redstone, levers, and grass are passable. Leaves are solid.
             if (b === 0 || b === 7 || b === 10 || b === 11 || b === 19 || b === 20 || b === 24 || b === 25 || b === 26 || b === 27 || b === 28 || b === 30 || b === 31 || b === 42 || b === LAVA_ID || b === GLASS_SENSOR_DOOR_OPEN_ID || b === PRESSURE_PLATE_ID) return false;
             return true;
@@ -5423,7 +5417,8 @@
 
         function isTinySolidAtPoint(x, y, z) {
             const c = microCellAt(x,y,z);
-            return isSolidType(getMicroType(c));
+            const type=getMicroType(c);
+            return isSolidType(type) && !isPassableHomeCell(c.x,c.y,c.z,type);
         }
 
         function checkTinyCollision(pos) {
@@ -5434,7 +5429,10 @@
             const size=microCellSize(c);
             const corner=[c.x-0.5+c.mx*size,c.y-0.5+c.my*size,c.z-0.5+c.mz*size];
             if (corner.some((v,i)=>v>=max[i] || v+size<=min[i])) return false;
-            if (!refinedMicroCells.has(detailKey(c))) return isSolidType(getMicroType(c));
+            if (!refinedMicroCells.has(detailKey(c))) {
+                const type=getMicroType(c);
+                return isSolidType(type) && !isPassableHomeCell(c.x,c.y,c.z,type);
+            }
             const childSize=size/10;
             const lo=corner.map((v,i)=>Math.max(0,Math.floor((min[i]-v)/childSize)));
             const hi=corner.map((v,i)=>Math.min(9,Math.floor((max[i]-v)/childSize)));
@@ -8057,7 +8055,8 @@
             if (isThirdPerson && localPlayerModel) {
                 // 玩家模型放在原本的摄像机位置（代表真实物理坐标）
                 localPlayerModel.position.copy(controls.getObject().position);
-                localPlayerModel.position.y -= 1.5; // 脚底对齐
+                localPlayerModel.position.y -= 0.75*playerScale;
+                localPlayerModel.scale.setScalar(playerScale);
                 localPlayerModel.rotation.y = camera.rotation.y;
                 
                 // 摄像机向后退 4 格，向上抬 1 格
@@ -8300,6 +8299,7 @@
                 }
 
                 renderer.render(scene, updateMechView(delta));
+                updateSurveillance();
         }
 
         initWorldExpansion();
