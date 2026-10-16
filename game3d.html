@@ -379,6 +379,11 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+    <script src="three-reflector-r128.js"></script>
+    <script src="world-expansion.js?v=20261016a"></script>
+    <script src="home-city.js?v=20261016a"></script>
+    <script src="kitchen-home.js?v=20261016a"></script>
+    <script src="city-life.js?v=20261016a"></script>
 
     <script>
         // --- 场景、相机、渲染器 ---
@@ -545,6 +550,10 @@
                 heldItemGroup.remove(heldItemGroup.children[0]); 
             }
             if (blockId === 0) return;
+            if (HOME_ITEMS[blockId] || CAR_ITEMS[blockId] || blockId===ENDER_EGG_ID) {
+                const item=CAR_ITEMS[blockId]?createCityCar(undefined,CAR_ITEMS[blockId]):HOME_ITEMS[blockId]?createFurnitureModel(blockId,{}):createEndermanModel();
+                item.userData.modItem=true;item.scale.setScalar(blockId===ENDER_EGG_ID?0.15:0.38);heldItemGroup.add(item);return;
+            }
             if (blockId >= 67 && blockId <= 71) {
                 const item = createModItemModel(blockId);
                 item.scale.setScalar(0.45);
@@ -2025,7 +2034,7 @@
             const saveData = {
                 seed: seed,
                 camera: { 
-                    x: camera.position.x, y: camera.position.y, z: camera.position.z,
+                    x: (seatedAt?.returnPosition||drivingCar?.returnPosition||camera.position).x, y: (seatedAt?.returnPosition||drivingCar?.returnPosition||camera.position).y, z: (seatedAt?.returnPosition||drivingCar?.returnPosition||camera.position).z,
                     rx: camera.rotation.x, ry: camera.rotation.y, rz: camera.rotation.z
                 },
                 worldMap: Array.from(worldMap.entries()),
@@ -2041,6 +2050,7 @@
                 currentDimension: currentDimension,
                 playerScale: playerScale,
                 creativeFlying: creativeFlying,
+                expansion: saveWorldExpansion(),
                 activeMech: activeMech,
                 spawnedMobs: [...villagers,...creepers,...zombies].filter(m=>m.eggId && !m.dying).map(m=>({
                     id:m.eggId,x:m.mesh.position.x,y:m.mesh.position.y,z:m.mesh.position.z,hp:m.hp
@@ -2072,6 +2082,7 @@
                     clearMech();
                     clearCombatState();
                     resetPlayerFlight();
+                    clearExpansionWorld();
                     
                     // 清理旧区块
                     for (let [key, meshes] of chunkMeshes) {
@@ -2137,9 +2148,11 @@
                     data.worldMap.forEach(([k, v]) => worldMap.set(k, v));
                     restoreMicroEdits(data.microMinedBlocks || [], data.microPlacedBlocks || []);
                     restoreFineVoxelEdits(data.fineVoxelEdits || []);
+                    restoreWorldExpansion(data.expansion);
                     restoreMech(data.activeMech);
                     creativeFlying = data.creativeFlying === true && canCreativeFly();
                     for(const mob of (Array.isArray(data.spawnedMobs)?data.spawnedMobs:[]).slice(0,80)) {
+                        if(mob.id===67&&currentDimension==='nether')continue;
                         if([67,68,69].includes(mob.id) && [mob.x,mob.y,mob.z].every(Number.isFinite)) {
                             const entity=spawnMobFromEgg(mob.id,mob.x,mob.y,mob.z);
                             entity.hp=Math.max(1,Math.min(entity.hp,Number(mob.hp)||entity.hp));
@@ -2657,9 +2670,9 @@
                 54:'Axe', 55:'Bow', 56:'Crossbow', 57:'Trident', 58:'Mace',
                 59:'Brick', 60:'Blue Concrete', 61:'Blackstone', 62:'Glow Block', 63:'Modern Tile',
                 64:'Dry Sponge', 65:'Water Bucket', 67:'Villager Egg', 68:'Creeper Egg', 69:'Zombie Egg',
-                70:'Prime Truck Core', 71:'Bee Scout Core'
+                70:'Prime Truck Core', 71:'Bee Scout Core', 127:'Netherrack'
             };
-            return names[id] || '';
+            return HOME_ITEMS[id] || (CAR_ITEMS[id]?CAR_MODELS[CAR_ITEMS[id]].name:id===ENDER_EGG_ID?'Enderman Egg':names[id]) || '';
         }
 
         function checkRecipes() {
@@ -2766,7 +2779,11 @@
                  33:43, 34:44, 35:45, 36:46, 37:47, 38:48, 39:51,
                  40:52, 41:53, 42:54, 43:55, 44:56, 45:57, 46:58,
                  47:59, 48:60, 49:61, 50:62, 51:63, 52:64, 53:65, 54:66,
-                 55:67, 56:68, 57:69, 58:70, 59:71
+                 55:67, 56:68, 57:69, 58:70, 59:71,
+                 60:72, 61:73, 62:74, 63:75, 64:76, 65:77, 66:78, 67:79,
+                 70:82, 71:83, 72:84, 73:85, 74:86, 75:87, 76:88, 77:89, 78:90, 79:91, 80:92,
+                 81:93, 82:94, 83:95, 84:96, 85:97, 86:98, 88:100, 89:101, 90:102, 91:103,
+                 ...Object.fromEntries(Object.keys({...KITCHEN_ITEMS,...CITY_LIFE_ITEMS,127:'Netherrack'}).map(id=>[Number(id)-12,Number(id)]))
              };
         }
 
@@ -3262,11 +3279,8 @@
         const DRY_SPONGE_ID = 64;
         const WATER_BUCKET_ID = 65;
         const SEA_LEVEL = 8;
-        const WATER_FLOW_PER_FRAME = 8;
-        const WATER_FLOW_DRAIN_EVERY = 6;
         const waterFlowQueue = [];
         const queuedWaterFlow = new Set();
-        let waterFlowCount = 0;
         const pistonDirections = new Map();
         const pistonTimers = new Map();
         let jumpPadCooldown = 0;
@@ -3361,7 +3375,11 @@
             if (heightCache.has(key)) return heightCache.get(key);
             
             let h = 15;
-            if (selectedTerrain === 'plains') {
+            if (currentDimension === 'nether') {
+                h = 8 + Math.sin(x*0.065)*6 + Math.cos(z*0.055)*5 + Math.sin((x-z)*0.035)*4;
+            } else if (selectedTerrain === 'city') {
+                h = 16;
+            } else if (selectedTerrain === 'plains') {
                 h = 10 + Math.sin(x * 0.05) * 3 + Math.cos(z * 0.05) * 3;
             } else if (selectedTerrain === 'desert') {
                 h = 7 + Math.sin(x * 0.018) * 1.2 + Math.cos(z * 0.018) * 1.2;
@@ -3402,17 +3420,18 @@
 
         function getBlock(x, y, z) {
             const key = `${x},${y},${z}`;
-            if (worldMap.has(key)) return worldMap.get(key);
+            if (worldMap.has(key)) return floodBlockType(x,y,z,worldMap.get(key));
 
             const h = getSurfaceHeight(x, z);
             if (currentDimension === 'nether') {
-                if (y > h) return 0;
-                if (y <= 4) return LAVA_ID;
+                if (y > h) return y<=6 ? LAVA_ID : 0;
+                if (y < h-7 && y>1 && Math.sin(x*0.12)+Math.cos(z*0.1)>1.5) return y<=6?LAVA_ID:0;
                 if (hash3(x, y, z, 44.4) < 0.035 && y < h - 5) return OBSIDIAN_ID;
-                return 3;
+                return hash3(x,y,z,32)<0.08?61:127;
             }
 
             if (y > h) {
+                if(currentDimension==='overworld' && worldFloodHeight!==null && y<=worldFloodHeight) return 24;
                 if (selectedTerrain !== 'moon' && y <= SEA_LEVEL) {
                     if (y < SEA_LEVEL && Math.abs(hash(x * 3.14, z * 2.71)) < 0.1) {
                         return 25; // 海带
@@ -3455,6 +3474,7 @@
             const key = `${bx},${by},${bz}`;
             if (worldMap.has(key)) {
                 const t = worldMap.get(key);
+                if(HOME_ITEMS[t] || t===FRIDGE_TOP_ID || t===FURNITURE_PART_ID || t===NETHER_PORTAL_ID) return true;
                 return [0, 6, 7, 8, 9, 10, 11, 16, 17, 18, 19, 20, 24, 25, 26, 27, 28, 30, 31, 42, LAVA_ID, BARRIER_ID, GLASS_SENSOR_DOOR_BOTTOM_ID, GLASS_SENSOR_DOOR_TOP_ID, GLASS_SENSOR_DOOR_OPEN_ID].includes(t);
             }
             // 海平面下的天然地形如果没生成，可能是水或者沙子
@@ -4062,6 +4082,7 @@
         }
 
         function setBlock(x, y, z, type) {
+            const oldType=getBlock(x,y,z);
             resetMicroBlock(x, y, z);
             modifiedColumns.add(`${x},${z}`); // 记录该列已被修改
             const colKey = `${x},${z}`;
@@ -4070,6 +4091,7 @@
 
             let key = `${x},${y},${z}`;
             worldMap.set(key, type);
+            expansionBlockChanged(x,y,z,oldType,type);
             
             if (type === 16) {
                 if (!torchLights.has(key)) {
@@ -4108,6 +4130,7 @@
         }
 
         function setBlockNoRebuild(x, y, z, type, dirtyChunks) {
+            const oldType=getBlock(x,y,z);
             resetMicroBlock(x, y, z);
             modifiedColumns.add(`${x},${z}`);
             const colKey = `${x},${z}`;
@@ -4115,6 +4138,9 @@
             if (curMinY === undefined || y < curMinY) columnMinY.set(colKey, y);
             const key = `${x},${y},${z}`;
             worldMap.set(key, type);
+            expansionBlockChanged(x,y,z,oldType,type);
+            const chunkKey=`${Math.floor(x/CHUNK_SIZE)},${Math.floor(z/CHUNK_SIZE)}`;
+            chunkMaxY.set(chunkKey,Math.max(chunkMaxY.get(chunkKey)||-999,y));
 
             if (type === 16) {
                 if (!torchLights.has(key)) {
@@ -4166,66 +4192,13 @@
             }
         }
 
-        function checkPortalAt(cx, cy, cz) {
-            let count = 0;
-            for (let dx = -1; dx <= 1; dx++) {
-                for (let dz = -1; dz <= 1; dz++) {
-                    if (dx === 0 && dz === 0) continue;
-                    if (getBlock(cx + dx, cy, cz + dz) === 32) count++;
-                }
-            }
-            return count >= 8 && getBlock(cx, cy, cz) === 0;
+        function isNetherPortalCenter(x,y,z) {
+            return getBlock(x,y,z) === NETHER_PORTAL_ID;
         }
 
-        function isNetherPortalCenter(cx, cy, cz) {
-            if (getBlock(cx, cy, cz) !== LAVA_ID) return false;
-            let count = 0;
-            for (let dx = -1; dx <= 1; dx++) {
-                for (let dz = -1; dz <= 1; dz++) {
-                    if (dx === 0 && dz === 0) continue;
-                    if (getBlock(cx + dx, cy, cz + dz) === 32) count++;
-                }
-            }
-            return count >= 8;
-        }
+        function tryCreateNetherPortalNear(x,y,z) { return activatePortalNear(x,y,z); }
 
-        function tryCreateNetherPortalNear(x, y, z) {
-            for (let dx = -1; dx <= 1; dx++) {
-                for (let dz = -1; dz <= 1; dz++) {
-                    const cx = x + dx;
-                    const cz = z + dz;
-                    if (checkPortalAt(cx, y, cz)) {
-                        setBlock(cx, y, cz, LAVA_ID);
-                        showToast("Nether portal opened.");
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
-
-        function teleportToDimension(nextDimension) {
-            clearCombatState();
-            resetPlayerFlight();
-            currentDimension = nextDimension;
-            heightCache.clear();
-            chunkMeshes.forEach(meshes => {
-                for (let type in meshes) {
-                    scene.remove(meshes[type]);
-                    if (meshes[type].geometry) meshes[type].geometry.dispose();
-                }
-            });
-            chunkMeshes.clear();
-            rebuildQueue.clear();
-            chunkQueue.length = 0;
-            lastChunkX = -999;
-            lastChunkZ = -999;
-            const spawnY = getSurfaceHeight(Math.round(camera.position.x), Math.round(camera.position.z)) + 4;
-            camera.position.y = Math.max(spawnY, 12);
-            velocity.set(0, 0, 0);
-            updateChunks(camera.position);
-            showToast(nextDimension === 'nether' ? "Entered the Nether." : "Returned to Overworld.");
-        }
+        function teleportToDimension(nextDimension) { travelThroughPortal(nextDimension); }
 
         const railShapes = new Map();
         function isRailBlockAt(x, y, z) {
@@ -4294,50 +4267,8 @@
             return `${x},${y},${z}`;
         }
 
-        function enqueueWaterFlow(x, y, z) {
-            if (currentDimension === 'nether') return;
-            if (selectedTerrain === 'moon') return;
-            if (y > SEA_LEVEL + 3) return;
-            const key = waterFlowKey(x, y, z);
-            if (queuedWaterFlow.has(key)) return;
-            queuedWaterFlow.add(key);
-            waterFlowQueue.push({ x, y, z });
-        }
-
-        function hasNeighborWater(x, y, z) {
-            const offsets = [[1,0,0], [-1,0,0], [0,0,1], [0,0,-1], [0,1,0]];
-            for (let off of offsets) {
-                if (isWaterBlock(getBlock(x + off[0], y + off[1], z + off[2]))) return true;
-            }
-            return false;
-        }
-
-        function drainNearbyWaterSurface(x, y, z, dirtyChunks) {
-            waterFlowCount++;
-            if (waterFlowCount % WATER_FLOW_DRAIN_EVERY !== 0) return;
-            const maxRadius = 7;
-            for (let r = 0; r <= maxRadius; r++) {
-                for (let dx = -r; dx <= r; dx++) {
-                    for (let dz = -r; dz <= r; dz++) {
-                        if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
-                        const sx = x + dx;
-                        const sz = z + dz;
-                        if (getBlock(sx, SEA_LEVEL, sz) === 24) {
-                            setBlockNoRebuild(sx, SEA_LEVEL, sz, 0, dirtyChunks);
-                            return;
-                        }
-                    }
-                }
-            }
-        }
-
-        function spreadWaterFrom(x, y, z) {
-            enqueueWaterFlow(x + 1, y, z);
-            enqueueWaterFlow(x - 1, y, z);
-            enqueueWaterFlow(x, y, z + 1);
-            enqueueWaterFlow(x, y, z - 1);
-            enqueueWaterFlow(x, y - 1, z);
-        }
+        function enqueueWaterFlow(x,y,z) { queueFluidNeighbors(x,y,z); }
+        function spreadWaterFrom(x,y,z) { queueFluidNeighbors(x,y,z); }
 
         function absorbWaterAround(x, y, z, radius = 4) {
             const dirtyChunks = new Set();
@@ -4362,32 +4293,10 @@
             return absorbed;
         }
 
-        function processWaterFlowQueue() {
-            if (waterFlowQueue.length === 0) return;
-            const dirtyChunks = new Set();
-            let processed = 0;
-            while (waterFlowQueue.length > 0 && processed < WATER_FLOW_PER_FRAME) {
-                const p = waterFlowQueue.shift();
-                queuedWaterFlow.delete(waterFlowKey(p.x, p.y, p.z));
-                processed++;
-
-                const current = getBlock(p.x, p.y, p.z);
-                if (current !== 0 && current !== 42) continue;
-                if (!hasNeighborWater(p.x, p.y, p.z)) continue;
-
-                setBlockNoRebuild(p.x, p.y, p.z, 24, dirtyChunks);
-                const touchesLava = [[1,0,0], [-1,0,0], [0,0,1], [0,0,-1], [0,1,0], [0,-1,0]]
-                    .some(off => getBlock(p.x + off[0], p.y + off[1], p.z + off[2]) === LAVA_ID);
-                if (touchesLava) {
-                    setBlockNoRebuild(p.x, p.y, p.z, OBSIDIAN_ID, dirtyChunks);
-                }
-                drainNearbyWaterSurface(p.x, p.y, p.z, dirtyChunks);
-                spreadWaterFrom(p.x, p.y, p.z);
-            }
-            addDirtyChunksToQueue(dirtyChunks);
-        }
+        function processWaterFlowQueue(delta) { tickWaterFlow(delta); }
 
         function getDroppedItemForBlock(blockType) {
+            if(blockType===NETHER_PORTAL_ID || blockType===FRIDGE_TOP_ID) return 0;
             if (blockType === 42) return 0;
             if (blockType === 9 || blockType === 10 || blockType === 11) return 8;
             if (blockType === 15) return 14;
@@ -4456,6 +4365,8 @@
         }
 
         function mineBlock(hit, useScanner) {
+            const furniture=furnitureRecord(hit.x,hit.y,hit.z);
+            if(furniture) hit=new THREE.Vector3(furniture.x,furniture.y,furniture.z);
             const targetType = getBlock(hit.x, hit.y, hit.z);
             if (targetType === 0) return;
 
@@ -4618,6 +4529,7 @@
             if (scannedRange) {
                 top = Math.max(top, scannedRange.maxY);
             }
+            if(currentDimension==='overworld' && worldFloodHeight!==null) top=Math.max(top,worldFloodHeight);
 
 	            const viewTop = Math.floor(camera.position.y + 120); // 增加上方视野，防止向上看时切断
             const viewBottom = Math.floor(camera.position.y - 180); // 摄像机往下 180 格
@@ -4692,10 +4604,13 @@
                         // 但对于 100 多层的深渊，必须完整渲染保证上下相连。
                         if (Math.abs(y - camera.position.y) > 300) continue; 
                         let type = getBlock(x, y, z);
+                        if(HOME_ITEMS[type] || type===FRIDGE_TOP_ID || type===FURNITURE_PART_ID) continue;
                         if (type !== 0) {
                             if (microRenderBlocks.has(microParentKey(x,y,z)) && isSolid(x,y,z)) continue;
                             let exposed = true;
-                            if (y < h) {
+                            if(type===24) {
+                                exposed=waterAmount(x,y,z)<8 || [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]].some(([dx,dy,dz])=>waterAmount(x+dx,y+dy,z+dz)<8);
+                            } else if (y < h) {
                                 // 使用极速透明检测函数，大幅减少多余计算
                                 exposed = isTransparent(x, y+1, z) || 
                                           isTransparent(x+1, y, z) || 
@@ -4750,6 +4665,10 @@
                 } else {
                     matrix.identity();
                     matrix.setPosition(b.x, b.y, b.z);
+                    if(b.type===24) {
+                        const height=waterAmount(b.x,b.y,b.z)/8;
+                        matrix.makeScale(1,height,1);matrix.setPosition(b.x,b.y-0.5+height/2,b.z);
+                    }
                 }
                 let idx = typeIndices[b.type];
                 instancedMeshes[b.type].setMatrixAt(idx, matrix);
@@ -4765,6 +4684,8 @@
         }
 
         function generateHouseData(cx, cz) {
+            if(currentDimension==='nether') return;
+            if(selectedTerrain==='city' && currentDimension==='overworld') {generateCityChunk(cx,cz);return;}
             let key = `house_${cx},${cz}`;
             if (worldMap.has(key)) return;
             worldMap.set(key, true);
@@ -4831,6 +4752,8 @@
         }
 
         function generateTrees(cx, cz) {
+            if(currentDimension==='nether') return;
+            if(selectedTerrain==='city' && currentDimension==='overworld') return;
             let key = `trees_${cx},${cz}`;
             if (worldMap.has(key)) return;
             worldMap.set(key, true);
@@ -4947,6 +4870,7 @@
         
         controls.addEventListener('unlock', () => {
             clearMovementInput();
+            if(document.getElementById('home-panel')?.hidden===false || document.getElementById('command-panel')?.hidden===false) return;
             let ui1 = document.getElementById('autobuild-ui');
             let ui2 = document.getElementById('trade-ui');
             let ui3 = document.getElementById('cooked-meat-ui');
@@ -5015,8 +4939,9 @@
         window.addEventListener('blur', clearMovementInput);
 
         function getEnvironmentTypeAt(x, y, z) {
-            return isTinyMode() ? getMicroType(microCellAt(x, y, z))
-                : getBlock(Math.floor(x + 0.5), Math.floor(y + 0.5), Math.floor(z + 0.5));
+            const bx=Math.floor(x+0.5),by=Math.floor(y+0.5),bz=Math.floor(z+0.5);
+            const type=isTinyMode() ? getMicroType(microCellAt(x,y,z)) : getBlock(bx,by,bz);
+            return type===24 && getBlock(bx,by,bz)===24 && y>=by-0.5+waterAmount(bx,by,bz)/8 ? 0 : type;
         }
 
         function getPlayerEnvironment(pos = camera.position) {
@@ -5027,17 +4952,20 @@
             const n = level ? microDivisions(level) : 1, size = 1 / n;
             const lo = min.map(v => Math.floor((v+0.5)*n));
             const hi = max.map(v => Math.floor((v+0.5)*n));
-            let waterVolume = 0, onLadder = false;
+            let waterVolume = 0, lavaVolume = 0, onLadder = false;
             // Read the same voxel grid as collision, including placed miniature water and ladders.
             for (let x=lo[0]; x<=hi[0]; x++) for (let y=lo[1]; y<=hi[1]; y++) for (let z=lo[2]; z<=hi[2]; z++) {
                 const type = level ? getMicroType(microCell(x,y,z,level)) : getBlock(x,y,z);
                 if (type === 7) onLadder = true;
-                if (type !== 24) continue;
+                if (type !== 24 && type !== LAVA_ID) continue;
                 const corner = [x/n-0.5, y/n-0.5, z/n-0.5];
-                waterVolume += corner.reduce((volume,v,i) => volume * Math.max(0, Math.min(max[i],v+size)-Math.max(min[i],v)), 1);
+                const [bx,by,bz]=corner.map(v=>Math.floor(v+size/2+0.5));
+                const waterTop=getBlock(bx,by,bz)===24?Math.min(corner[1]+size,by-0.5+waterAmount(bx,by,bz)/8):corner[1]+size;
+                const overlap=corner.reduce((volume,v,i) => volume * Math.max(0, Math.min(max[i],i===1?waterTop:v+size)-Math.max(min[i],v)), 1);
+                if(type===LAVA_ID) lavaVolume+=overlap;else waterVolume+=overlap;
             }
             const volume = max.reduce((v,edge,i) => v * (edge-min[i]), 1);
-            return { onLadder, waterFraction: Math.min(1, waterVolume / volume),
+            return { onLadder, waterFraction: Math.min(1, waterVolume / volume), lavaFraction: Math.min(1,lavaVolume/volume),
                 headInWater: getEnvironmentTypeAt(pos.x,pos.y,pos.z) === 24 };
         }
 
@@ -5084,6 +5012,11 @@
 
         document.addEventListener('keydown', (e) => {
             if (isTextEntryTarget(e.target)) return;
+            if(e.code==='Slash' && isGameStarted) {e.preventDefault();openCommandPanel();return;}
+            if(e.code==='KeyE' && document.getElementById('home-panel')?.hidden===false) {closeFurniturePanel();return;}
+            if(e.code==='KeyE' && drivingCar) {e.preventDefault();leaveCityCar();return;}
+            if(e.code==='Space' && drivingCar) {e.preventDefault();carBraking=true;drivingCar.speed=0;return;}
+            if((e.code==='KeyE'||e.code==='Space') && seatedAt) {e.preventDefault();standFromChair();return;}
             if (controls.isLocked && !e.repeat && e.code === 'KeyR' && activeMech) { transformMech(); return; }
             if (controls.isLocked && !e.repeat && e.code === 'KeyX' && activeMech) { exitMech(); return; }
             if (controls.isLocked && !e.repeat && e.code === 'KeyF' && activeMech) { fireHandCannon(); return; }
@@ -5173,12 +5106,16 @@
         
         function updatePlayerMovement(playerDelta) {
             if (!controls.isLocked || !isGameStarted || isSleeping) return;
+            if(seatedAt) {velocity.set(0,0,0);return;}
+            if(drivingCar) {updateDrivingCar(playerDelta);return;}
             if (creativeFlying && !canCreativeFly()) resetPlayerFlight();
             const bx = Math.round(camera.position.x), bz = Math.round(camera.position.z);
             const environment = getPlayerEnvironment();
             const onLadder = environment.onLadder;
             if (onLadder) resolvePreciseFloorContact();
-            const inWaterPhys = environment.waterFraction > 0.00001;
+            const inLavaPhys=environment.lavaFraction>0.00001;
+            const liquidFraction=Math.min(1,environment.waterFraction+environment.lavaFraction);
+            const inWaterPhys = liquidFraction > 0.00001;
             const physicsScale = activeMech ? 1 : playerScale;
             let onGroundPhys = isTinyMode() || playerScale>1 || activeMech
                 ? checkScaledCollision(camera.position.clone().add(new THREE.Vector3(0,-0.004*Math.min(playerScale,1),0)))
@@ -5203,10 +5140,10 @@
                 if (moveBackward) velocity.y = -4 * physicsScale;
             } else if (inWaterPhys) {
                 // Buoyancy balances at the surface; drag prevents a long fall from carrying through the water.
-                velocity.y += (environment.waterFraction - 0.65) * 24 * physicsScale * playerDelta;
-                velocity.y *= Math.exp(-5 * playerDelta);
+                velocity.y += (liquidFraction - 0.65) * 24 * physicsScale * playerDelta;
+                velocity.y *= Math.exp(-(inLavaPhys?8:5) * playerDelta);
                 velocity.y = Math.max(-3*physicsScale, Math.min(3*physicsScale, velocity.y));
-                if (holdingSpace) velocity.y = 4 * physicsScale; // 水中游泳上升
+                if (holdingSpace) velocity.y = (inLavaPhys?2:4) * physicsScale;
             } else if (holdingSpace) {
                 if (onGroundPhys && (!activeMech || activeMech.form==='robot')) velocity.y = 8 * physicsScale;
                 holdingSpace = false;
@@ -5220,7 +5157,7 @@
 
             const tiredMultiplier = playerTired && !creativeFlying ? TIRED_WALK_MULTIPLIER : 1;
             const waterSlowsMovement = inWaterPhys && !creativeFlying;
-            let moveSpeed = (waterSlowsMovement ? 25.0 : 50.0) * tiredMultiplier * physicsScale;
+            let moveSpeed = (waterSlowsMovement ? (inLavaPhys?12:25) : 50.0) * tiredMultiplier * physicsScale;
             if(activeMech && !waterSlowsMovement && !creativeFlying) moveSpeed=activeMech.form==='vehicle'?MECH_TYPES[activeMech.id].speed*10:45;
             if (moveForward || moveBackward) {
                 velocity.z -= direction.z * moveSpeed * playerDelta;
@@ -5316,6 +5253,7 @@
 
         // --- 强制刷新所有区块并重生 ---
         function findSafeSpawn() {
+            if(selectedTerrain==='city') return {x:1,y:16.5+getPlayerHeight(),z:1};
             for (let attempt = 0; attempt < 200; attempt++) {
                 const x = Math.floor(Math.random() * 1000 - 500);
                 const z = Math.floor(Math.random() * 1000 - 500);
@@ -5332,6 +5270,7 @@
             clearMech();
             clearCombatState();
             resetPlayerFlight();
+            clearExpansionWorld();
             // 清理旧区块
             for (let meshes of chunkMeshes.values()) {
                 for (const mesh of Object.values(meshes)) scene.remove(mesh);
@@ -5395,7 +5334,7 @@
 
         let currentBlock = 2; 
         window.switchTab = function(tabId, btnElement) {
-            ['tab-build', 'tab-life', 'tab-weapon', 'tab-redstone', 'tab-mods'].forEach(id => {
+            ['tab-build', 'tab-life', 'tab-weapon', 'tab-redstone', 'tab-mods', 'tab-home'].forEach(id => {
                 document.getElementById(id).style.display = 'none';
             });
             document.getElementById('tab-' + tabId).style.display = 'flex';
@@ -5472,6 +5411,7 @@
         }
 
         function isSolidType(b) {
+            if(b===NETHER_PORTAL_ID || b===92) return false;
             // Ladders, open doors, water, rails, redstone, levers, and grass are passable. Leaves are solid.
             if (b === 0 || b === 7 || b === 10 || b === 11 || b === 19 || b === 20 || b === 24 || b === 25 || b === 26 || b === 27 || b === 28 || b === 30 || b === 31 || b === 42 || b === LAVA_ID || b === GLASS_SENSOR_DOOR_OPEN_ID || b === PRESSURE_PLATE_ID) return false;
             return true;
@@ -5501,6 +5441,7 @@
         }
 
         function checkScaledCollision(pos) {
+            if(playerHitsCityCar(pos)) return true;
             const radius = getPlayerRadius(), epsilon = Math.min(playerScale,1)*0.00002;
             const min = [pos.x-radius+epsilon, pos.y-getPlayerHeight()+epsilon, pos.z-radius+epsilon];
             const max = [pos.x+radius-epsilon, pos.y+0.2*playerScale-epsilon, pos.z+radius-epsilon];
@@ -5551,6 +5492,7 @@
         }
 
         function checkCollision(pos) {
+            if(playerHitsCityCar(pos)) return true;
             if (isTinyMode() || playerScale>1 || activeMech) return checkScaledCollision(pos);
             const playerHeight = getPlayerHeight();
             const playerRadius = getPlayerRadius();
@@ -5653,6 +5595,7 @@
         }
 
         function isMovableByPiston(type) {
+            if(HOME_ITEMS[type] || type===FRIDGE_TOP_ID || type===FURNITURE_PART_ID || type===NETHER_PORTAL_ID) return false;
             return type !== 0 && type !== BARRIER_ID && type !== LAVA_ID && type !== 24 && type !== 25 &&
                 type !== 30 && type !== 31 && type !== 32 && type !== PISTON_ID;
         }
@@ -5833,7 +5776,8 @@
         function disposeModModel(model) {
             if (!model) return;
             scene.remove(model);
-            model.traverse(obj=>{if(obj.isMesh) {obj.geometry.dispose();obj.material.dispose();}});
+            model.userData.screen?.texture.dispose();
+            model.traverse(obj=>{if(obj.isMesh) {obj.getRenderTarget?.().dispose();obj.geometry.dispose();obj.material.dispose();}});
         }
 
         function updateMechHUD() {
@@ -5979,6 +5923,7 @@
         }
 
         function spawnMobFromEgg(id,x,y,z) {
+            if(id===ENDER_EGG_ID) return spawnEnderman(x,y,z,true);
             let mob;
             if(id===67) {spawnVillagerAt(x,y,z);mob=villagers[villagers.length-1];}
             else {
@@ -5998,8 +5943,9 @@
         }
 
         function useSpawnEgg(id) {
-            if(![67,68,69].includes(id) || !hasInventoryItem(id)) {showToast('No spawn eggs left.');return false;}
-            if(zombies.length+creepers.length+villagers.length+animals.length>=80) {showToast('Mob limit reached.');return false;}
+            if(id===67 && currentDimension==='nether') {showToast('Villagers live in the Overworld.');return false;}
+            if(![67,68,69,ENDER_EGG_ID].includes(id) || !hasInventoryItem(id)) {showToast('No spawn eggs left.');return false;}
+            if(zombies.length+creepers.length+villagers.length+animals.length+endermen.length>=80) {showToast('Mob limit reached.');return false;}
             const dir=new THREE.Vector3();camera.getWorldDirection(dir);
             let previous=null;
             for(let d=0;d<=7;d+=0.04) {
@@ -6011,9 +5957,10 @@
                     const {x,y,z}=previous;
                     const clear=[0,42];
                     if(!isSolid(x,y-1,z) || !clear.includes(getBlock(x,y,z)) || !clear.includes(getBlock(x,y+1,z))) break;
+                    if(id===ENDER_EGG_ID && getBlock(x,y+2,z)!==0) break;
                     if(Math.hypot(x-camera.position.x,z-camera.position.z)<getPlayerRadius()+0.45 &&
                         y+1.5>camera.position.y-getPlayerHeight() && y-0.5<camera.position.y+0.2*playerScale) break;
-                    if([...zombies,...creepers,...villagers,...animals].some(m=>m.mesh.position.distanceTo(new THREE.Vector3(x,y,z))<0.8)) break;
+                    if([...zombies,...creepers,...villagers,...animals,...endermen].some(m=>m.mesh.position.distanceTo(new THREE.Vector3(x,y,z))<0.8)) break;
                     if(!consumeInventoryItem(id)) return false;
                     if(getBlock(x,y,z)===42) setBlock(x,y,z,0);
                     spawnMobFromEgg(id,x,y,z);updateInventoryCounts();playSound('place');
@@ -6169,7 +6116,7 @@
                     target.mesh.position.clone().add(new THREE.Vector3(0,0.4,0)));
             if(companionOrder && canReach(companionOrder.target)) return companionOrder.target;
             let best=null, distance=14;
-            for(const target of [...zombies,...creepers]) {
+            for(const target of [...zombies,...creepers,...endermen.filter(m=>m.anger>0)]) {
                 const d=target.mesh.position.distanceTo(ally.mesh.position);
                 if(d<distance && canReach(target)) {best=target;distance=d;}
             }
@@ -6178,6 +6125,7 @@
 
         function damageMob(entity, amount, source='player') {
             if (!entity || entity.dying || (source==='player' && isCompanion(entity))) return false;
+            if(entity.kind==='enderman') entity.anger=20;
             if(source==='player') companionOrder={target:entity,remaining:12};
             entity.hp = (entity.hp || 1) - amount;
             entity.hurtTimer = 0.35;
@@ -6301,6 +6249,7 @@
         }
 
         function spawnVillagerAt(x, y, z) {
+            if(currentDimension==='nether') return;
             const group = createVillagerModel();
             group.position.set(x, y, z);
             scene.add(group);
@@ -6335,6 +6284,7 @@
         }
 
         function spawnAnimal(type, x, y, z) {
+            if(currentDimension==='nether') return false;
             const safeSpot = isAnimalSpawnSafe(x, y, z) ? { x, y, z } : findSafeAnimalSpot(x, z);
             if (!safeSpot) return false;
             const mesh = createAnimalModel(type);
@@ -6361,6 +6311,8 @@
         }
 
         function spawnVillager() {
+            if(currentDimension==='nether') return;
+            if(selectedTerrain==='city' && currentDimension==='overworld') {populateCityStreets();return;}
             const angle = Math.random() * Math.PI * 2;
             const dist = 20 + Math.random() * 15;
             const x = camera.position.x + Math.cos(angle) * dist;
@@ -6586,6 +6538,7 @@
                 if (v.dying) continue;
 
                 v.timer -= delta;
+                if(v.merchantId) {v.timer=10;v.vx=0;v.vz=0;}
                 if (v.timer <= 0) {
                     v.timer = 2 + Math.random() * 3;
                     let angle = Math.random() * Math.PI * 2;
@@ -6992,7 +6945,7 @@
             }
             let closest=block?distance:range,entity=null;
             const ray=new THREE.Ray(origin,dir),box=new THREE.Box3(),intersection=new THREE.Vector3();
-            if(includeMobs) for(const mob of [...zombies,...creepers,...villagers,...animals]) {
+            if(includeMobs) for(const mob of [...zombies,...creepers,...villagers,...animals,...endermen]) {
                 if(mob.dying || mob.mesh.parent!==scene) continue;
                 mob.mesh.updateMatrixWorld(true);box.setFromObject(mob.mesh);
                 if(!ray.intersectBox(box,intersection)) continue;
@@ -7082,8 +7035,9 @@
             if (e.button === 0) cancelMining();
         });
         document.addEventListener('mousedown', (e) => {
-            e.preventDefault();
             if (!controls.isLocked) return;
+            e.preventDefault();
+            if(handleExpansionClick(e)) return;
             if (e.button !== 0) cancelMining();
             if (currentBlock >= 67 && currentBlock <= 71) {
                 if (e.button === 2) {
@@ -7679,6 +7633,7 @@
                                 setBlock(placePos.x, placePos.y, placePos.z, matId);
                             }
                             if (matId === 24 || matId === LAVA_ID || matId === WATER_BUCKET_ID) solidifyFluidContact(placePos.x, placePos.y, placePos.z);
+                            if (matId === OBSIDIAN_ID) activatePortalNear(placePos.x,placePos.y,placePos.z);
                             if (matId === DRY_SPONGE_ID) absorbWaterAround(placePos.x, placePos.y, placePos.z);
                             if (matId === 26 || matId === 27) updateRailsAround(placePos.x, placePos.y, placePos.z);
                             if (matId === PISTON_ID) {
@@ -7710,7 +7665,7 @@
                 redstone: [[28, 32], [30, 16], [52, 12], [53, 12], [26, 24], [27, 24], [29, 6]],
                 weapons: [[33, 1], [54, 1], [55, 1], [56, 1], [57, 1], [58, 1], [35, 1]],
                 nature: [[1, 32], [2, 32], [4, 24], [5, 24], [23, 24], [24, 8], [25, 12], [42, 32]],
-                mobs: [[67, 8], [68, 8], [69, 8]],
+                mobs: [[67, 8], [68, 8], [69, 8], [72, 8]],
                 mechs: [[70, 1], [71, 1]]
             };
             const pack = packs[type] || packs.builder;
@@ -8089,7 +8044,7 @@
             document.getElementById('coord-x').innerText = `X: ${Math.round(camera.position.x)}`;
             document.getElementById('coord-y').innerText = `Y: ${Math.round(camera.position.y)}`;
             document.getElementById('coord-z').innerText = `Z: ${Math.round(camera.position.z)}`;
-            document.getElementById('terrain-display').innerText = `Terrain: ${getTerrainName(selectedTerrain)}`;
+            document.getElementById('terrain-display').innerText = `Terrain: ${currentDimension==='nether'?'Nether':getTerrainName(selectedTerrain)}`;
             document.getElementById('mode-display').innerText = `Mode: ${isCreativeMode() ? (creativeFlying ? 'Creative / Flying' : 'Creative') : 'Survival'}`;
             updateRoomCodeFloat();
 
@@ -8171,7 +8126,9 @@
             let feetZ = Math.round(camera.position.z);
             let inLava = getEnvironmentTypeAt(camera.position.x,camera.position.y,camera.position.z) === LAVA_ID ||
                 getEnvironmentTypeAt(camera.position.x,camera.position.y-getPlayerHeight()+0.15*playerScale,camera.position.z) === LAVA_ID;
-            if (portalCooldown === 0 && (isNetherPortalCenter(feetX, feetY, feetZ) || isNetherPortalCenter(headX, headY, headZ))) {
+            const touchingPortal=isNetherPortalCenter(feetX,feetY,feetZ)||isNetherPortalCenter(headX,headY,headZ);
+            if(!touchingPortal) portalExitRequired=false;
+            if (portalCooldown === 0 && !portalExitRequired && touchingPortal) {
                 portalCooldown = 3;
                 teleportToDimension(currentDimension === 'nether' ? 'overworld' : 'nether');
             }
@@ -8248,7 +8205,9 @@
                 }
             }
             
-            if (selectedTerrain !== 'moon') {
+            if (currentDimension === 'nether') {
+                dirLight.intensity=0.35;
+            } else if (selectedTerrain !== 'moon') {
                 if (isDay) {
                     dirLight.intensity = Math.max(0.1, sunHeight * 0.8);
                     
@@ -8290,7 +8249,7 @@
                 updatePressurePlatesAndPistons(delta);
 
                 // 异步处理区块生成与重建，防止主线程卡死导致“鼠标一粘就失灵”
-                processWaterFlowQueue();
+                processWaterFlowQueue(delta);
                 processRebuildQueue();
                 
                 if (chunkQueue.length > 0 && performance.now() - lastChunkBuildTime >= CHUNK_BUILD_INTERVAL_MS) {
@@ -8321,6 +8280,7 @@
             updateDroppedItems(delta);
             updateExplosionParticles(delta);
             updateCombatEffects(delta);
+            updateWorldExpansion(delta);
             updateMicroVoxelOverlay(delta);
 
             // 移动白云
@@ -8337,6 +8297,7 @@
                 renderer.render(scene, updateMechView(delta));
         }
 
+        initWorldExpansion();
         initModIcons();
         animate();
     </script>
