@@ -138,7 +138,73 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
             buildingReset();setBlock(0,1,0,4);executeWorldCommand(parseWorldCommand('房子20×21 10层'));finishBuilding();executeWorldCommand({kind:'undo'});
         });
         await page.waitForFunction(()=>constructionRegions.length===0&&getBlock(0,1,0)===4);
+        await page.setViewportSize({width:1440,height:900});await page.waitForTimeout(100);
+        console.log(await page.evaluate(()=>{
+            buildingReset();const check=(ok,name)=>{if(!ok)throw Error(name);};
+            const phrase='城楼加城墙 长50 宽50 厚5 高10；四角城楼 高12 宽4 长4';
+            for(const text of [phrase,'城楼加城墙 长五十 宽五十 厚五 高十 然后四角城楼为高十二宽四长四','城墙加城楼 长50 宽50 厚5 高10','城墙 长50 宽50 厚5 高10 城楼 长4 宽4 高12']){
+                const p=parseWorldCommand(text);check(p.shape==='fortress'&&p.width===50&&p.depth===50&&p.thickness===5&&p.wallHeight===10&&p.towerWidth===4&&p.towerDepth===4&&p.towerHeight===12,'Combined grammar: '+text);
+            }
+            for(const text of ['城楼加城墙长50宽50厚5高10 四角城楼高8宽4长4','城楼加城墙长50宽50高10 四角城楼高12高13','城楼加城墙长10宽10厚5高10','城楼加城墙长50宽50然后用水把全世界填满']){
+                let bad=false;try{parseWorldCommand(text);}catch{bad=true;}check(bad,'Reject conflicting castle command');
+            }
+            executeWorldCommand(parseWorldCommand(phrase));finishBuilding();const r=constructionRegions.at(-1),at=(x,y,z)=>getBlock(r.x+x,r.y+y,r.z+z);
+            for(let x=0;x<5;x++)check(at(x,5,25)===59,'Five-thick connected wall');
+            check(at(2,10,25)===59&&at(2,11,25)===0,'Wall height is exactly ten');
+            check(at(0,12,0)===3&&at(25,12,25)===0&&at(25,0,25)===63,'Twelve-high towers and open courtyard');
+            for(let z=0;z<5;z++)check(at(25,1,z)===0&&at(25,2,z)===0,'Main gate runs through entire wall');
+            const queue=[[25,25]],seen=new Set(['25,25']);
+            for(let i=0;i<queue.length;i++)for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){
+                const x=queue[i][0]+dx,z=queue[i][1]+dz,key=`${x},${z}`;
+                if(x<0||z<0||x>=50||z>=50||seen.has(key)||isSolid(r.x+x,r.y+1,r.z+z)||isSolid(r.x+x,r.y+2,r.z+z))continue;
+                seen.add(key);queue.push([x,z]);
+            }
+            for(const x of [1,47])for(const z of [1,47])check(seen.has(`${x},${z}`),'Walk from courtyard into all four towers');
+            controls.isLocked=true;camera.position.set(r.x+5,r.y+2.1,r.z+25);holdingSpace=true;
+            for(let i=0;i<170;i++)updatePlayerMovement(1/60);check(camera.position.y>r.y+10,'Climb to the wall walkway');resetPlayerFlight();controls.isLocked=false;
+            const save=JSON.parse(JSON.stringify(saveWorldExpansion()));restoreConstruction();restoreWorldExpansion(save);check(at(2,10,25)===59&&at(0,12,0)===3,'Combined castle persists');
+            camera.position.set(62,42,-62);camera.lookAt(0,4,0);renderBuilding();
+            return 'PASS: Combined wall/tower dimensions, real five-thick walls, entrance passages into all four towers, wall climbing and persistence.';
+        }));
+        await page.screenshot({path:'/private/tmp/mc-combined-castle.png'});
+        await page.setViewportSize({width:390,height:844});await page.waitForTimeout(100);
+        await page.evaluate(()=>{camera.position.set(82,68,-82);camera.lookAt(0,3,0);renderBuilding();});
+        await page.screenshot({path:'/private/tmp/mc-combined-castle-mobile.png'});
+        await page.setViewportSize({width:1440,height:900});await page.waitForTimeout(100);
+        await page.evaluate(()=>{
+            camera.position.set(60,2.1,0);executeWorldCommand(parseWorldCommand('房子20×21 10层'));finishBuilding();
+            placeFurniture(144,0,1,0);camera.position.set(5,2.1,5);openFurniturePanel({id:139,key:'tablet',data:{}});
+        });
+        await page.getByRole('button',{name:'Launchers',exact:true}).click();
+        assert.match(await page.getByLabel('Mapped Buildings').textContent(),/House 2 \(60, 0\)/);
+        await page.getByRole('spinbutton',{name:'Target X',exact:true}).fill('60');
+        await page.getByRole('spinbutton',{name:'Target Z',exact:true}).fill('0');
+        await page.getByRole('button',{name:'Launch 1',exact:true}).click();
+        assert.equal(await page.evaluate(()=>nuclearMissiles.length),0);
+        assert(await page.getByRole('button',{name:'Confirm Launch 1',exact:true}).isVisible());
+        assert.match(await page.locator('#home-panel output[aria-live]').textContent(),/DANGER.*House 2/);
+        await page.screenshot({path:'/private/tmp/mc-launcher-building-warning.png'});
+        await page.getByRole('spinbutton',{name:'Target X',exact:true}).fill('61');
+        assert(!(await page.getByRole('button',{name:'Confirm Launch 1',exact:true}).isVisible()));
+        await page.getByRole('button',{name:'Launch 1',exact:true}).click();
+        await page.getByRole('button',{name:'Cancel',exact:true}).click();
+        assert.equal(await page.evaluate(()=>nuclearMissiles.length),0);
+        await page.evaluate(()=>{
+            for(let x=-64;x<=-60;x++)for(let y=1;y<=3;y++)setBlockNoRebuild(x,y,0,51,new Set());
+            launcherMapRefresh.time=0;updateNuclearMissiles(0);
+            if(launcherMapStructures().filter(m=>m.name.startsWith('Building')).length!==1)throw Error('Manual structure not mapped');
+            if(launchNuclearMissile(furnitureRecord(0,1,0),[60,1,0],0))throw Error('Unsafe launch bypasses confirmation');
+            const data=JSON.parse(JSON.stringify(saveWorldExpansion()));restoreConstruction();restoreWorldExpansion(data);
+            if(!launcherMapStructures().some(m=>m.name==='House 2'))throw Error('Saved house marker missing');
+        });
+        await page.getByRole('button',{name:'Launch 1',exact:true}).click();
+        await page.getByRole('button',{name:'Confirm Launch 1',exact:true}).click();
+        assert.equal(await page.evaluate(()=>nuclearMissiles.length),1);
+        await page.getByRole('combobox',{name:'Map range',exact:true}).selectOption('4.5');
+        await page.setViewportSize({width:390,height:844});await page.waitForTimeout(100);
+        assert(await page.evaluate(()=>{const d=document.querySelector('#home-panel .world-dialog');return d.scrollWidth<=d.clientWidth+1;}));
+        await page.screenshot({path:'/private/tmp/mc-launcher-building-warning-mobile.png'});
         assert.deepEqual(errors,[]);
-        console.log('PASS: Desktop/mobile canvas pixels and command controls, actual save-file reload, interrupted-job resume and undo.');
+        console.log('PASS: Desktop/mobile commands and launcher maps, actual save-file reload, undo, procedural/manual building markers, refreshed danger zones, cancel and explicit launch confirmation.');
     } finally {await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

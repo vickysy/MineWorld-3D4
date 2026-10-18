@@ -5,6 +5,7 @@ Object.assign(COMMAND_ITEMS,{'岩浆桶':140,'打火器':141,'打火石':141,'�
 const lavaAmounts=new Map(),lavaQueue=new Map(),burningBlocks=new Map(),fireVisuals=new Map(),craterColumns=new Map();
 const HEAT_OFFSETS=[[1,0,0],[-1,0,0],[0,0,1],[0,0,-1],[0,-1,0],[0,1,0]];
 const LAVA_BUCKET_VOLUME=128;
+const NUKE_BLAST_RADIUS=10;
 const FIRE_FUEL=new Set([4,5,7,8,9,10,11,12,14,15,16,25,42,82,83,84,90,91,92,97,118,126,137]);
 let lavaWriting=false,thermalBulkWrite=false,lavaElapsed=0,fireElapsed=0,thermalScanElapsed=0,nukeJobs=[];
 
@@ -232,29 +233,30 @@ function beginNuclearBlast(x,y,z,remote=false) {
     if(nukeJobs.some(j=>j.x===x&&j.y===y&&j.z===z)||nukeJobs.length>=4)return false;
     if(!remote&&requestRoomThermal('nuke',[x,y,z]))return true;
     setBlockNoRebuild(x,y,z,0,rebuildQueue);
-    nukeJobs.push({x,y,z,column:0});
+    nukeJobs.push({x,y,z,column:0,radius:NUKE_BLAST_RADIUS});
     if(!remote)broadcastRoomThermal('nuke',[x,y,z]);
     const firstParticle=explosionParticles.length;
-    spawnExplosionParticles(x,y,z,80);
-    for(let i=0;i<12;i++) {const a=i*Math.PI/6;spawnExplosionParticles(x+Math.cos(a)*12,y+6,z+Math.sin(a)*12,8);}
-    for(let i=firstParticle;i<explosionParticles.length;i++){const p=explosionParticles[i];p.mesh.scale.setScalar(3);p.velocity.multiplyScalar(4);p.life*=1.8;p.maxLife=p.life;}
+    spawnExplosionParticles(x,y,z,40);
+    for(let i=0;i<8;i++) {const a=i*Math.PI/4;spawnExplosionParticles(x+Math.cos(a)*3,y+2,z+Math.sin(a)*3,4);}
+    for(let i=firstParticle;i<explosionParticles.length;i++){const p=explosionParticles[i];p.mesh.scale.setScalar(1.5);p.velocity.multiplyScalar(1.5);p.life*=1.2;p.maxLife=p.life;}
     playSound('explosion');showToast('Nuclear blast: excavating crater...');
     for(const list of [zombies,creepers,villagers,animals,endermen])for(let i=list.length-1;i>=0;i--) {
         const p=list[i].mesh.position;
-        if(Math.hypot(p.x-x,p.z-z)<50&&p.y>y-50&&p.y<y+20){disposeModModel(list[i].mesh);list.splice(i,1);}
+        if(Math.hypot(p.x-x,p.z-z)<NUKE_BLAST_RADIUS&&p.y>y-NUKE_BLAST_RADIUS&&p.y<y+Math.ceil(NUKE_BLAST_RADIUS*0.36)){disposeModModel(list[i].mesh);list.splice(i,1);}
     }
     return true;
 }
 
 function tickNuclearBlast() {
     const job=nukeJobs[0];if(!job)return;
+    const radius=job.radius??NUKE_BLAST_RADIUS,diameter=radius*2,total=diameter*diameter;
     const dirty=new Set(),editing=commandEditing,started=performance.now();let columns=0;
     commandEditing=true;thermalBulkWrite=true;
     try {
-        // A 100-by-100 footprint with a hemispherical floor, never a cube or an unbounded clear loop.
-        while(job.column<10000&&columns++<160&&performance.now()-started<5) {
-            const dx=job.column%100-50,dz=Math.floor(job.column/100)-50;job.column++;
-            const radial=2500-(dx+0.5)**2-(dz+0.5)**2;if(radial<=0)continue;
+        // Persist each job's radius so an older partially excavated crater resumes without changing shape.
+        while(job.column<total&&columns++<160&&performance.now()-started<5) {
+            const dx=job.column%diameter-radius,dz=Math.floor(job.column/diameter)-radius;job.column++;
+            const radial=radius*radius-(dx+0.5)**2-(dz+0.5)**2;if(radial<=0)continue;
             const depth=Math.floor(Math.sqrt(radial)),x=job.x+dx,z=job.z+dz,low=job.y-depth,high=job.y-1+Math.ceil(depth*0.36);
             const key=`${x},${z}`,ranges=[...(craterColumns.get(key)||[]),[low,high]].sort((a,b)=>a[0]-b[0]),merged=[];
             for(const range of ranges) {const prev=merged[merged.length-1];if(prev&&range[0]<=prev[1]+1)prev[1]=Math.max(prev[1],range[1]);else merged.push([...range]);}
@@ -265,7 +267,7 @@ function tickNuclearBlast() {
             for(const [a,b] of [[cx,cz],[cx-1,cz],[cx+1,cz],[cx,cz-1],[cx,cz+1]])dirty.add(`${a},${b}`);
         }
     } finally {thermalBulkWrite=false;commandEditing=editing;addDirtyChunksToQueue(dirty);}
-    if(job.column>=10000){nukeJobs.shift();showToast('Crater complete.');}
+    if(job.column>=total){nukeJobs.shift();showToast('Crater complete.');}
 }
 
 function saveThermalWorld() {return {missiles:saveNuclearMissiles(),lava:Array.from(lavaAmounts),fires:Array.from(burningBlocks),craters:Array.from(craterColumns),jobs:nukeJobs.map(j=>({...j}))};}
@@ -278,7 +280,7 @@ function clearThermalWorld() {
 function restoreThermalWorld(data={}) {
     clearThermalWorld();
     for(const [map,entries] of [[lavaAmounts,data.lava],[burningBlocks,data.fires],[craterColumns,data.craters]])for(const [key,value] of entries||[])map.set(key,value);
-    nukeJobs=(data.jobs||[]).slice(0,4).map(j=>({...j}));
+    nukeJobs=(data.jobs||[]).slice(0,4).map(j=>({...j,radius:j.radius===undefined?50:Number.isSafeInteger(j.radius)&&j.radius>=1&&j.radius<=50?j.radius:NUKE_BLAST_RADIUS}));
     restoreNuclearMissiles(data.missiles);
     for(const [key,type] of worldMap)if(type===LAVA_ID)queueLavaCell(...key.split(',').map(Number));
 }

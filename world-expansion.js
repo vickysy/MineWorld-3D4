@@ -645,7 +645,7 @@ function initWorldExpansion() {
         .world-dialog header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}.world-dialog h2{font-size:22px;margin:0}
         .world-dialog button,.world-dialog select{padding:9px 12px;background:#385b63;color:white;border:1px solid #9cbbbf;border-radius:4px;cursor:pointer}
         .world-dialog textarea,.world-dialog input[type=text]{box-sizing:border-box;width:100%;font:16px sans-serif;background:#11191d;color:white;border:1px solid #9cbbbf;padding:12px;margin:10px 0}
-        .home-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0}.home-row span{flex:1;min-width:120px}
+        .home-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0}.home-row[hidden]{display:none}.home-row span{flex:1;min-width:120px}
         #home-content{display:grid;gap:12px}.home-game{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.home-game button{height:70px;font-size:26px}.home-game button.lit{background:#cf933e;color:#fff7ca}
         .surveillance-body{display:grid;gap:12px;min-width:0}.surveillance-body select{max-width:100%;margin-top:6px}
         .home-row button[aria-pressed=true]{background:#406f49;border-color:#b0d5a4}.surveillance-body output{font:13px monospace;color:#a5d9af}
@@ -804,7 +804,7 @@ function commandDimensions(text) {
 function parseWorldCommand(text) {
     const normalized=normalizeWorldCommand(text);
     if(/不要|别帮|别建|别做|不需要|不想|禁止/.test(normalized))throw new Error('这句话包含否定意思，请明确写出你要执行的操作。');
-    if(/然后|接着|再帮|并且/.test(normalized))throw new Error('请一次输入一个操作，每次检查后再执行。');
+    if(/然后|接着|再帮|并且/.test(normalized)&&!isFortressCommand(normalized))throw new Error('请一次输入一个操作，每次检查后再执行。');
     if(/^(?:请|帮我|请帮我|我想)?(?:撤销|取消上1个命令)(?:上1个命令|上1次操作|吧|1下)?$/.test(normalized)) return {kind:'undo',label:commandUndo?.kind==='construction'?'恢复大型建造前的整个世界，建造之后的其他修改也会撤回。':'撤销上一个命令'};
     if(/(取消|撤掉|清除).*(全世界|整个世界|全游戏|城市).*水/.test(normalized)) return {kind:'flood',height:null,label:'取消全世界统一水位'};
     if(/(?:去|到|找到|寻找|传送到)(学校|市场|地摊|足球场)(?:吧|一下|1下)?$/.test(normalized)) {
@@ -952,7 +952,7 @@ function initWorldCommands() {
     document.getElementById('command-form').onsubmit=e=>{e.preventDefault();preview();};
     document.getElementById('execute-command').onclick=()=>{if(commandPreview) executeWorldCommand(commandPreview);};
     document.getElementById('world-command').oninput=()=>{commandPreview=null;document.getElementById('execute-command').disabled=true;};
-    for(const label of ['房子20×21 每层高3 10层','城楼四角 间隔20 高12','场地100×100×100','城墙 厚5 长100 宽100','用水把全世界填满','查找冰箱','撤销']) {
+    for(const label of ['房子20×21 每层高3 10层','城楼加城墙 长50 宽50 厚5 高10；四角城楼 高12 宽4 长4','城楼四角 间隔20 高12','场地100×100×100','用水把全世界填满','查找冰箱','撤销']) {
         const b=document.createElement('button');b.textContent=label;b.onclick=()=>{document.getElementById('world-command').value=label;preview();};document.getElementById('command-presets').appendChild(b);
     }
 }

@@ -1,4 +1,4 @@
-const ROOM_PROTOCOL='daniel-mc-room-2', ROOM_PREFIX='daniel-mc-room2-';
+const ROOM_PROTOCOL='daniel-mc-room-3', ROOM_PREFIX='daniel-mc-room2-';
 const ROOM_TIMEOUT_MS=30000, ROOM_MAX_SAVE=16*1024*1024, ROOM_PACKET_CELLS=128;
 let multiplayerRoom=null, multiplayerMode='host', currentRoomCode='', remotePlayers={};
 
@@ -258,7 +258,8 @@ function receiveRoomGuest(r,entry,p) {
     if(p.type==='launcher-request') {
         if(p.dimension!==currentDimension||!Array.isArray(p.at)||p.at.length!==3||!p.at.every(Number.isSafeInteger))return;
         const launcher=furnitureRecord(...p.at);
-        if(launcher?.id===NUCLEAR_LAUNCHER_ID&&validLauncherTarget(launcher,p.target,p.port))launchNuclearMissile(launcher,p.target,p.port);
+        if(launcher?.id===NUCLEAR_LAUNCHER_ID&&validLauncherTarget(launcher,p.target,p.port)&&!launchNuclearMissile(launcher,p.target,p.port,p.confirmed===true))
+            sendRoomPacket(entry.conn,{type:'launcher-rejected'});
         return;
     }
     if(p.type==='thermal-request') {
@@ -321,6 +322,8 @@ function receiveRoomHost(r,entry,p) {
     } else if(p.type==='patch'&&r.worldReady) {
         if(p.seq<=r.seq)return;if(p.seq!==r.seq+1||p.dimension!==currentDimension)throw new Error('World revision mismatch');
         applyRoomCells(r,p.cells);r.seq=p.seq;
+    } else if(p.type==='launcher-rejected'&&r.worldReady) {
+        showToast('Host blocked the launch. Check buildings, confirm the target, and wait for the port to reload.');
     } else if(p.type==='launcher-shot'&&r.worldReady&&p.dimension===currentDimension) {
         if(nuclearMissiles.length<8&&Array.isArray(p.from)&&p.from.length===3&&p.from.every(n=>Number.isFinite(n)&&Math.abs(n)<=100001)&&validLauncherTarget({x:p.from[0],y:p.from[1],z:p.from[2]},p.target,p.port))createNuclearMissile(p.from,p.target,p.port);
     } else if(p.type==='thermal'&&r.worldReady&&validRoomThermal(p)) {

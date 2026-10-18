@@ -105,8 +105,8 @@ async function assertScenePixels(page) {
         const nuke=[cell[0]+120,cell[1],cell[2]+120];
         await host.evaluate(p=>setBlockNoRebuild(...p,22,new Set()),nuke);await guest.waitForFunction(p=>getBlock(...p)===22,nuke);
         await guest.evaluate(p=>igniteNuke(...p),nuke);
-        await host.waitForFunction(()=>craterColumns.size>7000&&!nukeJobs.length,{},{timeout:60000});
-        await guest.waitForFunction(()=>craterColumns.size>7000&&!nukeJobs.length,{},{timeout:60000});
+        await host.waitForFunction(()=>craterColumns.size>300&&craterColumns.size<400&&!nukeJobs.length,{},{timeout:60000});
+        await guest.waitForFunction(()=>craterColumns.size>300&&craterColumns.size<400&&!nukeJobs.length,{},{timeout:60000});
         assert.deepEqual(await host.evaluate(()=>Array.from(craterColumns)),await guest.evaluate(()=>Array.from(craterColumns)));
         console.log('PASS: Guest ignition, fire on stone, water extinguishing, shallow lava levels and nuclear crater geometry synchronize.');
         const launcher=[cell[0]+24,cell[1]+6,cell[2]+8],cctv=[cell[0]+22,cell[1]+6,cell[2]+8];

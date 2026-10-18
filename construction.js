@@ -16,6 +16,7 @@ function constructionTypeAt(x,y,z) {
         const r=list[i];if(!insideConstruction(r,x,y,z))continue;
         if(r.kind==='building')return buildingBlockAt(r,x-r.x,y-r.y,z-r.z);
         if(r.kind==='towers')return cornerTowerBlockAt(r,x-r.x,y-r.y,z-r.z);
+        if(r.kind==='fortress')return fortressBlockAt(r,x-r.x,y-r.y,z-r.z);
         if(r.kind==='wall')return 59;
         if(y===r.y)return 63;
         const edge=Math.min(x-r.x,z-r.z,r.x+r.width-1-x,r.z+r.depth-1-z)<r.thickness;
@@ -48,20 +49,66 @@ function buildingBlockAt(r,x,y,z) {
 
 function cornerTowerBlockAt(r,x,y,z) {
     if(y===0)return 63;
-    const size=r.towerSize,far=r.width-size;
-    const west=x<size,east=x>=far,north=z<size,south=z>=far;
+    const sx=r.towerWidth??r.towerSize,sz=r.towerDepth??r.towerSize,height=r.towerHeight??r.height;
+    if(y>height)return 0;
+    const farX=r.width-sx,farZ=r.depth-sz;
+    const west=x<sx,east=x>=farX,north=z<sz,south=z>=farZ;
     if(!(west||east)||!(north||south))return 0;
-    const u=west?x:x-far,v=north?z:z-far,roof=r.height-1;
-    const edge=u===0||v===0||u===size-1||v===size-1;
-    const corner=(u===0||u===size-1)&&(v===0||v===size-1);
-    if(y===r.height)return edge&&(corner||(u+v)%2===0)?3:0;
-    if(u===1&&v===size-2)return 7;
+    const u=west?x:x-farX,v=north?z:z-farZ,roof=height-1;
+    const edge=u===0||v===0||u===sx-1||v===sz-1;
+    const corner=(u===0||u===sx-1)&&(v===0||v===sz-1);
+    if(y===height)return edge&&(corner||(u+v)%2===0)?3:0;
+    if(u===1&&v===sz-2)return 7;
     if(y===roof||(y%4===0&&roof-y>=3))return 63;
     if(edge) {
-        if(u===(west?size-1:0)&&v===1&&y<=2)return 0;
+        const doorV=r.kind==='fortress'?(north?sz-2:1):1;
+        if(u===(west?sx-1:0)&&v===doorV&&y<=2)return 0;
         return corner?3:y%4===2?6:59;
     }
     return 0;
+}
+
+function fortressBlockAt(r,x,y,z) {
+    if(y===0)return 63;
+    const u=Math.min(x,r.width-1-x),v=Math.min(z,r.depth-1-z);
+    if(u<r.towerWidth&&v<r.towerDepth)return cornerTowerBlockAt(r,x,y,z);
+    if(y>r.wallHeight)return 0;
+    // A short passage keeps small towers accessible even when the wall is thicker than a tower.
+    const turn=Math.max(r.thickness,r.towerWidth),exit=Math.max(r.thickness,r.towerDepth);
+    if(y<=2&&((u>=r.towerWidth-1&&u<=turn&&v===r.towerDepth-2)||(u===turn&&v>=r.towerDepth-2&&v<=exit)))return 0;
+    if(y<=3&&z<r.thickness&&Math.abs(x-Math.floor(r.width/2))<=1)return 0;
+    if(x===r.thickness&&z===Math.floor(r.depth/2))return 7;
+    return Math.min(u,v)<r.thickness?59:0;
+}
+
+function isFortressCommand(text) {
+    return /城墙/.test(text)&&/城楼|角楼/.test(text)&&!/清理|清空|挖空|水|岩浆|撤销|删除|移除|发射|炸|城市|房子|场地|查找|寻找|搜索/.test(text);
+}
+
+function parseFortressCommand(text) {
+    if(!isFortressCommand(text))return null;
+    if(/[-+−]\d|\d[.．]\d/.test(text))throw new Error('城墙和城楼的尺寸必须是正整数。');
+    const source=text.replace(/(?:4角)?城楼(?:加|和|与|\+|搭配)城墙/,'城墙').replace(/城墙(?:加|和|与|\+)城楼/,'城墙');
+    const sections=Array.from(source.matchAll(/城墙|(?:4角)?城楼|角楼/g));
+    const values={};
+    for(let i=0;i<sections.length;i++){
+        const name=sections[i][0]==='城墙'?'wall':'tower';
+        if(values[name])throw new Error('请分别填写一组城墙尺寸和一组四角城楼尺寸。');
+        const part=source.slice(sections[i].index+sections[i][0].length,sections[i+1]?.index);
+        if(/\d+×\d+/.test(part))throw new Error('组合城堡请分别写长、宽、高和墙厚，避免混淆。');
+        const d={};for(const axis of ['长','宽','高','厚']){
+            const matches=Array.from(part.matchAll(new RegExp(axis+'(?:度)?(?:为|是|等于)?(\\d+)','g')));
+            if(matches.length>1)throw new Error('同一部分的'+axis+'只能填写一次。');if(matches.length)d[axis]=Number(matches[0][1]);
+        }values[name]=d;
+    }
+    const w=values.wall||{},t=values.tower||{},width=w.长,depth=w.宽,thickness=w.厚??1,wallHeight=w.高??10;
+    const towerWidth=t.长??4,towerDepth=t.宽??4,towerHeight=t.高??wallHeight+2;
+    if(![width,depth,thickness,wallHeight,towerWidth,towerDepth,towerHeight].every(Number.isSafeInteger)||
+        width>200||depth>200||width<=2*Math.max(thickness,towerWidth)+2||depth<=2*Math.max(thickness,towerDepth)+2||
+        thickness<1||thickness>20||wallHeight<3||towerHeight<wallHeight+2||towerHeight>200||towerWidth<4||towerWidth>16||towerDepth<4||towerDepth>16||t.厚!==undefined)
+        throw new Error('请补全城墙长宽：最大200格，墙厚1到20格、高至少3格；城楼长宽4到16格，比城墙至少高2格，总高不超过200格，并留出中间庭院。');
+    return {kind:'construction',shape:'fortress',width,depth,height:towerHeight,thickness,wallHeight,towerWidth,towerDepth,towerHeight,
+        label:`城楼加城墙：总占地${width}×${depth}格，城墙厚${thickness}、高${wallHeight}格；四角各一座${towerWidth}×${towerDepth}、高${towerHeight}格的城楼。城楼与围墙连接，有大门、通往庭院的通道和登顶爬梯，中间不封顶。会替换范围内建筑；需单人执行，撤销恢复整个世界，请先保存。`};
 }
 
 function parseBuildingCommand(text) {
@@ -109,6 +156,7 @@ function parseBuildingCommand(text) {
 }
 
 function parseConstructionCommand(text) {
+    const fortress=parseFortressCommand(text);if(fortress)return fortress;
     const building=parseBuildingCommand(text);if(building)return building;
     if((!/field|场地|庭院|院子|城墙|围墙|wall|墙|空间/.test(text)&&!/^\d+(?:×\d+){1,2}$/.test(text))||/清理|清空|挖空|填水/.test(text))return null;
     if(/[-+−]\d|\d[.．]\d/.test(text))throw new Error('尺寸必须是正整数。');
@@ -152,6 +200,7 @@ function startConstruction(plan) {
     if(plan.shape==='building'&&plan.floorHeight<getPlayerHeight()+0.2*playerScale){showCommandStatus('当前人物太高，请先恢复正常大小，或增加每层净高。');return false;}
     const r={kind:plan.shape,width:plan.width,depth:plan.depth,height:plan.height,thickness:plan.thickness,
         floors:plan.floors,floorHeight:plan.floorHeight,towerSize:plan.towerSize,gap:plan.gap,
+        wallHeight:plan.wallHeight,towerWidth:plan.towerWidth,towerDepth:plan.towerDepth,towerHeight:plan.towerHeight,
         x:Math.round(camera.position.x)-Math.floor(plan.width/2),y:Math.round(camera.position.y-getPlayerHeight()-0.5),
         z:Math.round(camera.position.z)-Math.floor(plan.depth/2)};
     if(r.kind==='wall')r.z=Math.round(camera.position.z)-r.depth-3;
@@ -191,7 +240,7 @@ function tickConstruction() {
         camera.position.y=r.y+0.5+getPlayerHeight();velocity.set(0,0,0);
     }
     commandJob=null;showCommandStatus(r.kind==='wall'?'墙体已完成。':r.kind==='building'?`${r.floors}层楼房已完成。`:
-        r.kind==='towers'?'四角城楼已完成，中间为露天庭院。':'已完成。场地没有屋顶。');
+        r.kind==='fortress'?'城墙和四角城楼已一起完成。':r.kind==='towers'?'四角城楼已完成，中间为露天庭院。':'已完成。场地没有屋顶。');
 }
 
 function undoConstruction() {
