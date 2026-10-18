@@ -122,6 +122,51 @@ async function assertScenePixels(page) {
         assert.deepEqual(await host.evaluate(()=>Array.from(craterColumns)),await guest.evaluate(()=>Array.from(craterColumns)));
         console.log('PASS: Guest camera pan and tablet launch reach the host; both players receive the missile and the same crater.');
 
+        const machine=[cell[0]+5,cell[1]+10,cell[2]-10];
+        await host.evaluate(p=>{
+            const [x,y,z]=p;
+            for(let dx=-3;dx<=35;dx++)for(let dz=-2;dz<=2;dz++)for(let dy=-1;dy<=5;dy++)setBlockNoRebuild(x+dx,y+dy,z+dz,dy===-1?3:0,rebuildQueue);
+            setBlockNoRebuild(x,y,z,PISTON_ID,rebuildQueue);pistonDirections.set(p.join(','),{x:1,y:0,z:0});pistonModes.set(p.join(','),'cycle');
+            setBlockNoRebuild(x,y-1,z,134,rebuildQueue);hiddenRedstone.add(`${x},${y-1},${z}`);circuitDirty=true;
+            setBlockNoRebuild(x-1,y-1,z,30,rebuildQueue);setBlockNoRebuild(x+1,y,z,3,rebuildQueue);
+        },machine);
+        await guest.waitForFunction(p=>getBlock(...p)===PISTON_ID&&pistonDirections.get(p.join(','))?.x===1&&hiddenRedstone.has(`${p[0]},${p[1]-1},${p[2]}`),machine);
+        await guest.evaluate(p=>setBlockNoRebuild(p[0]-1,p[1]-1,p[2],31,rebuildQueue),machine);
+        await host.waitForFunction(p=>pistonStates.has(p.join(',')),machine);
+        await guest.waitForFunction(p=>pistonStates.has(p.join(','))&&getBlock(p[0]+2,p[1],p[2])===3,machine);
+        await guest.evaluate(p=>setBlockNoRebuild(p[0]-1,p[1]-1,p[2],30,rebuildQueue),machine);
+        await host.waitForFunction(p=>!pistonStates.has(p.join(','))&&getBlock(p[0]+1,p[1],p[2])===3,machine);
+        await guest.waitForFunction(p=>!pistonStates.has(p.join(','))&&getBlock(p[0]+1,p[1],p[2])===3,machine);
+        await host.evaluate(p=>{setBlockNoRebuild(p[0]+1,p[1],p[2],TNT_ID,rebuildQueue);setBlockNoRebuild(p[0]+1,p[1]+1,p[2],TNT_ID,rebuildQueue);},machine);
+        await guest.waitForFunction(p=>getBlock(p[0]+1,p[1],p[2])===TNT_ID,machine);
+        await guest.evaluate(p=>setBlockNoRebuild(p[0]-1,p[1]-1,p[2],31,rebuildQueue),machine);
+        await host.waitForFunction(()=>movingTNT.size===2);
+        await guest.waitForFunction(()=>movingTNT.size===2);
+        await host.waitForFunction(()=>!movingTNT.size,{},{timeout:20000});
+        await guest.waitForFunction(()=>!movingTNT.size,{},{timeout:20000});
+        const impact=await host.evaluate(p=>[...worldMap].filter(([key,type])=>{
+            const [x,y,z]=key.split(',').map(Number);return type===0&&x>p[0]+15&&x<p[0]+35&&y===p[1]-1&&Math.abs(z-p[2])<3;
+        }).map(([key])=>key.split(',').map(Number)),machine);
+        assert(impact.length>0);await guest.waitForFunction(cells=>cells.every(p=>getBlock(...p)===0),impact);
+        assert.equal(await guest.evaluate(p=>getBlock(...p),machine),53);
+        console.log('PASS: Guest lever drives host piston, hidden wire/direction and gate synchronize, both players see two TNT projectiles and the same distant impact.');
+
+        const door=[machine[0],machine[1],machine[2]+8];
+        await host.evaluate(p=>{
+            const [x,y,z]=p;
+            for(let dx=-12;dx<=4;dx++)for(let dz=-1;dz<=1;dz++)for(let dy=-1;dy<=3;dy++)setBlockNoRebuild(x+dx,y+dy,z+dz,dy===-1?3:0,rebuildQueue);
+            setBlockNoRebuild(x,y,z,PISTON_ID,rebuildQueue);pistonDirections.set(p.join(','),{x:1,y:0,z:0});pistonModes.set(p.join(','),'door');
+            setBlockNoRebuild(x+1,y,z,6,rebuildQueue);
+            for(let dx=-10;dx<0;dx++)setBlockNoRebuild(x+dx,y,z,REDSTONE_DUST_ID,rebuildQueue);
+            setBlockNoRebuild(x-11,y,z,BUTTON_ID,rebuildQueue);buttonFaces.set(`${x-11},${y},${z}`,{x:0,y:1,z:0});
+        },door);
+        await guest.waitForFunction(p=>pistonModes.get(p.join(','))==='door'&&pistonStates.has(p.join(','))&&getBlock(p[0]-11,p[1],p[2])===BUTTON_ID,door);
+        await guest.evaluate(p=>pressMachineButton(p[0]-11,p[1],p[2]),door);
+        await guest.waitForFunction(p=>!pistonStates.has(p.join(','))&&getBlock(p[0]+2,p[1],p[2])===0,door);
+        await guest.waitForFunction(p=>pistonStates.has(p.join(','))&&getBlock(p[0]+2,p[1],p[2])===6&&!(buttonTimers.get(`${p[0]-11},${p[1]},${p[2]}`)||0),door);
+        assert(await host.evaluate(p=>pistonStates.has(p.join(','))&&!buttonTimers.size,door));
+        console.log('PASS: Guest button opens a normally-closed door through a long dust wire; the host releases the pulse and both players see it close.');
+
         await guest.evaluate(()=>{controls.unlock();});await guest.waitForFunction(()=>!controls.isLocked);
         await guest.locator('#pause-room-btn').click();await guest.locator('#leave-room-btn').click();
         await host.waitForFunction(()=>Object.keys(remotePlayers).length===0);

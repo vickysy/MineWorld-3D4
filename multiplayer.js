@@ -1,4 +1,4 @@
-const ROOM_PROTOCOL='daniel-mc-room-3', ROOM_PREFIX='daniel-mc-room2-';
+const ROOM_PROTOCOL='daniel-mc-room-4', ROOM_PREFIX='daniel-mc-room2-';
 const ROOM_TIMEOUT_MS=30000, ROOM_MAX_SAVE=16*1024*1024, ROOM_PACKET_CELLS=128;
 let multiplayerRoom=null, multiplayerMode='host', currentRoomCode='', remotePlayers={};
 
@@ -225,7 +225,7 @@ function displayRoomPlayer(id,p) {
 }
 
 function roomCellValid(cell) {
-    return Array.isArray(cell)&&cell.length===4&&cell.every(Number.isSafeInteger)&&cell.slice(0,3).every(n=>Math.abs(n)<=100000)&&cell[3]>=0&&cell[3]<=144;
+    return Array.isArray(cell)&&cell.length===4&&cell.every(Number.isSafeInteger)&&cell.slice(0,3).every(n=>Math.abs(n)<=100000)&&cell[3]>=0&&cell[3]<=147;
 }
 
 function applyRoomCells(r,cells) {
@@ -236,6 +236,7 @@ function applyRoomCells(r,cells) {
             if(!roomCellValid(change.cell))throw new Error('Invalid cell');
             const [x,y,z,id]=change.cell,key=`${currentDimension}|${x},${y},${z}`;
             setBlockNoRebuild(x,y,z,id,dirty);
+            applyMachineCellData(x,y,z,change.machine);
             if(id===LAVA_ID&&Number.isInteger(change.lava)&&change.lava>0&&change.lava<=8)lavaAmounts.set(`${x},${y},${z}`,change.lava);
             if(id===24&&Number.isInteger(change.water)&&change.water>0&&change.water<=8)waterAmounts.set(`${x},${y},${z}`,change.water);
             if(HOME_ITEMS[id]&&change.furniture&&typeof change.furniture==='object') {
@@ -266,6 +267,7 @@ function receiveRoomGuest(r,entry,p) {
         if(!validRoomThermal(p))return;
         if(p.action==='nuke'&&getBlock(...p.at)===NUKE_ID)beginNuclearBlast(...p.at);
         else if(p.action==='ignite')igniteThermalTarget(...p.at,p.air);
+        else if(p.action==='button')pressMachineButton(...p.at);
         return;
     }
     if(p.type==='pos'&&validateRoomPosition(p)) {
@@ -322,6 +324,8 @@ function receiveRoomHost(r,entry,p) {
     } else if(p.type==='patch'&&r.worldReady) {
         if(p.seq<=r.seq)return;if(p.seq!==r.seq+1||p.dimension!==currentDimension)throw new Error('World revision mismatch');
         applyRoomCells(r,p.cells);r.seq=p.seq;
+    } else if(['machines','machine-blast'].includes(p.type)&&r.worldReady) {
+        receiveMachinePacket(p);
     } else if(p.type==='launcher-rejected'&&r.worldReady) {
         showToast('Host blocked the launch. Check buildings, confirm the target, and wait for the port to reload.');
     } else if(p.type==='launcher-shot'&&r.worldReady&&p.dimension===currentDimension) {
@@ -354,7 +358,7 @@ function updateMultiplayer(now=performance.now()) {
     const cells=[];
     for(const [key,coords] of r.dirty) {
         const id=getBlock(...coords),furniture=furnitureData.get(`${currentDimension}|${key}`);
-        cells.push({cell:[...coords,id],...(id===LAVA_ID?{lava:lavaAmount(...coords)}:{}),...(id===24?{water:waterAmount(...coords)}:{}),...(furniture?{furniture}: {})});r.dirty.delete(key);
+        cells.push({cell:[...coords,id],...((id===PISTON_ID||id===BUTTON_ID||HIDDEN_BLOCKS[id])?{machine:machineCellData(...coords)}:{}),...(id===LAVA_ID?{lava:lavaAmount(...coords)}:{}),...(id===24?{water:waterAmount(...coords)}:{}),...(furniture?{furniture}: {})});r.dirty.delete(key);
         if(cells.length>=ROOM_PACKET_CELLS)break;
     }
     if(!cells.length)return;
@@ -375,7 +379,7 @@ function initMultiplayer() {
 
 function validRoomThermal(p) {
     const coords=a=>Array.isArray(a)&&a.length===3&&a.every(n=>Number.isSafeInteger(n)&&Math.abs(n)<=100000);
-    return p.dimension===currentDimension&&['ignite','nuke','extinguish'].includes(p.action)&&coords(p.at)&&
+    return p.dimension===currentDimension&&['ignite','nuke','extinguish','button'].includes(p.action)&&coords(p.at)&&
         (!p.air||(coords(p.air)&&p.air.reduce((n,v,i)=>n+Math.abs(v-p.at[i]),0)===1));
 }
 function requestRoomThermal(action,at,air) {

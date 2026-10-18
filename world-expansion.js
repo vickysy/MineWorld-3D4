@@ -80,6 +80,7 @@ function tickWaterFlow(delta=0.1) {
 
 function expansionBlockChanged(x,y,z,oldType,type) {
     if(!expansionReady) return;
+    machineBlockChanged(x,y,z,oldType,type);
     thermalBlockChanged(x,y,z,oldType,type);
     if(!waterWriting) {
         waterAmounts.delete(`${x},${y},${z}`);

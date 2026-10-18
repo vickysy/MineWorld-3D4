@@ -379,16 +379,17 @@
     <script src="three-r128.min.js"></script>
     <script src="three-pointer-lock-r128.js"></script>
     <script src="three-reflector-r128.js"></script>
-    <script src="world-expansion.js?v=20261018-castle-map"></script>
+    <script src="world-expansion.js?v=20261018-machines"></script>
     <script src="home-city.js?v=20261017-thermal1"></script>
     <script src="kitchen-home.js?v=20261016c"></script>
     <script src="city-life.js?v=20261016a"></script>
     <script src="surveillance.js?v=20261018-tools"></script>
     <script src="peerjs-1.5.5.min.js"></script>
-    <script src="multiplayer.js?v=20261018-castle-map"></script>
-    <script src="thermal-world.js?v=20261018-castle-map"></script>
+    <script src="multiplayer.js?v=20261018-machines"></script>
+    <script src="thermal-world.js?v=20261018-machines"></script>
     <script src="launchers.js?v=20261018-castle-map"></script>
     <script src="construction.js?v=20261018-castle-map"></script>
+    <script src="redstone-machines.js?v=20261018-machines"></script>
 
     <script>
         // --- 场景、相机、渲染器 ---
@@ -1300,7 +1301,7 @@
             39: matRawMeat, 40: matCookedMeat, 41: matScanner, 42: matTallGrass,
             43: matLava, 44: matObsidian, 45: matBucket, 46: matShrinkPotion,
             47: matBarrier, 48: matGlassSensorDoor, 49: matGlassSensorDoor, 50: matGlassSensorDoorOpen,
-            51: matWhiteCobblestone, 52: matPressurePlate, 53: matPiston,
+            51: matWhiteCobblestone, 52: matPressurePlate, 53: matPiston, 145: matPiston,
             54: matAxe, 55: matBow, 56: matCrossbow, 57: matTrident, 58: matMace,
             59: matBrickBlock, 60: matBlueConcrete, 61: matBlackstone, 62: matGlowBlock, 63: matModernTile,
             64: matDrySponge, 65: matWaterBucket, 66: matGrowPotion
@@ -2186,6 +2187,7 @@
         ];
         
         function getBlockName(id) {
+            if(MACHINE_ITEMS[id])return MACHINE_ITEMS[id];
             if(THERMAL_ITEMS[id])return THERMAL_ITEMS[id];
             const names = {
                 2:'Dirt', 3:'Stone', 4:'Wood', 5:'Leaves', 6:'Glass', 7:'Ladder', 8:'Wooden Door',
@@ -2312,7 +2314,7 @@
                  60:72, 61:73, 62:74, 63:75, 64:76, 65:77, 66:78, 67:79,
                  70:82, 71:83, 72:84, 73:85, 74:86, 75:87, 76:88, 77:89, 78:90, 79:91, 80:92,
                  81:93, 82:94, 83:95, 84:96, 85:97, 86:98, 88:100, 89:101, 90:102, 91:103,
-                 ...Object.fromEntries(Object.keys({...KITCHEN_ITEMS,...CITY_LIFE_ITEMS,...HIDDEN_BLOCKS,...SURVEILLANCE_ITEMS,...THERMAL_ITEMS,127:'Netherrack'}).map(id=>[Number(id)-12,Number(id)]))
+                 ...Object.fromEntries(Object.keys({...KITCHEN_ITEMS,...CITY_LIFE_ITEMS,...HIDDEN_BLOCKS,...SURVEILLANCE_ITEMS,...THERMAL_ITEMS,...MACHINE_ITEMS,127:'Netherrack'}).map(id=>[Number(id)-12,Number(id)]))
              };
         }
 
@@ -2608,16 +2610,45 @@
             for (let i = explosionParticles.length - 1; i >= 0; i--) {
                 const p = explosionParticles[i];
                 p.life -= delta;
-                p.velocity.y -= 2.2 * delta;
-                p.mesh.position.addScaledVector(p.velocity, delta);
-                p.mesh.rotation.x += delta * 5;
-                p.mesh.rotation.y += delta * 4;
-                p.mesh.material.opacity = Math.max(0, p.life / p.maxLife);
+                if (p.debrisRadius) {
+                    updateBlockDebris(p, delta);
+                    p.mesh.material.opacity = 0.82 * Math.max(0, Math.min(1, p.life / (p.maxLife * 0.4)));
+                } else {
+                    p.velocity.y -= 2.2 * delta;
+                    p.mesh.position.addScaledVector(p.velocity, delta);
+                    p.mesh.rotation.x += delta * 5;
+                    p.mesh.rotation.y += delta * 4;
+                    p.mesh.material.opacity = Math.max(0, p.life / p.maxLife);
+                }
                 if (p.life <= 0) {
                     scene.remove(p.mesh);
                     p.mesh.geometry.dispose();
                     p.mesh.material.dispose();
                     explosionParticles.splice(i, 1);
+                }
+            }
+        }
+
+        function updateBlockDebris(p, delta) {
+            // Small substeps keep chips above the floor even during a slow frame.
+            const steps = Math.max(1, Math.ceil(Math.min(delta, 0.1) * 60));
+            const dt = Math.min(delta, 0.1) / steps, pos = p.mesh.position;
+            for (let i = 0; i < steps; i++) {
+                p.velocity.y -= 12 * dt;
+                for (const axis of ['x', 'z', 'y']) {
+                    const motion = p.velocity[axis] * dt;
+                    if (!motion) continue;
+                    const next = pos.clone();
+                    next[axis] += motion + Math.sign(motion) * p.debrisRadius;
+                    const cell = ['x', 'y', 'z'].map(a => Math.floor(next[a] + 0.5));
+                    if (isSolid(...cell)) {
+                        pos[axis] = cell[['x', 'y', 'z'].indexOf(axis)] - Math.sign(motion) * (0.5 + p.debrisRadius);
+                        p.velocity[axis] = 0;
+                        if (axis === 'y' && motion < 0) {
+                            p.velocity.x *= Math.exp(-16 * dt);
+                            p.velocity.z *= Math.exp(-16 * dt);
+                        }
+                    } else pos[axis] += motion;
                 }
             }
         }
@@ -2665,13 +2696,14 @@
                 );
                 const dir = new THREE.Vector3(Math.random() - 0.5, Math.random() * 0.45 + 0.18, Math.random() - 0.5).normalize();
                 const speed = 0.8 + Math.random() * 1.4;
-                const life = 0.35 + Math.random() * 0.25;
+                const life = 1.0 + Math.random() * 0.3;
                 scene.add(mesh);
                 explosionParticles.push({
                     mesh,
                     velocity: dir.multiplyScalar(speed),
                     life,
-                    maxLife: life
+                    maxLife: life,
+                    debrisRadius: size / 2
                 });
             }
         }
@@ -2813,6 +2845,7 @@
         const pistonDirections = new Map();
         const pistonTimers = new Map();
         let jumpPadCooldown = 0;
+        let jumpPadBoostTimer = 0;
 
         let seed = Math.random() * 1000;
         function hash(x, z) {
@@ -3781,10 +3814,13 @@
             refreshBlockAndNeighbors(x, y, z);
         }
 
-        function addDirtyChunksToQueue(dirtyChunks) {
+        function addDirtyChunksToQueue(dirtyChunks, prioritize=false) {
+            const pending=prioritize?Array.from(rebuildQueue):[];
+            if(prioritize)rebuildQueue.clear();
             for (let key of dirtyChunks) {
                 rebuildQueue.add(key);
             }
+            for(const key of pending)rebuildQueue.add(key);
         }
 
         function isWaterBlock(type) {
@@ -3828,6 +3864,7 @@
         function processWaterFlowQueue(delta) { tickWaterFlow(delta); }
 
         function getDroppedItemForBlock(blockType) {
+            if(blockType===PISTON_HEAD_ID)return 0;
             if(blockType===FIRE_ID)return 0;
             if(blockType===NETHER_PORTAL_ID || blockType===FRIDGE_TOP_ID) return 0;
             if (blockType === 42) return 0;
@@ -3899,6 +3936,10 @@
         }
 
         function mineBlock(hit, useScanner) {
+            if(getBlock(hit.x,hit.y,hit.z)===PISTON_HEAD_ID) {
+                const base=pistonBaseForHead(hit.x,hit.y,hit.z);
+                if(base)hit=new THREE.Vector3(...base);
+            }
             const furniture=furnitureRecord(hit.x,hit.y,hit.z);
             if(furniture) hit=new THREE.Vector3(furniture.x,furniture.y,furniture.z);
             const targetType = getBlock(hit.x, hit.y, hit.z);
@@ -3906,10 +3947,12 @@
 
             const dirtyChunks = new Set();
             const minedItem = getDroppedItemForBlock(targetType);
+            const concealedWire=hiddenRedstone.has(`${hit.x},${hit.y},${hit.z}`);
 
             setBlockNoRebuild(hit.x, hit.y, hit.z, 0, dirtyChunks);
             spawnBlockBreakParticles(hit.x, hit.y, hit.z, targetType);
             spawnDroppedItem(hit.x, hit.y, hit.z, minedItem);
+            if(concealedWire)spawnDroppedItem(hit.x,hit.y,hit.z,28);
             enqueueWaterFlow(hit.x, hit.y, hit.z);
 
             if (targetType === 8 || targetType === 10) setBlockNoRebuild(hit.x, hit.y + 1, hit.z, 0, dirtyChunks);
@@ -3944,47 +3987,14 @@
                 }
             }
 
-            addDirtyChunksToQueue(dirtyChunks);
+            addDirtyChunksToQueue(dirtyChunks,true);
             if (targetType === 26 || targetType === 27) updateRailsAround(hit.x, hit.y, hit.z);
             playMineSound(targetType);
 
         }
 
         function igniteTNT(x, y, z) {
-            const visited = new Set();
-            const queue = [{ x, y, z }];
-            const dirtyChunks = new Set();
-
-            while (queue.length > 0) {
-                const p = queue.shift();
-                const k = `${p.x},${p.y},${p.z}`;
-                if (visited.has(k)) continue;
-                visited.add(k);
-
-                if (getBlock(p.x, p.y, p.z) !== TNT_ID) continue;
-
-                setBlockNoRebuild(p.x, p.y, p.z, 0, dirtyChunks);
-                spawnExplosionParticles(p.x, p.y, p.z);
-
-                const radius = 2;
-                for (let dx = -radius; dx <= radius; dx++) {
-                    for (let dz = -radius; dz <= radius; dz++) {
-                        let depth = (Math.abs(dx) <= 1 && Math.abs(dz) <= 1) ? 2 : (Math.random() < 0.35 ? 2 : 1);
-                        for (let dy = 0; dy <= depth; dy++) {
-                            const bx = p.x + dx;
-                            const by = p.y - dy;
-                            const bz = p.z + dz;
-                            const t = getBlock(bx, by, bz);
-                            if (t === TNT_ID) queue.push({ x: bx, y: by, z: bz });
-                            else if (t !== 0) setBlockNoRebuild(bx, by, bz, 0, dirtyChunks);
-                        }
-                    }
-                }
-            }
-
-            for (let key of dirtyChunks) {
-                rebuildQueue.add(key);
-            }
+            return primeTNT(x,y,z);
         }
 
         function igniteNuke(x, y, z) {return beginNuclearBlast(x,y,z);}
@@ -4096,7 +4106,7 @@
                         // 但对于 100 多层的深渊，必须完整渲染保证上下相连。
                         if (Math.abs(y - camera.position.y) > 300) continue; 
                         let type = getBlock(x, y, z);
-                        if(HOME_ITEMS[type] || type===FRIDGE_TOP_ID || type===FURNITURE_PART_ID || type===FIRE_ID) continue;
+                        if(HOME_ITEMS[type] || MACHINE_ITEMS[type] || type===FRIDGE_TOP_ID || type===FURNITURE_PART_ID || type===FIRE_ID || type===PISTON_HEAD_ID) continue;
                         if (type !== 0) {
                             if (microRenderBlocks.has(microParentKey(x,y,z)) && (isSolid(x,y,z) || HIDDEN_BLOCKS[type])) continue;
                             let exposed = true;
@@ -4383,6 +4393,7 @@
 
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
         let holdingSpace = false, holdingDescend = false;
+        const sprintKeys = new Set();
         let creativeFlying = false;
         let lastSpaceTapAt = -Infinity;
         const FLIGHT_DOUBLE_TAP_MS = 350;
@@ -4390,6 +4401,7 @@
         const direction = new THREE.Vector3();
         const MAX_PLAYER_STEP = 1 / 45;
         const MAX_WALK_SPEED = 5.2;
+        const SPRINT_MULTIPLIER = 1.6;
         const MAX_WATER_WALK_SPEED = 2.8;
         const TIRED_WALK_MULTIPLIER = 0.72;
 
@@ -4399,6 +4411,8 @@
         function clearMovementInput() {
             moveForward = moveBackward = moveLeft = moveRight = false;
             holdingSpace = holdingDescend = false;
+            sprintKeys.clear();
+            jumpPadBoostTimer = 0;
             lastSpaceTapAt = -Infinity;
             velocity.set(0, 0, 0);
         }
@@ -4549,6 +4563,10 @@
                 case 'KeyS': moveBackward = controls.isLocked; break;
                 case 'KeyA': moveLeft = controls.isLocked; break;
                 case 'KeyD': moveRight = controls.isLocked; break;
+                case 'ShiftLeft':
+                case 'ShiftRight':
+                    if (controls.isLocked && isGameStarted && !isSleeping) sprintKeys.add(e.code);
+                    break;
                 case 'Space': {
                     if (!controls.isLocked || !isGameStarted || isSleeping) break;
                     e.preventDefault();
@@ -4590,6 +4608,8 @@
                 case 'KeyS': moveBackward = false; break;
                 case 'KeyA': moveLeft = false; break;
                 case 'KeyD': moveRight = false; break;
+                case 'ShiftLeft':
+                case 'ShiftRight': sprintKeys.delete(e.code); break;
                 case 'Space': holdingSpace = false; break; // 松开空格停止上浮
                 case 'KeyB': holdingDescend = false; break;
             }
@@ -4648,7 +4668,9 @@
 
             const tiredMultiplier = playerTired && !creativeFlying ? TIRED_WALK_MULTIPLIER : 1;
             const waterSlowsMovement = inWaterPhys && !creativeFlying;
-            let moveSpeed = (waterSlowsMovement ? (inLavaPhys?12:25) : 50.0) * tiredMultiplier * physicsScale;
+            const sprintMultiplier = sprintKeys.size && !activeMech && !ridingMinecart && !creativeFlying && !onLadder && !inWaterPhys
+                ? SPRINT_MULTIPLIER : 1;
+            let moveSpeed = (waterSlowsMovement ? (inLavaPhys?12:25) : 50.0) * tiredMultiplier * sprintMultiplier * physicsScale;
             if(activeMech && !waterSlowsMovement && !creativeFlying) moveSpeed=activeMech.form==='vehicle'?MECH_TYPES[activeMech.id].speed*10:45;
             if (moveForward || moveBackward) {
                 velocity.z -= direction.z * moveSpeed * playerDelta;
@@ -4659,8 +4681,9 @@
                 isMoving = true;
             }
 
-            const maxSpeed = activeMech && !waterSlowsMovement && !creativeFlying ? (activeMech.form==='vehicle'?MECH_TYPES[activeMech.id].speed:4.5)
-                : (waterSlowsMovement ? MAX_WATER_WALK_SPEED : MAX_WALK_SPEED) * tiredMultiplier * physicsScale;
+            const maxSpeed = Math.max(jumpPadBoostTimer>0&&!waterSlowsMovement&&!creativeFlying?18*physicsScale:0,
+                activeMech && !waterSlowsMovement && !creativeFlying ? (activeMech.form==='vehicle'?MECH_TYPES[activeMech.id].speed:4.5)
+                : (waterSlowsMovement ? MAX_WATER_WALK_SPEED : MAX_WALK_SPEED) * tiredMultiplier * sprintMultiplier * physicsScale);
             const horizontalSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
             if (horizontalSpeed > maxSpeed) {
                 const scale = maxSpeed / horizontalSpeed;
@@ -4903,6 +4926,7 @@
         }
 
         function isSolidType(b) {
+            if(MACHINE_ITEMS[b])return false;
             if(b===FIRE_ID)return false;
             if(HIDDEN_BLOCKS[b] || b===SHOWER_ID || b===NETHER_PORTAL_ID || b===92) return false;
             // Ladders, open doors, water, rails, redstone, levers, and grass are passable. Leaves are solid.
@@ -5060,12 +5084,11 @@
         }
 
         function hasRedstoneWireNear(x, y, z) {
-            return redstoneNeighbors(x, y, z).some(p => getBlock(p.x, p.y, p.z) === 28);
+            return redstoneNeighbors(x, y, z).some(p => isWireAt(p.x, p.y, p.z));
         }
 
         function isRedstonePowered(x, y, z) {
-            if (hasPoweredLeverNear(x, y, z)) return true;
-            return redstoneNeighbors(x, y, z).some(p => getBlock(p.x, p.y, p.z) === 28 && hasPoweredLeverNear(p.x, p.y, p.z));
+            return machinePowered(x,y,z);
         }
 
         function getStoredPistonDirection(x, y, z) {
@@ -5073,7 +5096,7 @@
             if (pistonDirections.has(key)) return pistonDirections.get(key);
             for (let p of redstoneNeighbors(x, y, z)) {
                 const t = getBlock(p.x, p.y, p.z);
-                if (t === 28 || t === 30 || t === 31) {
+                if (isWireAt(p.x,p.y,p.z) || t === 30 || t === 31) {
                     const dir = { x: -p.off[0], y: -p.off[1], z: -p.off[2] };
                     pistonDirections.set(key, dir);
                     return dir;
@@ -5084,15 +5107,17 @@
         }
 
         function rememberPistonDirectionFromHit(x, y, z, norm) {
-            let dir = { x: 0, y: 0, z: 1 };
-            if (norm && (norm.x || norm.y || norm.z)) {
-                dir = { x: Math.round(norm.x), y: Math.round(norm.y), z: Math.round(norm.z) };
-            }
+            const look=camera.getWorldDirection(new THREE.Vector3());
+            const dx=camera.position.x-x,dz=camera.position.z-z;
+            let dir = Math.abs(dx)>Math.abs(dz)?{x:Math.sign(dx),y:0,z:0}:{x:0,y:0,z:Math.sign(dz)||1};
+            if(Math.abs(look.y)>0.9)dir={x:0,y:-Math.sign(look.y),z:0};
             pistonDirections.set(`${x},${y},${z}`, dir);
+            queueRoomBlockChange(x,y,z);
         }
 
         function isMovableByPiston(type) {
             if(HOME_ITEMS[type] || type===FRIDGE_TOP_ID || type===FURNITURE_PART_ID || type===NETHER_PORTAL_ID) return false;
+            if(MACHINE_ITEMS[type]||[PISTON_HEAD_ID,OBSIDIAN_ID,7,8,9,10,11,14,15,16,17,18,19,20,26,27,28,48,49,50,52,FIRE_ID].includes(type))return false;
             return type !== 0 && type !== BARRIER_ID && type !== LAVA_ID && type !== 24 && type !== 25 &&
                 type !== 30 && type !== 31 && type !== 32 && type !== PISTON_ID;
         }
@@ -5110,53 +5135,29 @@
         }
 
         function pulsePiston(x, y, z) {
-            const dir = getStoredPistonDirection(x, y, z);
-            const tx = x + dir.x;
-            const ty = y + dir.y;
-            const tz = z + dir.z;
-            const target = getBlock(tx, ty, tz);
-            const nx = tx + dir.x;
-            const ny = ty + dir.y;
-            const nz = tz + dir.z;
-
-            if (isMovableByPiston(target) && getBlock(nx, ny, nz) === 0) {
-                setBlock(nx, ny, nz, target);
-                setBlock(tx, ty, tz, 0);
-            }
-            pushPlayerFromPiston(x, y, z, dir);
-            playSound('stone');
+            return extendPiston(x,y,z);
         }
 
         function updatePressurePlatesAndPistons(delta) {
+            // Pressure Plate: the thin floor tile. Powered by a lever/wire, it becomes a Jump Pad.
             if (jumpPadCooldown > 0) jumpPadCooldown = Math.max(0, jumpPadCooldown - delta);
+            jumpPadBoostTimer=Math.max(0,jumpPadBoostTimer-delta);
             const footX = Math.round(camera.position.x);
-            const footY = Math.round(camera.position.y - getPlayerHeight() - 0.05);
+            const feet=camera.position.y-getPlayerHeight();
+            const footY = Math.floor(feet + 0.62);
             const footZ = Math.round(camera.position.z);
-            if (getBlock(footX, footY, footZ) === PRESSURE_PLATE_ID && isRedstonePowered(footX, footY, footZ) && jumpPadCooldown === 0) {
-                const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-                forward.y = 0;
-                if (forward.lengthSq() < 0.01) forward.set(0, 0, -1);
-                forward.normalize();
-                velocity.x += forward.x * 18;
-                velocity.z += forward.z * 18;
-                velocity.y = Math.max(velocity.y, 14);
+            if (controls.isLocked && !creativeFlying && !activeMech && !ridingMinecart && !drivingCar && !seatedAt &&
+                Math.abs(feet-(footY-0.5))<0.18 && getBlock(footX, footY, footZ) === PRESSURE_PLATE_ID &&
+                isRedstonePowered(footX, footY, footZ) && jumpPadCooldown === 0) {
+                velocity.z = -18 * playerScale;
+                velocity.y = Math.max(velocity.y, 14 * playerScale);
+                jumpPadBoostTimer = 0.45;
                 jumpPadCooldown = 0.8;
                 showToast("Jump pad launched!");
                 playSound('stone');
             }
 
-            for (let [key, type] of worldMap.entries()) {
-                if (type !== PISTON_ID) continue;
-                const [x, y, z] = key.split(',').map(Number);
-                if (!isRedstonePowered(x, y, z)) continue;
-                const elapsed = (pistonTimers.get(key) || 0) + delta;
-                if (elapsed >= 0.65) {
-                    pistonTimers.set(key, 0);
-                    pulsePiston(x, y, z);
-                } else {
-                    pistonTimers.set(key, elapsed);
-                }
-            }
+            tickRedstoneMachines(delta);
         }
 
         function addModelBox(group, w, h, d, color, x, y, z, name) {
@@ -6027,6 +6028,7 @@
             // 更新村民
             for (let i = villagers.length - 1; i >= 0; i--) {
                 let v = villagers[i];
+                updateVillagerLavaDamage(v,delta);
                 if (updateMobDamageState(v, delta)) {
                     scene.remove(v.mesh);
                     villagers.splice(i, 1);
@@ -6263,6 +6265,7 @@
         let miningState = null;
 
         function getMiningDuration(blockType, heldItem) {
+            if (isCreativeMode()) return 0;
             blockType=HIDDEN_BLOCKS[blockType]?.base || blockType;
             if (blockType === 5 || blockType === 42) return 0.05;
             if (blockType === 6) return 0.35;
@@ -6381,7 +6384,8 @@
             if (isTinyMode()) return;
             const blockType = getBlock(hit.x, hit.y, hit.z);
             if (blockType === 0) return;
-            if (blockType === 5 || blockType === 42) {
+            if (isCreativeMode() || blockType === 5 || blockType === 42) {
+                cancelMining();
                 mineBlock(hit, useScanner);
                 return;
             }
@@ -6534,7 +6538,9 @@
         });
         document.addEventListener('mousedown', (e) => {
             if (!controls.isLocked) return;
+            if(document.getElementById('home-panel')?.hidden===false||document.getElementById('command-panel')?.hidden===false)return;
             e.preventDefault();
+            if(handleMachineClick(e))return;
             if(handleThermalClick(e))return;
             if(handleExpansionClick(e)) return;
             if (e.button !== 0) cancelMining();
@@ -7785,6 +7791,7 @@
 
         initWorldExpansion();
         initThermalWorld();
+        initRedstoneMachines();
         initMultiplayer();
         initModIcons();
         animate();

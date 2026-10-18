@@ -84,7 +84,9 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
             for(let i=0;i<3000;i++)tickFire(0.5);
             check(getBlock(3,1,0)===CAMPFIRE_ID,'Campfire does not expire');
             thermalPut(12,1,0,TNT_ID);thermalPut(13,1,0,TNT_ID);startBurning(12,1,0);
-            check(getBlock(12,1,0)===0&&getBlock(13,1,0)===0,'Lighter detonates TNT and its neighbor');
+            check(getBlock(12,1,0)===0&&getBlock(13,1,0)===TNT_ID&&movingTNT.size===1,'Lighter starts a visible TNT fuse without an instant blast');
+            for(let i=0;i<500;i++)tickMovingTNT(1/60);
+            check(getBlock(13,1,0)===0&&!movingTNT.size,'TNT detonates after its fuse and chains to its neighbor');
             return `PASS: ${checks.length} lava, water reaction, Nether, complete tree burning, perpetual campfire, TNT, recipe and inventory checks.`;
         }));
 

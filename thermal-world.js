@@ -270,8 +270,9 @@ function tickNuclearBlast() {
     if(job.column>=total){nukeJobs.shift();showToast('Crater complete.');}
 }
 
-function saveThermalWorld() {return {missiles:saveNuclearMissiles(),lava:Array.from(lavaAmounts),fires:Array.from(burningBlocks),craters:Array.from(craterColumns),jobs:nukeJobs.map(j=>({...j}))};}
+function saveThermalWorld() {return {machines:saveRedstoneMachines(),missiles:saveNuclearMissiles(),lava:Array.from(lavaAmounts),fires:Array.from(burningBlocks),craters:Array.from(craterColumns),jobs:nukeJobs.map(j=>({...j}))};}
 function clearThermalWorld() {
+    clearRedstoneMachines();
     clearNuclearMissiles();
     for(const m of fireVisuals.values())disposeModModel(m);fireVisuals.clear();
     for(const m of [lavaAmounts,lavaQueue,burningBlocks,craterColumns])m.clear();nukeJobs=[];
@@ -282,6 +283,7 @@ function restoreThermalWorld(data={}) {
     for(const [map,entries] of [[lavaAmounts,data.lava],[burningBlocks,data.fires],[craterColumns,data.craters]])for(const [key,value] of entries||[])map.set(key,value);
     nukeJobs=(data.jobs||[]).slice(0,4).map(j=>({...j,radius:j.radius===undefined?50:Number.isSafeInteger(j.radius)&&j.radius>=1&&j.radius<=50?j.radius:NUKE_BLAST_RADIUS}));
     restoreNuclearMissiles(data.missiles);
+    restoreRedstoneMachines(data.machines);
     for(const [key,type] of worldMap)if(type===LAVA_ID)queueLavaCell(...key.split(',').map(Number));
 }
 
