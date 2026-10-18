@@ -776,7 +776,9 @@ function normalizeWorldCommand(text) {
         let sum=0,number=0;
         for(const char of word){if(char in digits)number=digits[char];else {sum+=(number||1)*({'十':10,'百':100,'千':1000}[char]);number=0;}}
         return String(sum+number);
-    }).replace(/乘以|乘|[＊*xX]/g,'×').replace(/\s/g,'').replace(/(\d+)(?:个)?(?:格|米|方块)/g,'$1');
+    }).replace(/乘以|乘|[＊*xX]/g,'×')
+        .replace(/(\d+)(?:个)?(?:格|米|方块)\s*(?=\d)/g,'$1,')
+        .replace(/(\d)\s+(?=\d)/g,'$1,').replace(/\s/g,'').replace(/(\d+)(?:个)?(?:格|米|方块)/g,'$1');
 }
 
 function commandDimensions(text) {
@@ -832,7 +834,7 @@ function parseWorldCommand(text) {
         const label=kind==='room'?`建空心房间，外部长×宽×高：${width} × ${depth} × ${height} 格；内有地板、屋顶和门。`:`${kind==='water'?'填水':'清理空间'}：${width} × ${depth} × ${height} 格，底部保留地板。`;
         return {kind,width,depth,height,layers,label:label+'会修改你周围的方块，确认后执行，可以撤销。'};
     }
-    throw new Error('还没有理解这句话。请补充对象和尺寸，例如“场地100×100×100”或“城墙 厚5 长100 宽100”，也可以查找物品、填水、生成城市或撤销。');
+    throw new Error('还没有理解这句话。请补充对象和尺寸，例如“房子20×21 每层高3 10层”“城楼四角 间隔20 高12”或“场地100×100×100”，也可以查找物品、填水、生成城市或撤销。');
 }
 
 function openCommandPanel() {
@@ -950,7 +952,7 @@ function initWorldCommands() {
     document.getElementById('command-form').onsubmit=e=>{e.preventDefault();preview();};
     document.getElementById('execute-command').onclick=()=>{if(commandPreview) executeWorldCommand(commandPreview);};
     document.getElementById('world-command').oninput=()=>{commandPreview=null;document.getElementById('execute-command').disabled=true;};
-    for(const label of ['场地100×100×100','field 200×200×10','城墙 厚5 长100 宽100','用水把全世界填满','查找冰箱','撤销']) {
+    for(const label of ['房子20×21 每层高3 10层','城楼四角 间隔20 高12','场地100×100×100','城墙 厚5 长100 宽100','用水把全世界填满','查找冰箱','撤销']) {
         const b=document.createElement('button');b.textContent=label;b.onclick=()=>{document.getElementById('world-command').value=label;preview();};document.getElementById('command-presets').appendChild(b);
     }
 }

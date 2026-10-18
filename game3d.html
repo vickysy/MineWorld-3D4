@@ -379,7 +379,7 @@
     <script src="three-r128.min.js"></script>
     <script src="three-pointer-lock-r128.js"></script>
     <script src="three-reflector-r128.js"></script>
-    <script src="world-expansion.js?v=20261018-tools"></script>
+    <script src="world-expansion.js?v=20261018-buildings"></script>
     <script src="home-city.js?v=20261017-thermal1"></script>
     <script src="kitchen-home.js?v=20261016c"></script>
     <script src="city-life.js?v=20261016a"></script>
@@ -388,7 +388,7 @@
     <script src="multiplayer.js?v=20261018-tools"></script>
     <script src="thermal-world.js?v=20261018-lava128"></script>
     <script src="launchers.js?v=20261018-tools"></script>
-    <script src="construction.js?v=20261018-tools"></script>
+    <script src="construction.js?v=20261018-buildings"></script>
 
     <script>
         // --- 场景、相机、渲染器 ---
@@ -3011,7 +3011,7 @@
                 return [0, 6, 7, 8, 9, 10, 11, 16, 17, 18, 19, 20, 24, 25, 26, 27, 28, 30, 31, 42, LAVA_ID, BARRIER_ID, GLASS_SENSOR_DOOR_BOTTOM_ID, GLASS_SENSOR_DOOR_TOP_ID, GLASS_SENSOR_DOOR_OPEN_ID].includes(t);
             }
             if(isCraterVoid(bx,by,bz))return true;
-            const built=constructionTypeAt(bx,by,bz);if(built!==null)return built===0;
+            const built=constructionTypeAt(bx,by,bz);if(built!==null)return [0,6,7,8,9].includes(built);
             // 海平面下的天然地形如果没生成，可能是水或者沙子
             if (by <= 12 && by > getSurfaceHeight(bx, bz)) {
                 return true; // 水也是透明的

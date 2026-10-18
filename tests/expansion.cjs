@@ -59,7 +59,10 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
                 check(activatePortalNear(0,1,0),`Obsidian frame activates along ${axis}`);
                 check(activePortals.values().next().value.cells.length===6,'Obsidian portal has six interior cells');
             }
-            reset();testPut(8,1,8,51);placeFurniture(FRIDGE_ID,5,1,0);
+            reset();
+            // As in live play, generate the arrival neighborhood before placing the edits to preserve.
+            for(let x=-1;x<=1;x++)for(let z=-1;z<=1;z++)generateHouseData(x,z);
+            testPut(8,1,8,51);placeFurniture(FRIDGE_ID,5,1,0);
             furnitureRecord(5,1,0).data.food[40]=3;waterAmounts.set('4,1,4',4);worldMap.set('4,1,4',24);
             const friend=spawnEnderman(3,1,3,true);friend.hp=5;
             const tinyCell=microCellAt(20,3,20,2);setMicroPlacement(tinyCell,4);
