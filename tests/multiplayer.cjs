@@ -167,6 +167,40 @@ async function assertScenePixels(page) {
         assert(await host.evaluate(p=>pistonStates.has(p.join(','))&&!buttonTimers.size,door));
         console.log('PASS: Guest button opens a normally-closed door through a long dust wire; the host releases the pulse and both players see it close.');
 
+        const keypad=[door[0]-5,door[1],door[2]+1];
+        await guest.waitForFunction(()=>multiplayerRoom.lockAuthenticated&&localLockIdentity);
+        await guest.evaluate(p=>{creativeFlying=true;camera.position.set(p[0],p[1]+1.6,p[2]+3);},keypad);
+        await host.waitForFunction(p=>[...multiplayerRoom.positions.values()].some(v=>Math.abs(v.x-p[0])<0.1&&Math.abs(v.z-p[2]-3)<0.1),keypad);
+        assert((await guest.evaluate(at=>performLockAction('place',at,{face:{x:0,y:1,z:0}}),keypad)).ok);
+        await guest.waitForFunction(p=>getBlock(...p)===PASSWORD_LOCK_ID&&passwordLocks.has(p.join(',')),keypad);
+        const guestOwner=await guest.evaluate(()=>localLockIdentity.id);
+        assert.equal(await host.evaluate(p=>passwordLocks.get(p.join(',')).owner,keypad),guestOwner);
+        assert((await guest.evaluate(at=>performLockAction('set-code',at,{code:'friend door 42'}),keypad)).ok);
+        assert.equal(await guest.evaluate(()=>passwordLockSecrets.size),0,'Host never broadcasts the password verifier');
+        assert(!(await host.evaluate(at=>performLockAction('unlock',at,{code:'wrong'}),keypad)).ok);
+        assert(!(await host.evaluate(at=>performLockAction('remove',at),keypad)).ok,'A host is not automatically the owner of a guest lock');
+        await host.evaluate(p=>{setBlockNoRebuild(...p,0,rebuildQueue);},keypad);
+        assert.equal(await host.evaluate(p=>getBlock(...p),keypad),148);
+        const revision=await guest.evaluate(p=>{
+            const r=multiplayerRoom,seq=r.seq;
+            for(const e of r.connections.values())sendRoomPacket(e.conn,{type:'edit',dimension:currentDimension,cells:[{cell:[...p,0]}]});
+            return seq;
+        },keypad);
+        await guest.waitForFunction(seq=>multiplayerRoom.seq>seq,revision);
+        assert.equal(await host.evaluate(p=>getBlock(...p),keypad),148,'Even an owner cannot bypass the authenticated remove action using a raw edit');
+        await host.evaluate(p=>pressMachineButton(p[0]-11,p[1],p[2]),door);
+        assert.equal(await host.evaluate(p=>machinePowered(...p),door),false,'An ordinary switch cannot bypass the password');
+        assert((await host.evaluate(at=>performLockAction('unlock',at,{code:'friend door 42'}),keypad)).ok);
+        await guest.waitForFunction(p=>!pistonStates.has(p.join(',')),door);
+        await guest.evaluate(p=>camera.position.set(p[0]+2,p[1]+1.6,p[2]),door);
+        await host.waitForFunction(p=>[...multiplayerRoom.positions.values()].some(v=>Math.abs(v.x-p[0]-2)<0.1&&Math.abs(v.z-p[2])<0.1),door);
+        assert(await host.evaluate(p=>{for(let i=0;i<13*60;i++)tickRedstoneMachines(1/60);return !pistonStates.has(p.join(','));},door),'Remote player keeps the passage open after password expiry');
+        await guest.evaluate(p=>camera.position.set(p[0],p[1]+1.6,p[2]+3),keypad);
+        await host.waitForFunction(p=>[...multiplayerRoom.positions.values()].some(v=>Math.abs(v.x-p[0])<0.1&&Math.abs(v.z-p[2]-3)<0.1),keypad);
+        await host.evaluate(()=>{for(let i=0;i<10*60;i++)tickRedstoneMachines(1/60);});
+        await guest.waitForFunction(p=>pistonStates.has(p.join(',')),door);
+        console.log('PASS: Guest-owned password lock, host/visitor restrictions, masked verifier, rejected raw deletion, correct-code entry and remote-player anti-crush safety.');
+
         await guest.evaluate(()=>{controls.unlock();});await guest.waitForFunction(()=>!controls.isLocked);
         await guest.locator('#pause-room-btn').click();await guest.locator('#leave-room-btn').click();
         await host.waitForFunction(()=>Object.keys(remotePlayers).length===0);
@@ -174,6 +208,8 @@ async function assertScenePixels(page) {
         await guest.locator('#guest-mode-btn').click();await guest.locator('#room-code-input').fill(code);await guest.locator('#join-room-btn').click();
         await guest.waitForFunction(()=>multiplayerRoom?.worldReady,{},{timeout:60000});
         assert.equal(await guest.evaluate(p=>getBlock(...p),guestCell),60);
+        assert.equal(await guest.evaluate(p=>passwordLocks.get(p.join(','))?.owner,keypad),guestOwner);
+        assert.equal(await guest.evaluate(()=>passwordLockSecrets.size),0,'Rejoin snapshot also excludes private verifiers');
         await guest.setViewportSize({width:390,height:844});
         await assertScenePixels(guest);
         assert(await guest.evaluate(()=>{const p=document.getElementById('multiplayer-menu'),r=p.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.top>=0&&p.scrollWidth<=p.clientWidth+1;}));

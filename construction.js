@@ -216,7 +216,7 @@ function tickConstruction() {
     const editing=commandEditing;commandEditing=true;
     try {
         while(job.index<job.cells.length&&count++<256&&performance.now()-start<5) {
-            const p=job.cells[job.index++];setBlockNoRebuild(...p,0,dirty);worldMap.delete(p.join(','));
+            const p=job.cells[job.index++];if(setBlockNoRebuild(...p,0,dirty)!==false)worldMap.delete(p.join(','));
         }
         while(job.index===job.cells.length&&job.column<r.width*r.depth&&count++<512&&performance.now()-start<5) {
             const x=r.x+job.column%r.width,z=r.z+Math.floor(job.column/r.width),key=`${x},${z}`;job.column++;

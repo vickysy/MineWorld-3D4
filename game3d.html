@@ -385,11 +385,12 @@
     <script src="city-life.js?v=20261016a"></script>
     <script src="surveillance.js?v=20261018-tools"></script>
     <script src="peerjs-1.5.5.min.js"></script>
-    <script src="multiplayer.js?v=20261018-machines"></script>
+    <script src="multiplayer.js?v=20261018-locks"></script>
     <script src="thermal-world.js?v=20261018-machines"></script>
     <script src="launchers.js?v=20261018-castle-map"></script>
-    <script src="construction.js?v=20261018-castle-map"></script>
-    <script src="redstone-machines.js?v=20261018-machines"></script>
+    <script src="construction.js?v=20261018-locks"></script>
+    <script src="redstone-machines.js?v=20261018-locks"></script>
+    <script src="password-locks.js?v=20261018-locks"></script>
 
     <script>
         // --- 场景、相机、渲染器 ---
@@ -2967,6 +2968,7 @@
 
         // 用于在生成树木和房子时安全地放置方块并更新渲染边界
         function setGenBlock(x, y, z, type) {
+            if((type===PASSWORD_LOCK_ID||passwordLocks.size)&&!lockedBlockWriteAllowed(x,y,z,type))return;
             if(isCraterVoid(x,y,z)||constructionTypeAt(x,y,z)!==null)return;
             resetMicroBlock(x, y, z);
             worldMap.set(`${x},${y},${z}`, type);
@@ -3143,6 +3145,7 @@
         }
 
         function setFineVoxel(c,type) {
+            if(getBlock(c.x,c.y,c.z)===PASSWORD_LOCK_ID||!canEditPasswordCircuit(c.x,c.y,c.z))return false;
             clearFineDescendants(c);
             fineVoxelEdits.set(detailKey(c),type);
             rebuildFineIndex();
@@ -3196,6 +3199,7 @@
         }
 
         function setMicroPlacement(c, type) {
+            if(getBlock(c.x,c.y,c.z)===PASSWORD_LOCK_ID||!canEditPasswordCircuit(c.x,c.y,c.z))return false;
             if ((c.level || 1)>1) { setFineVoxel(c,type); return; }
             if (clearFineDescendants(c)) rebuildFineIndex();
             const parent = microParentKey(c.x,c.y,c.z);
@@ -3291,6 +3295,7 @@
 
         function mineMicroBlock(hit) {
             if (!hit || !getMicroType(hit)) return false;
+            if(getBlock(hit.x,hit.y,hit.z)===PASSWORD_LOCK_ID||!canEditPasswordCircuit(hit.x,hit.y,hit.z))return false;
             if ((hit.level || 1)>1) {
                 cancelMining();
                 setFineVoxel(hit,0);
@@ -3651,6 +3656,7 @@
         }
 
         function setBlock(x, y, z, type) {
+            if(!lockedBlockWriteAllowed(x,y,z,type))return false;
             const oldType=getBlock(x,y,z);
             resetMicroBlock(x, y, z);
             modifiedColumns.add(`${x},${z}`); // 记录该列已被修改
@@ -3700,6 +3706,7 @@
         }
 
         function setBlockNoRebuild(x, y, z, type, dirtyChunks) {
+            if(!lockedBlockWriteAllowed(x,y,z,type))return false;
             const oldType=getBlock(x,y,z);
             resetMicroBlock(x, y, z);
             modifiedColumns.add(`${x},${z}`);
@@ -3936,6 +3943,8 @@
         }
 
         function mineBlock(hit, useScanner) {
+            if(getBlock(hit.x,hit.y,hit.z)===PASSWORD_LOCK_ID){minePasswordLock(hit.x,hit.y,hit.z);return;}
+            if(!canEditPasswordCircuit(hit.x,hit.y,hit.z)){showToast('Only the lock owner can change this circuit.');return;}
             if(getBlock(hit.x,hit.y,hit.z)===PISTON_HEAD_ID) {
                 const base=pistonBaseForHead(hit.x,hit.y,hit.z);
                 if(base)hit=new THREE.Vector3(...base);

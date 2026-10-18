@@ -150,7 +150,9 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
             machinePut(-2,1,0,31);machineTicks(2);
             check(!pistonStates.size&&getBlock(1,1,0)===3&&getBlock(2,1,0)===0,'First lever activation retracts the door and keeps it open');
             machinePut(-2,1,0,30);machineTicks(1);
-            check(pistonStates.size===1&&getBlock(2,1,0)===3,'Switching the door off extends it again');
+            check(!pistonStates.size,'Switching the door off keeps the passage open during the safety delay');
+            machineTicks(8);
+            check(pistonStates.size===1&&getBlock(2,1,0)===3,'The door closes after the safety delay');
             const doorSave=saveRedstoneMachines();restoreRedstoneMachines(doorSave);machineTicks(1);
             check(pistonModes.get('0,1,0')==='door'&&pistonStates.size===1,'Closed-door mode and pushed row survive save/load');
 

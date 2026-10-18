@@ -1,7 +1,8 @@
 // Door pistons invert power; cannons fire on a rising edge; cycle pistons reciprocate.
 const PISTON_HEAD_ID=145;
-const REDSTONE_DUST_ID=146,BUTTON_ID=147;
-const MACHINE_ITEMS={146:'Redstone Dust',147:'Button'};
+const REDSTONE_DUST_ID=146,BUTTON_ID=147,PASSWORD_LOCK_ID=148;
+const MACHINE_ITEMS={146:'Redstone Dust',147:'Button',148:'Password Lock'};
+const DOOR_OPEN_HOLD=8,doorOpenTimers=new Map();
 const pistonModes=new Map(),pistonPowerEdges=new Map(),buttonTimers=new Map(),buttonFaces=new Map(),circuitVisuals=new Map();
 const PISTON_MODES=['auto','door','cannon','cycle'];
 const machineCells=new Map(),hiddenRedstone=new Set(),pistonStates=new Map(),pistonVisuals=new Map(),movingTNT=new Map();
@@ -15,15 +16,15 @@ const validPistonDirection=d=>d&&[d.x,d.y,d.z].every(Number.isSafeInteger)&&Math
 
 function machineBlockChanged(x,y,z,oldType,type) {
     const key=machineKey(x,y,z);
-    if([21,28,30,31,52,53,145,146,147].includes(type))machineCells.set(key,type);else machineCells.delete(key);
+    if([21,28,30,31,52,53,145,146,147,148].includes(type))machineCells.set(key,type);else machineCells.delete(key);
     if(!circuitDirty)circuitDirty=[28,30,31,PISTON_ID,REDSTONE_DUST_ID,BUTTON_ID].includes(oldType)||
-        [28,30,31,PISTON_ID,REDSTONE_DUST_ID,BUTTON_ID].includes(type)||hiddenRedstone.has(key)||
+        [28,30,31,PISTON_ID,REDSTONE_DUST_ID,BUTTON_ID,PASSWORD_LOCK_ID].includes(type)||oldType===PASSWORD_LOCK_ID||hiddenRedstone.has(key)||
         redstoneNeighbors(x,y,z).some(n=>machineCells.get(machineKey(n.x,n.y,n.z))===REDSTONE_DUST_ID);
     if(oldType!==type){buttonTimers.delete(key);buttonFaces.delete(key);}
     if(oldType!==type)hiddenRedstone.delete(key);
     if(machineWriting||oldType===type)return;
     if(oldType===PISTON_ID) {
-        const state=pistonStates.get(key);pistonStates.delete(key);pistonDirections.delete(key);pistonTimers.delete(key);pistonModes.delete(key);pistonPowerEdges.delete(key);
+        const state=pistonStates.get(key);pistonStates.delete(key);pistonDirections.delete(key);pistonTimers.delete(key);pistonModes.delete(key);pistonPowerEdges.delete(key);doorOpenTimers.delete(key);
         if(state&&thermalAuthority()) {
             const d=state.dir,at=[x+d.x,y+d.y,z+d.z];
             if(getBlock(...at)===PISTON_HEAD_ID)machineWrite(()=>setBlockNoRebuild(...at,0,rebuildQueue));
@@ -53,6 +54,7 @@ function wireNeighbors(x,y,z) {
 function rebuildCircuitPower() {
     if(!circuitDirty)return;
     circuitDirty=false;poweredWireCells.clear();poweredPistonCells.clear();
+    rebuildPasswordCircuits();
     const queue=[];
     for(const [key,type] of machineCells)if(type===31&&getBlock(...key.split(',').map(Number))===31) {
         const [x,y,z]=key.split(',').map(Number);
@@ -67,9 +69,11 @@ function rebuildCircuitPower() {
         const at=key.split(',').map(Number);
         for(const n of redstoneNeighbors(...at))if(isWireAt(n.x,n.y,n.z))queue.push([n.x,n.y,n.z]);
     }
+    for(const [wire,locks] of lockedWireCells)if(passwordCircuitOpen(locks))queue.push(wire.split(',').map(Number));
     for(let i=0;i<queue.length&&poweredWireCells.size<8192;i++) {
         const [x,y,z]=queue[i],key=machineKey(x,y,z);
         if(poweredWireCells.has(key))continue;
+        if(lockedWireCells.has(key)&&!passwordCircuitOpen(lockedWireCells.get(key)))continue;
         poweredWireCells.add(key);
         for(const n of wireNeighbors(x,y,z))if(!poweredWireCells.has(machineKey(n.x,n.y,n.z)))
             queue.push([n.x,n.y,n.z]);
@@ -88,6 +92,7 @@ function rebuildCircuitPower() {
     }
     candidates.sort((a,b)=>a.distance-b.distance||a.piston.localeCompare(b.piston)||a.wire.localeCompare(b.wire));
     for(const {piston,wire} of candidates) {
+        if(lockedPistonCells.has(piston)&&!passwordCircuitOpen(lockedPistonCells.get(piston)))continue;
         if(poweredPistonCells.has(piston)||(loads.get(wire)||0)>=PISTONS_PER_WIRE)continue;
         poweredPistonCells.add(piston);loads.set(wire,(loads.get(wire)||0)+1);
     }
@@ -98,9 +103,13 @@ function machinePowered(x,y,z) {
     return redstoneNeighbors(x,y,z).some(n=>getBlock(n.x,n.y,n.z)===31||(buttonTimers.get(machineKey(n.x,n.y,n.z))||0)>0||poweredWireCells.has(machineKey(n.x,n.y,n.z)));
 }
 function handleMachineClick(e) {
-    if(e.button!==2||isTinyMode())return false;
+    if(![0,2].includes(e.button))return false;
     const hit=expansionRay();if(!hit)return false;
+    if(e.button===0&&hit.type===PASSWORD_LOCK_ID){minePasswordLock(hit.x,hit.y,hit.z);return true;}
+    if(e.button!==2||isTinyMode())return false;
     const key=machineKey(hit.x,hit.y,hit.z);
+    if(hit.type===PASSWORD_LOCK_ID){openPasswordLockPanel(hit.x,hit.y,hit.z);return true;}
+    if(hit.previous&&!canEditPasswordCircuit(...hit.previous,undefined,currentBlock)){showToast('Only the lock owner can change this circuit.');return true;}
     if(hit.type===BUTTON_ID){pressMachineButton(hit.x,hit.y,hit.z);return true;}
     if(currentBlock===34&&(hit.type===PISTON_ID||hit.type===PISTON_HEAD_ID)) {
         const at=hit.type===PISTON_ID?[hit.x,hit.y,hit.z]:pistonBaseForHead(hit.x,hit.y,hit.z);
@@ -110,6 +119,16 @@ function handleMachineClick(e) {
         const at=hit.previous;if(!at||!hasInventoryItem(currentBlock))return true;
         if(![0,42].includes(getBlock(...at)))return true;
         const face={x:at[0]-hit.x,y:at[1]-hit.y,z:at[2]-hit.z};
+        if(currentBlock===PASSWORD_LOCK_ID) {
+            if(lockPlacementPending)return true;
+            if(validPistonDirection(face)&&(isSolid(hit.x,hit.y,hit.z)||isWireAt(hit.x,hit.y,hit.z))) {
+                lockPlacementPending=true;
+                performLockAction('place',at,{face}).then(result=>{
+                    if(result.ok){consumeInventoryItem(PASSWORD_LOCK_ID);updateInventoryCounts();updateHotbarUI();openPasswordLockPanel(...at);}else showToast(result.message);
+                }).catch(()=>showToast('Lock placement failed.')).finally(()=>lockPlacementPending=false);
+            }
+            return true;
+        }
         if(currentBlock===REDSTONE_DUST_ID&&!isSolid(at[0],at[1]-1,at[2]))return true;
         if(currentBlock===BUTTON_ID&&(!validPistonDirection(face)||!isSolid(hit.x,hit.y,hit.z)))return true;
         setBlock(...at,currentBlock);
@@ -133,6 +152,7 @@ function pressMachineButton(x,y,z) {
     buttonTimers.set(machineKey(x,y,z),1);circuitDirty=true;queueRoomBlockChange(x,y,z);playSound('place');return true;
 }
 function openPistonPanel(x,y,z) {
+    if(!canEditPasswordCircuit(x,y,z)){showToast('Only the lock owner can change this circuit.');return;}
     closeFurniturePanel(false);furnitureFocus=machineKey(x,y,z);
     const key=furnitureFocus,content=document.getElementById('home-content');content.replaceChildren();
     document.getElementById('home-title').textContent='Piston';document.getElementById('home-panel').hidden=false;
@@ -140,12 +160,12 @@ function openPistonPanel(x,y,z) {
     const row=document.createElement('div');row.className='home-row';row.setAttribute('role','group');row.setAttribute('aria-label','Piston mode');content.appendChild(row);
     for(const [mode,label] of [['auto','Auto'],['door','Door'],['cannon','TNT Cannon'],['cycle','Cycle']]) {
         const b=document.createElement('button');b.textContent=label;b.setAttribute('aria-pressed',String((pistonModes.get(key)||'auto')===mode));
-        b.onclick=()=>{if(getBlock(x,y,z)!==PISTON_ID)return;pistonModes.set(key,mode);pistonPowerEdges.delete(key);queueRoomBlockChange(x,y,z);openPistonPanel(x,y,z);};row.appendChild(b);
+        b.onclick=()=>{if(getBlock(x,y,z)!==PISTON_ID||!canEditPasswordCircuit(x,y,z))return;pistonModes.set(key,mode);pistonPowerEdges.delete(key);queueRoomBlockChange(x,y,z);openPistonPanel(x,y,z);};row.appendChild(b);
     }
     const rotate=document.createElement('button');rotate.innerHTML='&#x21bb;';rotate.title='Rotate';rotate.setAttribute('aria-label','Rotate');
     rotate.style.cssText='width:44px;height:44px;padding:0;font-size:26px';rotate.disabled=pistonStates.has(key);
     rotate.onclick=()=>{
-        if(getBlock(x,y,z)!==PISTON_ID||pistonStates.has(key))return;
+        if(getBlock(x,y,z)!==PISTON_ID||pistonStates.has(key)||!canEditPasswordCircuit(x,y,z))return;
         const directions=[{x:1,y:0,z:0},{x:0,y:0,z:1},{x:-1,y:0,z:0},{x:0,y:0,z:-1},{x:0,y:1,z:0},{x:0,y:-1,z:0}];
         const old=getStoredPistonDirection(x,y,z),i=directions.findIndex(d=>d.x===old.x&&d.y===old.y&&d.z===old.z);
         pistonDirections.set(key,directions[(i+1)%6]);queueRoomBlockChange(x,y,z);machineRevision++;playSound('stone');
@@ -167,13 +187,22 @@ function pistonBaseForHead(x,y,z) {
     }
     return null;
 }
-function machineCellOccupied(x,y,z) {
-    const overlaps=(p,r,bottom,top)=>Math.abs(p.x-x)<r+0.499&&Math.abs(p.z-z)<r+0.499&&top>y-0.499&&bottom<y+0.499;
+function machineCellOccupied(x,y,z,padding=0) {
+    const overlaps=(p,r,bottom,top)=>Math.abs(p.x-x)<r+0.499+padding&&Math.abs(p.z-z)<r+0.499+padding&&top>y-0.499-padding&&bottom<y+0.499+padding;
     if(isGameStarted&&overlaps(camera.position,getPlayerRadius(),camera.position.y-getPlayerHeight(),camera.position.y+0.2*playerScale))return true;
     if(multiplayerRoom?.role==='host')for(const p of multiplayerRoom.positions.values()) {
         if(p.dimension===currentDimension&&overlaps(p,0.2*p.scale,p.y-1.6*p.scale,p.y+0.2*p.scale))return true;
     }
     return [...villagers,...zombies,...creepers,...animals,...endermen].some(m=>!m.dying&&overlaps(m.mesh.position,0.35,m.mesh.position.y-0.5,m.mesh.position.y+1.3));
+}
+function doorPassageOccupied(at) {
+    const d=getStoredPistonDirection(...at);
+    for(let i=1;i<=13;i++) {
+        const cell=[at[0]+d.x*i,at[1]+d.y*i,at[2]+d.z*i];
+        if(machineCellOccupied(...cell,0.65))return true;
+        if(i>=2&&!getBlock(...cell))break;
+    }
+    return false;
 }
 function movablePistonCell(x,y,z,type) {
     if(!isMovableByPiston(type)||hiddenRedstone.has(machineKey(x,y,z)))return false;
@@ -365,6 +394,13 @@ function buildCircuitModel(type,links=[],powered=false,face={x:0,y:1,z:0}) {
             if(dy===1)addModelBox(group,dx?0.025:0.16,1,dz?0.025:0.16,color,dx*0.48,0,dz*0.48);
         }
     } else {
+        if(type===PASSWORD_LOCK_ID) {
+            addModelBox(group,0.58,0.09,0.76,0x3d484b,0,-0.43,0);
+            addModelBox(group,0.4,0.02,0.15,powered?0x49d593:0xd55748,0,-0.375,-0.2);
+            for(let x=-1;x<=1;x++)for(let z=0;z<3;z++)addModelBox(group,0.09,0.035,0.09,0xe2e4e0,x*0.14,-0.365,z*0.13-0.02);
+            group.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),new THREE.Vector3(face.x,face.y,face.z));
+            return group;
+        }
         addModelBox(group,0.42,0.06,0.3,0x48545b,0,-0.46,0);
         addModelBox(group,0.3,powered?0.04:0.12,0.2,powered?0xe45938:0xaab5bd,0,powered?-0.41:-0.37,0);
         group.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),new THREE.Vector3(face.x,face.y,face.z));
@@ -377,7 +413,8 @@ function updateCircuitVisuals() {
         const at=key.split(',').map(Number);if(!nearThermalPlayer(...at))continue;
         const links=type===REDSTONE_DUST_ID?wireNeighbors(...at).concat(redstoneNeighbors(...at).filter(n=>[30,31,53,52,BUTTON_ID].includes(getBlock(n.x,n.y,n.z))))
             .map(n=>[n.x-at[0],n.y-at[1],n.z-at[2]]):[];
-        const powered=type===REDSTONE_DUST_ID?poweredWireCells.has(key):(buttonTimers.get(key)||0)>0,face=buttonFaces.get(key)||{x:0,y:1,z:0};
+        const powered=type===REDSTONE_DUST_ID?poweredWireCells.has(key):type===PASSWORD_LOCK_ID?(passwordLocks.get(key)?.remaining||0)>0:(buttonTimers.get(key)||0)>0;
+        const face=passwordLocks.get(key)?.face||buttonFaces.get(key)||{x:0,y:1,z:0};
         const signature=JSON.stringify([type,links,powered,face]);let model=circuitVisuals.get(key);
         if(model?.userData.signature===signature)continue;
         if(model)disposeModModel(model);
@@ -389,7 +426,8 @@ function updateCircuitVisuals() {
 }
 function initRedstoneMachines() {
     materials[REDSTONE_DUST_ID]=matRedstone;materials[BUTTON_ID]=matStone;
-    recipes.push({ing:{28:1},out:REDSTONE_DUST_ID,count:8},{ing:{3:1},out:BUTTON_ID,count:1});
+    materials[PASSWORD_LOCK_ID]=matStone;
+    recipes.push({ing:{28:1},out:REDSTONE_DUST_ID,count:8},{ing:{3:1},out:BUTTON_ID,count:1},{ing:{36:2,28:1},out:PASSWORD_LOCK_ID,count:1});
     const renderer=new THREE.WebGLRenderer({alpha:true,antialias:true,preserveDrawingBuffer:true});renderer.setSize(96,96);
     const preview=new THREE.Scene();preview.add(new THREE.AmbientLight(0xffffff,1));
     const view=new THREE.PerspectiveCamera(35,1,0.01,10);view.position.set(1.3,1.3,1.8);view.lookAt(0,-0.35,0);
@@ -407,14 +445,16 @@ function tickRedstoneMachines(delta) {
     machineElapsed+=delta;
     if(machineElapsed>=0.1&&thermalAuthority()&&!commandJob&&!nukeJobs.length) {
         const elapsed=Math.min(machineElapsed,0.2);machineElapsed=0;
+        tickPasswordLocks(elapsed);
         for(const [key,time] of buttonTimers) {
             const left=Math.max(0,time-elapsed);
             if(left)buttonTimers.set(key,left);else {buttonTimers.delete(key);circuitDirty=true;queueRoomBlockChange(...key.split(',').map(Number));}
         }
         for(const [key,type] of [...machineCells])if(MACHINE_ITEMS[type]) {
+            if(type===PASSWORD_LOCK_ID)continue;
             const at=key.split(',').map(Number),f=type===BUTTON_ID?(buttonFaces.get(key)||{x:0,y:1,z:0}):{x:0,y:1,z:0};
             if(!isSolid(at[0]-f.x,at[1]-f.y,at[2]-f.z)) {
-                setBlockNoRebuild(...at,0,rebuildQueue);spawnDroppedItem(...at,type);
+                if(setBlockNoRebuild(...at,0,rebuildQueue)!==false)spawnDroppedItem(...at,type);
             }
         }
         // Run pistons before unsupported TNT, so stacked ammunition can be armed as a group.
@@ -423,8 +463,14 @@ function tickRedstoneMachines(delta) {
             const power=machinePowered(...at),state=pistonStates.get(key),mode=resolvedPistonMode(key,at);
             const wasPowered=pistonPowerEdges.get(key)||false;pistonPowerEdges.set(key,power);
             if(mode==='door') {
-                if(power&&state)retractPiston(...at);
-                else if(!power&&!state)extendPiston(...at);
+                if(power) {
+                    doorOpenTimers.set(key,DOOR_OPEN_HOLD);
+                    if(state)retractPiston(...at);
+                } else if(!state) {
+                    const remaining=doorPassageOccupied(at)?Math.max(2,doorOpenTimers.get(key)||0):Math.max(0,(doorOpenTimers.get(key)||0)-elapsed);
+                    doorOpenTimers.set(key,remaining);
+                    if(remaining===0)extendPiston(...at);
+                }
                 continue;
             }
             if(mode==='cannon') {
@@ -459,9 +505,10 @@ function tickRedstoneMachines(delta) {
 }
 
 function saveRedstoneMachines() {
-    return {tnt:[...movingTNT.values()].map(serializeTNT),pistons:[...pistonStates],directions:[...pistonDirections],modes:[...pistonModes],edges:[...pistonPowerEdges],buttons:[...buttonTimers],faces:[...buttonFaces],hidden:[...hiddenRedstone],nextTNT};
+    return {...savePasswordLocks(),doorTimers:[...doorOpenTimers],tnt:[...movingTNT.values()].map(serializeTNT),pistons:[...pistonStates],directions:[...pistonDirections],modes:[...pistonModes],edges:[...pistonPowerEdges],buttons:[...buttonTimers],faces:[...buttonFaces],hidden:[...hiddenRedstone],nextTNT};
 }
 function clearRedstoneMachines() {
+    clearPasswordLocks();doorOpenTimers.clear();
     for(const t of [...movingTNT.values()])removeMovingTNT(t);
     for(const m of pistonVisuals.values())disposeModModel(m);
     for(const m of circuitVisuals.values())disposeModModel(m);
@@ -476,11 +523,13 @@ function validPistonState(key,state) {
 }
 function restoreRedstoneMachines(data={}) {
     clearRedstoneMachines();
-    for(const [key,type] of worldMap)if([21,28,30,31,52,53,145,146,147].includes(type)&&validMachineCell(key.split(',').map(Number)))machineCells.set(key,type);
+    for(const [key,type] of worldMap)if([21,28,30,31,52,53,145,146,147,148].includes(type)&&validMachineCell(key.split(',').map(Number)))machineCells.set(key,type);
     for(const key of (data.hidden||[]).slice(0,8192))if(typeof key==='string'&&validMachineCell(key.split(',').map(Number))&&HIDDEN_BLOCKS[getBlock(...key.split(',').map(Number))])hiddenRedstone.add(key);
     for(const [key,d] of (data.directions||[]).slice(0,4096))if(machineCells.get(key)===PISTON_ID&&validPistonDirection(d))pistonDirections.set(key,d);
     for(const [key,s] of (data.pistons||[]).slice(0,512))if(machineCells.get(key)===PISTON_ID&&validPistonState(key,s))pistonStates.set(key,s);
     for(const [key,mode] of (data.modes||[]).slice(0,4096))if(machineCells.get(key)===PISTON_ID&&PISTON_MODES.includes(mode))pistonModes.set(key,mode);
+    for(const [key,time] of (data.doorTimers||[]).slice(0,4096))if(machineCells.get(key)===PISTON_ID&&Number.isFinite(time)&&time>=0&&time<=DOOR_OPEN_HOLD)doorOpenTimers.set(key,time);
+    restorePasswordLocks(data);
     // Older saves used reciprocating pistons only; keep their existing mechanism unchanged.
     if(!data.modes)for(const [key,type] of machineCells)if(type===PISTON_ID)pistonModes.set(key,'cycle');
     for(const [key,value] of (data.edges||[]).slice(0,4096))if(machineCells.get(key)===PISTON_ID&&typeof value==='boolean')pistonPowerEdges.set(key,value);
@@ -518,6 +567,7 @@ function broadcastMachinePacket(packet) {
 }
 function receiveMachinePacket(p) {
     if(p.dimension!==currentDimension)return;
+    if(p.type==='password-locks'){receivePasswordLocks(p);return;}
     if(p.type==='machine-blast') {
         if(validMachineCell(p.at))showTNTBlast(p.at);return;
     }

@@ -1,4 +1,4 @@
-const ROOM_PROTOCOL='daniel-mc-room-4', ROOM_PREFIX='daniel-mc-room2-';
+const ROOM_PROTOCOL='daniel-mc-room-5', ROOM_PREFIX='daniel-mc-room2-';
 const ROOM_TIMEOUT_MS=30000, ROOM_MAX_SAVE=16*1024*1024, ROOM_PACKET_CELLS=128;
 let multiplayerRoom=null, multiplayerMode='host', currentRoomCode='', remotePlayers={};
 
@@ -179,6 +179,11 @@ function sendRoomPacket(conn,packet) {
 
 function attachRoomConnection(r,conn) {
     const entry={conn,ready:false,sending:false,pending:[],rateStart:0,rate:0};r.connections.set(conn.peer,entry);
+    conn.on('open',async()=>{
+        if(r.role!=='guest')return;
+        const identity=await lockIdentityReady;
+        if(identity&&multiplayerRoom===r)sendRoomPacket(conn,{type:'lock-auth',token:identity.token});
+    });
     conn.on('data',packet=>{
         if(multiplayerRoom!==r||!packet||typeof packet!=='object')return;
         try {
@@ -199,7 +204,7 @@ function attachRoomConnection(r,conn) {
 
 function sendRoomSnapshot(r,entry) {
     if(entry.sending||!entry.conn.open)return;
-    const text=JSON.stringify(getWorldSaveData());
+    const text=JSON.stringify(getWorldSaveData(),(key,value)=>key==='lockSecrets'?undefined:value);
     if(text.length>ROOM_MAX_SAVE){sendRoomPacket(entry.conn,{type:'error',message:'This world is too large to transfer. Try a smaller world.'});return;}
     entry.sending=true;entry.pending=[];const size=8000,parts=Math.ceil(text.length/size);
     sendRoomPacket(entry.conn,{type:'world-begin',version:ROOM_PROTOCOL,parts,length:text.length,seq:r.seq});
@@ -225,16 +230,17 @@ function displayRoomPlayer(id,p) {
 }
 
 function roomCellValid(cell) {
-    return Array.isArray(cell)&&cell.length===4&&cell.every(Number.isSafeInteger)&&cell.slice(0,3).every(n=>Math.abs(n)<=100000)&&cell[3]>=0&&cell[3]<=147;
+    return Array.isArray(cell)&&cell.length===4&&cell.every(Number.isSafeInteger)&&cell.slice(0,3).every(n=>Math.abs(n)<=100000)&&cell[3]>=0&&cell[3]<=148;
 }
 
-function applyRoomCells(r,cells) {
+function applyRoomCells(r,cells,actor=null) {
     if(!Array.isArray(cells)||cells.length>ROOM_PACKET_CELLS)throw new Error('Invalid edit batch');
-    const dirty=new Set(),editing=commandEditing;r.applying=true;commandEditing=true;
+    const dirty=new Set(),editing=commandEditing,previousActor=lockEditActor;r.applying=true;commandEditing=true;lockEditActor=actor;
     try {
         for(const change of cells) {
             if(!roomCellValid(change.cell))throw new Error('Invalid cell');
             const [x,y,z,id]=change.cell,key=`${currentDimension}|${x},${y},${z}`;
+            if(r.role==='host'&&(id===PASSWORD_LOCK_ID||getBlock(x,y,z)===PASSWORD_LOCK_ID||!canEditPasswordCircuit(x,y,z,actor,id)))continue;
             setBlockNoRebuild(x,y,z,id,dirty);
             applyMachineCellData(x,y,z,change.machine);
             if(id===LAVA_ID&&Number.isInteger(change.lava)&&change.lava>0&&change.lava<=8)lavaAmounts.set(`${x},${y},${z}`,change.lava);
@@ -245,10 +251,11 @@ function applyRoomCells(r,cells) {
                 const model=furnitureMeshes.get(key);if(model){disposeModModel(model);furnitureMeshes.delete(key);}
             }
         }
-    } finally {r.applying=false;commandEditing=editing;addDirtyChunksToQueue(dirty);furnitureTick=1;}
+    } finally {r.applying=false;commandEditing=editing;lockEditActor=previousActor;addDirtyChunksToQueue(dirty);furnitureTick=1;}
 }
 
 function receiveRoomGuest(r,entry,p) {
+    if(p.type==='lock-auth'){authenticateLockGuest(r,entry,p).catch(()=>entry.conn.close());return;}
     if(p.type==='ready'&&entry.sending) {
         entry.ready=true;entry.sending=false;
         for(const patch of entry.pending)sendRoomPacket(entry.conn,patch);entry.pending=[];
@@ -256,6 +263,7 @@ function receiveRoomGuest(r,entry,p) {
         showToast('A player joined.');return;
     }
     if(!entry.ready||!r.worldReady)return;
+    if(p.type==='lock-request'){receiveGuestLockAction(r,entry,p).catch(()=>sendRoomPacket(entry.conn,{type:'lock-reply',request:p.request,ok:false,message:'Lock request failed.'}));return;}
     if(p.type==='launcher-request') {
         if(p.dimension!==currentDimension||!Array.isArray(p.at)||p.at.length!==3||!p.at.every(Number.isSafeInteger))return;
         const launcher=furnitureRecord(...p.at);
@@ -278,12 +286,14 @@ function receiveRoomGuest(r,entry,p) {
         const now=performance.now();if(now-entry.rateStart>1000){entry.rate=0;entry.rateStart=now;}
         entry.rate+=(p.cells?.length||0);if(entry.rate>4096){entry.conn.close();return;}
         if(JSON.stringify(p).length>60000)throw new Error('Edit too large');
-        applyRoomCells(r,p.cells);
+        applyRoomCells(r,p.cells,entry.owner||'unverified');
         for(const change of p.cells)r.dirty.set(change.cell.slice(0,3).join(','),change.cell.slice(0,3));
     }
 }
 
 function receiveRoomHost(r,entry,p) {
+    if(p.type==='lock-auth-ok'){r.lockAuthenticated=true;return;}
+    if(p.type==='lock-reply'){receiveLockReply(p);return;}
     if(p.type==='error'){roomFailure(r,String(p.message).slice(0,200));return;}
     if(p.type==='waiting') {
         clearTimeout(r.deadline);r.deadline=roomTimer(r,()=>roomFailure(r,'The host has not entered the room. Please try again.'),60000);
@@ -324,7 +334,7 @@ function receiveRoomHost(r,entry,p) {
     } else if(p.type==='patch'&&r.worldReady) {
         if(p.seq<=r.seq)return;if(p.seq!==r.seq+1||p.dimension!==currentDimension)throw new Error('World revision mismatch');
         applyRoomCells(r,p.cells);r.seq=p.seq;
-    } else if(['machines','machine-blast'].includes(p.type)&&r.worldReady) {
+    } else if(['machines','machine-blast','password-locks'].includes(p.type)&&r.worldReady) {
         receiveMachinePacket(p);
     } else if(p.type==='launcher-rejected'&&r.worldReady) {
         showToast('Host blocked the launch. Check buildings, confirm the target, and wait for the port to reload.');
