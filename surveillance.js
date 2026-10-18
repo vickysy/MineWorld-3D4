@@ -1,17 +1,27 @@
-const SECURITY_CAMERA_ID=138, SURVEILLANCE_TABLET_ID=139;
-const SURVEILLANCE_ITEMS={138:'Security Camera',139:'Surveillance Tablet'};
+const SECURITY_CAMERA_ID=138, SURVEILLANCE_TABLET_ID=139, NUCLEAR_LAUNCHER_ID=144;
+const SURVEILLANCE_ITEMS={138:'Security Camera',139:'Surveillance Tablet',144:'Twin Nuclear Launcher'};
 Object.assign(HOME_ITEMS,SURVEILLANCE_ITEMS);
 Object.assign(EXTRA_HOME_ITEMS,SURVEILLANCE_ITEMS);
-Object.assign(COMMAND_ITEMS,{'监控':138,'监控摄像头':138,'摄像头':138,'监控平板':139,'平板':139});
+Object.assign(COMMAND_ITEMS,{'监控':138,'监控摄像头':138,'摄像头':138,'监控平板':139,'平板':139,'核武器':144,'核弹发射器':144,'双管发射器':144});
 let nextSecurityCameraNumber=1, surveillanceWatch=null, surveillanceRendering=false;
 
 function surveillanceRecipes() {
-    return [{ing:{36:2,6:1,28:3},out:138,count:1},{ing:{36:1,6:2,28:3},out:139,count:1}];
+    return [{ing:{36:2,6:1,28:3},out:138,count:1},{ing:{36:1,6:2,28:3},out:139,count:1},{ing:{36:3,3:2,28:1,22:1},out:144,count:1}];
 }
 
 function buildSurveillanceModel(group,id,data) {
     const box=(w,h,d,c,x,y,z)=>addModelBox(group,w,h,d,c,x,y,z);
-    if(id===SECURITY_CAMERA_ID) {
+    if(id===NUCLEAR_LAUNCHER_ID) {
+        box(0.96,0.2,0.88,0x48545b,0,-0.39,0);
+        group.userData.launchPorts=[];
+        for(const x of [-0.24,0.24]) {
+            box(0.37,0.03,0.45,0x11191d,x,-0.25,0);
+            for(const dx of [-0.18,0.18])box(0.045,0.65,0.48,0xc4ced1,x+dx,0.06,0);
+            for(const z of [-0.22,0.22])box(0.36,0.65,0.045,0x82949d,x,0.06,z);
+            const light=box(0.08,0.06,0.025,0x6de0a3,x,-0.35,0.46);group.userData.launchPorts.push(light);
+        }
+        box(0.14,0.05,0.025,0xe7be4c,0,-0.35,0.46);
+    } else if(id===SECURITY_CAMERA_ID) {
         box(0.35,0.08,0.35,0x616e73,0,-0.46,-0.16);
         box(0.09,0.42,0.09,0xaab7bb,0,-0.22,-0.16);
         const head=new THREE.Group();head.position.y=0.1;head.rotation.x=-(data.pitch??-12)*Math.PI/180;group.add(head);
@@ -92,6 +102,7 @@ function startSurveillance(record,canvas,status) {
 }
 
 function updateSurveillance(now=performance.now()) {
+    updateSecurityCameraMovement();
     const w=surveillanceWatch;if(!w)return;
     const r=w.record;
     if(!w.canvas.isConnected||document.getElementById('home-panel').hidden||!r.key.startsWith(currentDimension+'|')){stopSurveillance();return;}
@@ -103,7 +114,7 @@ function updateSurveillance(now=performance.now()) {
     if(missing.length&&now>=w.nextBuild){buildChunkIfMissing(...missing[0].split(',').map(Number));w.nextBuild=now+60;missing.shift();}
     if(now<w.nextFrame)return;w.nextFrame=now+125;
     w.status.textContent=missing.length?`Loading ${25-missing.length} / 25`:'LIVE';
-    const yaw=r.data.yaw||0,pitch=(r.data.pitch??-12)*Math.PI/180;
+    const yaw=(r.data.yaw||0)+cameraPanDegrees(r.data)*Math.PI/180,pitch=(r.data.pitch??-12)*Math.PI/180;
     const forward=new THREE.Vector3(Math.sin(yaw)*Math.cos(pitch),Math.sin(pitch),Math.cos(yaw)*Math.cos(pitch));
     w.view.position.set(r.x,r.y+0.1,r.z);w.view.position.addScaledVector(forward,0.44);w.view.lookAt(w.view.position.clone().add(forward));
     w.view.updateMatrixWorld(true);
@@ -130,25 +141,27 @@ function openSecurityCameraPanel(record,content,button) {
     const data=record.data;
     const title=document.createElement('strong');title.textContent=`Camera ${ensureSecurityCameraNumber(data)}`;content.appendChild(title);
     const label=document.createElement('label'),power=document.createElement('input');power.type='checkbox';power.checked=data.on!==false;
-    power.onchange=()=>data.on=power.checked;label.append(power,document.createTextNode(' Power'));content.appendChild(label);
+    power.onchange=()=>{data.on=power.checked;queueRoomBlockChange(record.x,record.y,record.z);};label.append(power,document.createTextNode(' Power'));content.appendChild(label);
     const direction=document.createElement('select');direction.setAttribute('aria-label','Direction');
     for(const [name,value] of [['South',0],['East',90],['North',180],['West',270]]){const o=document.createElement('option');o.textContent=name;o.value=value;direction.appendChild(o);}
     direction.value=((Math.round((data.yaw||0)*180/Math.PI)%360)+360)%360;
-    direction.onchange=()=>{data.yaw=Number(direction.value)*Math.PI/180;syncFurnitureMeshes();};
+    direction.onchange=()=>{data.yaw=Number(direction.value)*Math.PI/180;syncFurnitureMeshes();queueRoomBlockChange(record.x,record.y,record.z);};
     const directionLabel=document.createElement('label');directionLabel.textContent='Direction';directionLabel.appendChild(direction);content.appendChild(directionLabel);
     const tiltLabel=document.createElement('label'),tilt=document.createElement('input'),value=document.createElement('output');
     tilt.type='range';tilt.min=-80;tilt.max=60;tilt.step=1;tilt.value=data.pitch??-12;tilt.setAttribute('aria-label','Tilt');
-    tilt.oninput=()=>{data.pitch=Number(tilt.value);value.textContent=`${data.pitch} degrees`;syncFurnitureMeshes();};value.textContent=`${tilt.value} degrees`;
+    tilt.oninput=()=>{data.pitch=Number(tilt.value);value.textContent=`${data.pitch} degrees`;syncFurnitureMeshes();queueRoomBlockChange(record.x,record.y,record.z);};value.textContent=`${tilt.value} degrees`;
     tiltLabel.append(document.createTextNode('Tilt '),tilt,value);content.appendChild(tiltLabel);
+    appendCameraPanControls(record,content);
 }
 
 function openSurveillanceComputer(record,content,button) {
     const tablet=record.id===SURVEILLANCE_TABLET_ID,data=record.data;
     const tabs=document.createElement('div');tabs.className='home-row';content.appendChild(tabs);
     const body=document.createElement('div');body.className='surveillance-body';content.appendChild(body);
-    let cameraTab,notesTab;
+    let cameraTab,notesTab,launcherTab;
     const render=mode=>{
-        stopSurveillance();body.replaceChildren();cameraTab.setAttribute('aria-pressed',mode==='cameras');notesTab?.setAttribute('aria-pressed',mode==='notes');
+        stopSurveillance();body.replaceChildren();cameraTab.setAttribute('aria-pressed',mode==='cameras');notesTab?.setAttribute('aria-pressed',mode==='notes');launcherTab?.setAttribute('aria-pressed',mode==='launchers');
+        if(mode==='launchers'){openLauncherTablet(body,button);return;}
         if(mode==='notes') {
             const input=document.createElement('textarea');input.rows=6;input.maxLength=2000;input.value=data.note||'';input.setAttribute('aria-label','Notes');
             input.oninput=()=>{data.note=input.value;data.on=true;};body.appendChild(input);
@@ -163,10 +176,40 @@ function openSurveillanceComputer(record,content,button) {
         canvas.style.cssText='display:block;width:100%;aspect-ratio:16/9;background:#11191d;border-radius:4px';
         const status=document.createElement('output');status.setAttribute('aria-live','polite');
         const label=document.createElement('label');label.textContent='Camera';label.appendChild(select);body.append(label,canvas,status);
-        select.onchange=()=>{data.cameraKey=select.value;data.on=true;status.textContent='Connecting';startSurveillance(cameras.find(r=>r.key===select.value),canvas,status);};
+        const panControls=document.createElement('div');body.appendChild(panControls);
+        select.onchange=()=>{data.cameraKey=select.value;data.on=true;status.textContent='Connecting';const r=cameras.find(r=>r.key===select.value);startSurveillance(r,canvas,status);panControls.replaceChildren();appendCameraPanControls(r,panControls);};
         select.onchange();
     };
     cameraTab=button('Cameras',()=>render('cameras'),tabs);
     if(!tablet)notesTab=button('Notes',()=>render('notes'),tabs);
+    launcherTab=button('Launchers',()=>render('launchers'),tabs);
     render(tablet||securityCameras().length?'cameras':'notes');
+}
+
+function cameraPanDegrees(data,now=Date.now()) {
+    const pan=Math.max(-90,Math.min(90,Number(data.pan)||0));
+    if(!data.scan||data.on===false)return pan;
+    const t=((now-(data.scanStarted||now))/6000+(data.scanPhase||0))%2;
+    return -90+180*(1-Math.abs(t-1));
+}
+
+function appendCameraPanControls(record,parent) {
+    const row=document.createElement('label'),slider=document.createElement('input'),value=document.createElement('output');
+    row.style.cssText='display:flex;align-items:center;gap:8px;flex-wrap:wrap';
+    slider.type='range';slider.min=-90;slider.max=90;slider.step=1;slider.value=cameraPanDegrees(record.data);slider.setAttribute('aria-label','Camera Pan');slider.style.maxWidth='100%';
+    value.dataset.cameraPan=record.key;value.textContent=`${Math.round(Number(slider.value))} degrees`;
+    const scanLabel=document.createElement('label'),scan=document.createElement('input');scan.type='checkbox';scan.checked=!!record.data.scan;scan.setAttribute('aria-label','Auto Scan');
+    const changed=()=>{queueRoomBlockChange(record.x,record.y,record.z);updateSecurityCameraMovement();if(surveillanceWatch)surveillanceWatch.nextFrame=0;};
+    slider.oninput=()=>{record.data.pan=Number(slider.value);record.data.scan=false;scan.checked=false;changed();};
+    scan.onchange=()=>{record.data.pan=cameraPanDegrees(record.data);record.data.scan=scan.checked;record.data.scanStarted=Date.now();record.data.scanPhase=(record.data.pan+90)/180;changed();};
+    row.append(document.createTextNode('Pan '),slider,value);scanLabel.append(scan,document.createTextNode(' Auto Scan'));parent.append(row,scanLabel);
+}
+
+function updateSecurityCameraMovement() {
+    for(const [key,model] of furnitureMeshes)if(model.userData.securityHead) {
+        const data=furnitureData.get(key);if(data)model.userData.securityHead.rotation.y=cameraPanDegrees(data)*Math.PI/180;
+    }
+    for(const output of document.querySelectorAll('[data-camera-pan]')) {
+        const data=furnitureData.get(output.dataset.cameraPan);if(data){const pan=Math.round(cameraPanDegrees(data));output.textContent=`${pan} degrees`;if(data.scan)output.parentElement.querySelector('input[type=range]').value=pan;}
+    }
 }

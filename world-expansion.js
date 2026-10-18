@@ -19,7 +19,7 @@ function waterAmount(x,y,z) {
 
 function queueFluidCell(x,y,z) {
     if (currentDimension === 'nether' || waterFlowQueue.length >= 8192) return;
-    if (Math.abs(x-camera.position.x)>64 || Math.abs(z-camera.position.z)>64 || Math.abs(y-camera.position.y)>160) return;
+    if (!nearThermalPlayer(x,y,z)) return;
     const key=`${x},${y},${z}`;
     if (!queuedWaterFlow.has(key)) { queuedWaterFlow.add(key);waterFlowQueue.push({x,y,z}); }
 }
@@ -37,7 +37,7 @@ function writeWater(x,y,z,amount,dirty) {
 }
 
 function tickWaterFlow(delta=0.1) {
-    if (currentDimension==='nether' || commandJob) return;
+    if (currentDimension==='nether' || commandJob || !thermalAuthority()) return;
     flowElapsed+=delta;
     if(flowElapsed<0.1 || !waterFlowQueue.length) return;
     flowElapsed=0;
@@ -51,10 +51,11 @@ function tickWaterFlow(delta=0.1) {
             let lava=false;
             for(const [dx,dy,dz] of [[1,0,0],[-1,0,0],[0,0,1],[0,0,-1],[0,-1,0],[0,1,0]]) {
                 if(getBlock(x+dx,y+dy,z+dz)===LAVA_ID) {
-                    setBlockNoRebuild(x+dx,y+dy,z+dz,OBSIDIAN_ID,dirty);lava=true;
+                    lava=quenchLava(x+dx,y+dy,z+dz,dirty)||lava;
                 }
             }
             if(lava) queueFluidNeighbors(x,y,z);
+            amount=waterAmount(x,y,z);if(!amount)continue;
             const below=getBlock(x,y-1,z);
             if([0,24,25,42].includes(below)) {
                 const n=waterAmount(x,y-1,z), moved=Math.min(amount,8-n);
@@ -79,6 +80,7 @@ function tickWaterFlow(delta=0.1) {
 
 function expansionBlockChanged(x,y,z,oldType,type) {
     if(!expansionReady) return;
+    thermalBlockChanged(x,y,z,oldType,type);
     if(!waterWriting) {
         waterAmounts.delete(`${x},${y},${z}`);
         queueFluidNeighbors(x,y,z);
@@ -143,7 +145,7 @@ function activatePortalNear(x,y,z) {
 }
 
 function snapshotDimension() {
-    return {worldMap:Array.from(worldMap),modifiedColumns:Array.from(modifiedColumns),columnMinY:Array.from(columnMinY),
+    return {construction:saveConstruction(),thermal:saveThermalWorld(),worldMap:Array.from(worldMap),modifiedColumns:Array.from(modifiedColumns),columnMinY:Array.from(columnMinY),
         microMined:Array.from(microMinedBlocks),microPlaced:Array.from(microPlacedBlocks),fineEdits:Array.from(fineVoxelEdits),
         chunkMaxY:Array.from(chunkMaxY),chunkScanYRanges:Array.from(chunkScanYRanges),waterAmounts:Array.from(waterAmounts),portals:Array.from(activePortals),pistons:Array.from(pistonDirections),
         companions:[...zombies,...creepers,...villagers].filter(m=>m.eggId&&!m.dying).map(m=>({id:m.eggId,pos:m.mesh.position.toArray(),hp:m.hp})),
@@ -152,6 +154,7 @@ function snapshotDimension() {
 }
 
 function restoreDimension(data={}) {
+    restoreConstruction(data.construction);
     for(const [map,entries] of [[worldMap,data.worldMap],[columnMinY,data.columnMinY],[chunkMaxY,data.chunkMaxY],
         [chunkScanYRanges,data.chunkScanYRanges],[waterAmounts,data.waterAmounts],[activePortals,data.portals],[pistonDirections,data.pistons]]) {
         map.clear();for(const [k,v] of entries||[]) map.set(k,v);
@@ -161,6 +164,7 @@ function restoreDimension(data={}) {
     railShapes.clear();
     waterFlowQueue.length=0;queuedWaterFlow.clear();
     for(const [key,type] of worldMap) if(type===24) queueFluidNeighbors(...key.split(',').map(Number));
+    restoreThermalWorld(data.thermal);
 }
 
 function travelThroughPortal(next) {
@@ -203,11 +207,13 @@ function travelThroughPortal(next) {
 }
 
 function saveWorldExpansion() {
-    return {nextSecurityCameraNumber,city:saveHomeCity(),flood:worldFloodHeight,water:Array.from(waterAmounts),portals:Array.from(activePortals),dimensions:Array.from(dimensionWorlds),furniture:Array.from(furnitureData),
+    return {construction:saveConstruction(),thermal:saveThermalWorld(),nextSecurityCameraNumber,city:saveHomeCity(),flood:worldFloodHeight,water:Array.from(waterAmounts),portals:Array.from(activePortals),dimensions:Array.from(dimensionWorlds),furniture:Array.from(furnitureData),
         endermen:endermen.filter(m=>!m.dying).map(m=>({x:m.mesh.position.x,y:m.mesh.position.y,z:m.mesh.position.z,eggId:m.eggId,hp:m.hp}))};
 }
 
 function clearExpansionWorld() {
+    restoreConstruction();
+    clearThermalWorld();
     clearHomeCity();
     closeFurniturePanel(false);closeCommandPanel(false);seatedAt=null;
     for(const mob of endermen) disposeModModel(mob.mesh);endermen=[];
@@ -219,6 +225,8 @@ function clearExpansionWorld() {
 }
 
 function restoreWorldExpansion(data={}) {
+    restoreConstruction(data.construction);
+    restoreThermalWorld(data.thermal);
     worldFloodHeight=Number.isFinite(data.flood)?data.flood:null;
     for(const [map,entries] of [[waterAmounts,data.water],[activePortals,data.portals],[dimensionWorlds,data.dimensions],[furnitureData,data.furniture]]) {
         map.clear();for(const [k,v] of entries||[]) map.set(k,v);
@@ -311,6 +319,7 @@ function updateEndermen(delta) {
 }
 
 function createFurnitureModel(id,data={}) {
+    if(id===CAMPFIRE_ID){const model=buildThermalModel(id);model.userData.itemId=id;return model;}
     const group=new THREE.Group(),box=(w,h,d,c,x,y,z,name)=>addModelBox(group,w,h,d,c,x,y,z,name);
     const silver=0xc7cdd0,white=0xeff2f2,dark=0x20252b;
     const screen=(w,h,x,y,z)=>{
@@ -451,6 +460,8 @@ function openFurniturePanel(record) {
     const data=record.data;
     if(record.id===SECURITY_CAMERA_ID) {
         openSecurityCameraPanel(record,content,button);
+    } else if(record.id===NUCLEAR_LAUNCHER_ID) {
+        openLauncherTablet(content,button);
     } else if([COMPUTER_ID,94,96,SURVEILLANCE_TABLET_ID].includes(record.id)) {
         openSurveillanceComputer(record,content,button);
     } else if(record.id===FRIDGE_ID) {
@@ -584,7 +595,7 @@ function handleExpansionClick(e) {
         }
     }
     const record=furnitureRecord(hit.x,hit.y,hit.z);
-    const usableHome=record && ([COMPUTER_ID,94,96,SECURITY_CAMERA_ID,SURVEILLANCE_TABLET_ID,85,86,89,91,104,105,106,SHOWER_ID,SHOWER_DOOR_ID,BOOKSHELF_ID].includes(record.id)||KITCHEN_FOOD[record.id]||record.id===119&&record.data.foodItem);
+    const usableHome=record && ([COMPUTER_ID,94,96,SECURITY_CAMERA_ID,SURVEILLANCE_TABLET_ID,NUCLEAR_LAUNCHER_ID,85,86,89,91,104,105,106,SHOWER_ID,SHOWER_DOOR_ID,BOOKSHELF_ID].includes(record.id)||KITCHEN_FOOD[record.id]||record.id===119&&record.data.foodItem);
     const joiningGlass=[112,SHOWER_DOOR_ID].includes(currentBlock);
     if(record && !e.shiftKey && !isToolItem(currentBlock) && (!HOME_ITEMS[currentBlock] || usableHome&&!joiningGlass)) {
         if([CHAIR_ID,83,126].includes(record.id)) sitInChair(record);
@@ -683,6 +694,7 @@ function initWorldExpansion() {
 
 function updateWorldExpansion(delta) {
     if(!expansionReady || !isGameStarted) return;
+    updateThermalWorld(delta);
     updateEndermen(delta);tickCommandJob();updateHomeCity(delta);
     matWater.map.offset.x=(matWater.map.offset.x+delta*0.025)%1;
     matWater.map.offset.y=(matWater.map.offset.y+delta*0.018)%1;
@@ -791,7 +803,7 @@ function parseWorldCommand(text) {
     const normalized=normalizeWorldCommand(text);
     if(/不要|别帮|别建|别做|不需要|不想|禁止/.test(normalized))throw new Error('这句话包含否定意思，请明确写出你要执行的操作。');
     if(/然后|接着|再帮|并且/.test(normalized))throw new Error('请一次输入一个操作，每次检查后再执行。');
-    if(/^(?:请|帮我|请帮我|我想)?(?:撤销|取消上1个命令)(?:上1个命令|上1次操作|吧|1下)?$/.test(normalized)) return {kind:'undo',label:'撤销上一个命令'};
+    if(/^(?:请|帮我|请帮我|我想)?(?:撤销|取消上1个命令)(?:上1个命令|上1次操作|吧|1下)?$/.test(normalized)) return {kind:'undo',label:commandUndo?.kind==='construction'?'恢复大型建造前的整个世界，建造之后的其他修改也会撤回。':'撤销上一个命令'};
     if(/(取消|撤掉|清除).*(全世界|整个世界|全游戏|城市).*水/.test(normalized)) return {kind:'flood',height:null,label:'取消全世界统一水位'};
     if(/(?:去|到|找到|寻找|传送到)(学校|市场|地摊|足球场)(?:吧|一下|1下)?$/.test(normalized)) {
         const landmark=normalized.includes('学校')?'school':normalized.includes('足球场')?'football':'market';
@@ -809,6 +821,7 @@ function parseWorldCommand(text) {
         const height=Math.max(48,Math.ceil(camera.position.y)+16);
         return {kind:'flood',height,label:`将整个主世界的水位升到 ${height} 格，保留建筑和地形。新生成的区域也会填水。`};
     }
+    const construction=parseConstructionCommand(normalized);if(construction)return construction;
     const sizes=commandDimensions(normalized);
     if(sizes && /(空间|房间|区域|水|正方体|立方体|房子)/.test(normalized)) {
         const [width,depth,givenHeight]=sizes,height=givenHeight??6;
@@ -819,7 +832,7 @@ function parseWorldCommand(text) {
         const label=kind==='room'?`建空心房间，外部长×宽×高：${width} × ${depth} × ${height} 格；内有地板、屋顶和门。`:`${kind==='water'?'填水':'清理空间'}：${width} × ${depth} × ${height} 格，底部保留地板。`;
         return {kind,width,depth,height,layers,label:label+'会修改你周围的方块，确认后执行，可以撤销。'};
     }
-    throw new Error('暂不支持这条命令。可用：创建20×20空间、建20×20×6房间、用水把20×20区域填满、用水把全世界填满、查找物品、生成城市、撤销。');
+    throw new Error('还没有理解这句话。请补充对象和尺寸，例如“场地100×100×100”或“城墙 厚5 长100 宽100”，也可以查找物品、填水、生成城市或撤销。');
 }
 
 function openCommandPanel() {
@@ -839,6 +852,7 @@ function showCommandStatus(message) {document.getElementById('command-result').t
 
 function executeWorldCommand(plan) {
     if(commandJob) {showCommandStatus('正在执行，请等当前命令完成。');return false;}
+    if(plan.kind==='construction')return startConstruction(plan);
     if(plan.kind==='find') {
         const slot=Object.entries(getInventorySlotMapping()).find(([,id])=>id===plan.id)?.[0];
         if(!slot) return false;
@@ -857,6 +871,7 @@ function executeWorldCommand(plan) {
     }
     if(plan.kind==='undo') {
         if(!commandUndo) {showCommandStatus('没有可以撤销的命令。');return false;}
+        if(commandUndo.kind==='construction')return undoConstruction();
         if(commandUndo.kind==='flood') {worldFloodHeight=commandUndo.height;for(const key of chunkMeshes.keys()) rebuildQueue.add(key);commandUndo=null;showCommandStatus('已撤销。');return true;}
         if(commandUndo.dimension!==currentDimension) {showCommandStatus('请回到执行命令的世界再撤销。');return false;}
         commandJob={undo:true,index:0,changes:commandUndo.cells,restore:commandUndo};commandUndo=null;return true;
@@ -893,6 +908,7 @@ function executeWorldCommand(plan) {
 
 function tickCommandJob() {
     if(!commandJob) return;
+    if(commandJob.kind==='construction'){tickConstruction();return;}
     const job=commandJob,dirty=new Set(),end=Math.min(job.index+256,job.changes.length);
     if(job.dimension && job.dimension!==currentDimension) {commandJob=null;return;}
     commandEditing=true;
@@ -934,7 +950,7 @@ function initWorldCommands() {
     document.getElementById('command-form').onsubmit=e=>{e.preventDefault();preview();};
     document.getElementById('execute-command').onclick=()=>{if(commandPreview) executeWorldCommand(commandPreview);};
     document.getElementById('world-command').oninput=()=>{commandPreview=null;document.getElementById('execute-command').disabled=true;};
-    for(const label of ['搭建20×20×20空间','创建20×20空间','用水把全世界填满','查找冰箱','生成城市','撤销']) {
+    for(const label of ['场地100×100×100','field 200×200×10','城墙 厚5 长100 宽100','用水把全世界填满','查找冰箱','撤销']) {
         const b=document.createElement('button');b.textContent=label;b.onclick=()=>{document.getElementById('world-command').value=label;preview();};document.getElementById('command-presets').appendChild(b);
     }
 }

@@ -50,12 +50,12 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
             check(parseWorldCommand('帮我找到淋浴门').id===SHOWER_DOOR_ID&&parseWorldCommand('查找书本方块').id===BOOKSHELF_ID,'Chinese aliases find the new items');
             check(parseWorldCommand('查找太三').id===100,'Chinese numeral normalization preserves existing car aliases');
             const sentences=['帮我搭建一个20×20×20的正方形空间','请帮我建造一个二十乘二十乘二十的房间','做一个长20格、宽20格、高20格的空间','搭建２０＊２０＊２０的空间','建造边长二十的正方体空间','帮我搭建一个20格乘以20格乘以20格的空间'];
-            for(const text of sentences){const p=parseWorldCommand(text);check(p.kind==='room'&&p.width===20&&p.depth===20&&p.height===20&&p.layers===20,`Understands: ${text}`);}
+            for(const text of sentences){const p=parseWorldCommand(text);check(p.kind===(text.includes('房间')?'room':'construction')&&p.width===20&&p.depth===20&&p.height===20,`Understands: ${text}`);}
             const named=parseWorldCommand('搭建一个高8宽12长18的房间');check(named.width===18&&named.depth===12&&named.height===8,'Named dimensions work in any order');
-            for(const text of ['不要搭建20×20×20空间','搭建20×20×0空间','搭建-20×20×20空间','搭建20.5×20×20空间','搭建20×20×20×20空间','搭建20×20×20空间然后用水淹没','搭建100×100×100空间','建一个长20高20的空间','做一个我想象中的东西']) {
+            for(const text of ['不要搭建20×20×20空间','搭建20×20×0空间','搭建-20×20×20空间','搭建20.5×20×20空间','搭建20×20×20×20空间','搭建20×20×20空间然后用水淹没','搭建201×201×201空间','建一个长20高20的空间','做一个我想象中的东西']) {
                 let rejected=false;try{parseWorldCommand(text);}catch{rejected=true;}check(rejected,`Rejects ambiguous/invalid command: ${text}`);
             }
-            homeFreedomReset();camera.position.set(0,2.1,0);const plan=parseWorldCommand(sentences[0]);
+            homeFreedomReset();camera.position.set(0,2.1,0);const plan=parseWorldCommand(sentences[1]);
             executeWorldCommand(plan);check(commandJob.changes.length===8000,'20 cubed edits exactly 8000 cells, not 8400');
             tickCommandJob();check(commandJob.index===256,'World changes remain batched');while(commandJob)tickCommandJob();
             check(getBlock(-10,0,-10)===51&&getBlock(9,19,9)===51&&getBlock(0,19,0)===51,'Exact outer bounds and roof are present');

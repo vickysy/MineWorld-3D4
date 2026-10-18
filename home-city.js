@@ -15,7 +15,7 @@ function extraHomeRecipes() {
         {ing:{6:4,36:3,28:2},out:93,count:1},{ing:{6:2,36:2,28:1},out:94,count:1},
         {ing:{36:3,28:3,38:1},out:95,count:1},{ing:{36:2,6:2,28:2},out:96,count:1},
         {ing:{5:2},out:97,count:2},{ing:{36:2,6:1},out:98,count:4}];
-    return list.concat(kitchenRecipes(),cityLifeRecipes(),surveillanceRecipes());
+    return list.concat(kitchenRecipes(),cityLifeRecipes(),surveillanceRecipes(),thermalRecipes());
 }
 
 function buildExtraFurniture(group,id,data) {

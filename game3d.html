@@ -376,16 +376,19 @@
 
     <div id="toast-msg" style="display: none; position: absolute; top: 20%; left: 50%; transform: translateX(-50%); font-size: 24px; color: #FFFFFF; font-weight: bold; background-color: rgba(0,0,0,0.6); padding: 10px 20px; border-radius: 8px; text-shadow: 2px 2px 4px black; z-index: 100; transition: opacity 0.5s;"></div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+    <script src="three-r128.min.js"></script>
+    <script src="three-pointer-lock-r128.js"></script>
     <script src="three-reflector-r128.js"></script>
-    <script src="world-expansion.js?v=20261016-roomfix"></script>
-    <script src="home-city.js?v=20261016c"></script>
+    <script src="world-expansion.js?v=20261018-tools"></script>
+    <script src="home-city.js?v=20261017-thermal1"></script>
     <script src="kitchen-home.js?v=20261016c"></script>
     <script src="city-life.js?v=20261016a"></script>
-    <script src="surveillance.js?v=20261016c"></script>
+    <script src="surveillance.js?v=20261018-tools"></script>
     <script src="peerjs-1.5.5.min.js"></script>
-    <script src="multiplayer.js?v=roomfix1"></script>
+    <script src="multiplayer.js?v=20261018-tools"></script>
+    <script src="thermal-world.js?v=20261018-lava128"></script>
+    <script src="launchers.js?v=20261018-tools"></script>
+    <script src="construction.js?v=20261018-tools"></script>
 
     <script>
         // --- 场景、相机、渲染器 ---
@@ -479,7 +482,7 @@
         let earthMesh = createBlockyEarth();
         scene.add(earthMesh);
 
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 150); // 远裁剪面适配迷雾距离
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 320);
         const mechCamera = camera.clone();
         const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" }); // 关闭抗锯齿，强制高性能，拯救卡顿
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -552,6 +555,7 @@
                 heldItemGroup.remove(heldItemGroup.children[0]); 
             }
             if (blockId === 0) return;
+            if(THERMAL_ITEMS[blockId]) {const item=buildThermalModel(blockId);item.scale.setScalar(0.42);heldItemGroup.add(item);return;}
             if (HOME_ITEMS[blockId] || CAR_ITEMS[blockId] || blockId===ENDER_EGG_ID) {
                 const item=CAR_ITEMS[blockId]?createCityCar(undefined,CAR_ITEMS[blockId]):HOME_ITEMS[blockId]?createFurnitureModel(blockId,{}):createEndermanModel();
                 item.userData.modItem=true;item.scale.setScalar(blockId===ENDER_EGG_ID?0.15:0.38);heldItemGroup.add(item);return;
@@ -1828,6 +1832,12 @@
                 noise.connect(nFilter).connect(nGain).connect(audioCtx.destination);
                 noise.start(now);
 
+            } else if (type === 'explosion') {
+                const duration=1.2,buffer=audioCtx.createBuffer(1,Math.floor(audioCtx.sampleRate*duration),audioCtx.sampleRate);
+                const samples=buffer.getChannelData(0);for(let i=0;i<samples.length;i++)samples[i]=(Math.random()*2-1)*Math.exp(-i/(audioCtx.sampleRate*0.25));
+                const source=audioCtx.createBufferSource(),filter=audioCtx.createBiquadFilter(),gain=audioCtx.createGain();
+                source.buffer=buffer;filter.type='lowpass';filter.frequency.value=260;gain.gain.value=0.32;
+                source.connect(filter);filter.connect(gain);gain.connect(audioCtx.destination);source.start();
             } else if (type === 'crackle') {
                 const duration = 0.055;
                 const bufferSize = audioCtx.sampleRate * duration;
@@ -2125,6 +2135,7 @@
         }
 
         function hasInventoryItem(id) {
+            if(id===LIGHTER_ID)return isCreativeMode()||(playerInventory[id]||0)>0;
             return isCreativeMode() || isToolItem(id) || (playerInventory[id] || 0) > 0;
         }
 
@@ -2175,6 +2186,7 @@
         ];
         
         function getBlockName(id) {
+            if(THERMAL_ITEMS[id])return THERMAL_ITEMS[id];
             const names = {
                 2:'Dirt', 3:'Stone', 4:'Wood', 5:'Leaves', 6:'Glass', 7:'Ladder', 8:'Wooden Door',
                 12:'Crafting Table', 13:'Furnace', 14:'Bed', 16:'Torch', 17:'Iron Door', 21:'TNT',
@@ -2300,7 +2312,7 @@
                  60:72, 61:73, 62:74, 63:75, 64:76, 65:77, 66:78, 67:79,
                  70:82, 71:83, 72:84, 73:85, 74:86, 75:87, 76:88, 77:89, 78:90, 79:91, 80:92,
                  81:93, 82:94, 83:95, 84:96, 85:97, 86:98, 88:100, 89:101, 90:102, 91:103,
-                 ...Object.fromEntries(Object.keys({...KITCHEN_ITEMS,...CITY_LIFE_ITEMS,...HIDDEN_BLOCKS,...SURVEILLANCE_ITEMS,127:'Netherrack'}).map(id=>[Number(id)-12,Number(id)]))
+                 ...Object.fromEntries(Object.keys({...KITCHEN_ITEMS,...CITY_LIFE_ITEMS,...HIDDEN_BLOCKS,...SURVEILLANCE_ITEMS,...THERMAL_ITEMS,127:'Netherrack'}).map(id=>[Number(id)-12,Number(id)]))
              };
         }
 
@@ -2311,7 +2323,7 @@
                 if(el) {
                     let id = mapping[i];
                     let count = playerInventory[id] || 0;
-                    let isTool = isToolItem(id);
+                    let isTool = isToolItem(id) && hasInventoryItem(id);
                     
                     // 清理旧的数量角标
                     let oldQty = el.querySelector('.inv-qty');
@@ -2568,8 +2580,7 @@
             }
         };
 
-        function spawnExplosionParticles(x, y, z) {
-            const count = 90;
+        function spawnExplosionParticles(x, y, z, count = 90) {
             for (let i = 0; i < count; i++) {
                 const size = 0.08 + Math.random() * 0.18;
                 const mat = new THREE.MeshBasicMaterial({
@@ -2923,6 +2934,7 @@
 
         // 用于在生成树木和房子时安全地放置方块并更新渲染边界
         function setGenBlock(x, y, z, type) {
+            if(isCraterVoid(x,y,z)||constructionTypeAt(x,y,z)!==null)return;
             resetMicroBlock(x, y, z);
             worldMap.set(`${x},${y},${z}`, type);
             modifiedColumns.add(`${x},${z}`);
@@ -2939,6 +2951,8 @@
         function getBlock(x, y, z) {
             const key = `${x},${y},${z}`;
             if (worldMap.has(key)) return floodBlockType(x,y,z,worldMap.get(key));
+            if(isCraterVoid(x,y,z))return floodBlockType(x,y,z,0);
+            const built=constructionTypeAt(x,y,z);if(built!==null)return floodBlockType(x,y,z,built);
 
             const h = getSurfaceHeight(x, z);
             if (currentDimension === 'nether') {
@@ -2993,9 +3007,11 @@
             if (worldMap.has(key)) {
                 const t = worldMap.get(key);
                 // Pass-through walls must not hide the room's adjacent solid faces.
-                if(HIDDEN_BLOCKS[t] || HOME_ITEMS[t] || t===FRIDGE_TOP_ID || t===FURNITURE_PART_ID || t===NETHER_PORTAL_ID) return true;
+                if(HIDDEN_BLOCKS[t] || HOME_ITEMS[t] || t===FRIDGE_TOP_ID || t===FURNITURE_PART_ID || t===NETHER_PORTAL_ID || t===FIRE_ID) return true;
                 return [0, 6, 7, 8, 9, 10, 11, 16, 17, 18, 19, 20, 24, 25, 26, 27, 28, 30, 31, 42, LAVA_ID, BARRIER_ID, GLASS_SENSOR_DOOR_BOTTOM_ID, GLASS_SENSOR_DOOR_TOP_ID, GLASS_SENSOR_DOOR_OPEN_ID].includes(t);
             }
+            if(isCraterVoid(bx,by,bz))return true;
+            const built=constructionTypeAt(bx,by,bz);if(built!==null)return built===0;
             // 海平面下的天然地形如果没生成，可能是水或者沙子
             if (by <= 12 && by > getSurfaceHeight(bx, bz)) {
                 return true; // 水也是透明的
@@ -3702,16 +3718,10 @@
         function solidifyFluidContact(x, y, z) {
             const type = getBlock(x, y, z);
             if (type !== 24 && type !== LAVA_ID) return;
-            const other = type === 24 ? LAVA_ID : 24;
-            const offsets = [[1,0,0], [-1,0,0], [0,0,1], [0,0,-1], [0,1,0], [0,-1,0]];
-            for (let off of offsets) {
-                if (getBlock(x + off[0], y + off[1], z + off[2]) === other) {
-                    setBlock(x, y, z, OBSIDIAN_ID);
-                    setBlock(x + off[0], y + off[1], z + off[2], OBSIDIAN_ID);
-                    showToast("Water and lava formed obsidian.");
-                    return;
-                }
-            }
+            const dirty=new Set();
+            if(type===LAVA_ID)quenchLava(x,y,z,dirty);
+            else for(const [dx,dy,dz] of HEAT_OFFSETS)quenchLava(x+dx,y+dy,z+dz,dirty);
+            addDirtyChunksToQueue(dirty);
         }
 
         function isNetherPortalCenter(x,y,z) {
@@ -3818,6 +3828,7 @@
         function processWaterFlowQueue(delta) { tickWaterFlow(delta); }
 
         function getDroppedItemForBlock(blockType) {
+            if(blockType===FIRE_ID)return 0;
             if(blockType===NETHER_PORTAL_ID || blockType===FRIDGE_TOP_ID) return 0;
             if (blockType === 42) return 0;
             if (blockType === 9 || blockType === 10 || blockType === 11) return 8;
@@ -3965,7 +3976,7 @@
                             const bz = p.z + dz;
                             const t = getBlock(bx, by, bz);
                             if (t === TNT_ID) queue.push({ x: bx, y: by, z: bz });
-                            if (t !== 0) setBlockNoRebuild(bx, by, bz, 0, dirtyChunks);
+                            else if (t !== 0) setBlockNoRebuild(bx, by, bz, 0, dirtyChunks);
                         }
                     }
                 }
@@ -3976,46 +3987,7 @@
             }
         }
 
-        function igniteNuke(x, y, z) {
-            const dirtyChunks = new Set();
-            const radius = 1; // 半径 1，形成 3x3x3 的立方体
-
-            for (let i = zombies.length - 1; i >= 0; i--) {
-                if (Math.abs(zombies[i].mesh.position.x - x) <= radius && 
-                    Math.abs(zombies[i].mesh.position.y - y) <= radius && 
-                    Math.abs(zombies[i].mesh.position.z - z) <= radius) {
-                    scene.remove(zombies[i].mesh);
-                    zombies.splice(i, 1);
-                }
-            }
-            for (let i = villagers.length - 1; i >= 0; i--) {
-                if (Math.abs(villagers[i].mesh.position.x - x) <= radius && 
-                    Math.abs(villagers[i].mesh.position.y - y) <= radius && 
-                    Math.abs(villagers[i].mesh.position.z - z) <= radius) {
-                    scene.remove(villagers[i].mesh);
-                    villagers.splice(i, 1);
-                }
-            }
-
-            setBlockNoRebuild(x, y, z, 0, dirtyChunks);
-
-            // 彻底的 100x100x100 立方体毁灭，忽略任何地形高度，全部强制清空
-            for (let dx = -radius; dx <= radius; dx++) {
-                for (let dy = -radius; dy <= radius; dy++) {
-                    for (let dz = -radius; dz <= radius; dz++) {
-                        const bx = x + dx;
-                        const by = y + dy;
-                        const bz = z + dz;
-                        const t = getBlock(bx, by, bz);
-                        if (t !== 0) setBlockNoRebuild(bx, by, bz, 0, dirtyChunks);
-                    }
-                }
-            }
-
-            for (let key of dirtyChunks) {
-                rebuildQueue.add(key);
-            }
-        }
+        function igniteNuke(x, y, z) {return beginNuclearBlast(x,y,z);}
 
         function buildChunkMesh(cx, cz) {
             const key = `${cx},${cz}`;
@@ -4124,13 +4096,13 @@
                         // 但对于 100 多层的深渊，必须完整渲染保证上下相连。
                         if (Math.abs(y - camera.position.y) > 300) continue; 
                         let type = getBlock(x, y, z);
-                        if(HOME_ITEMS[type] || type===FRIDGE_TOP_ID || type===FURNITURE_PART_ID) continue;
+                        if(HOME_ITEMS[type] || type===FRIDGE_TOP_ID || type===FURNITURE_PART_ID || type===FIRE_ID) continue;
                         if (type !== 0) {
                             if (microRenderBlocks.has(microParentKey(x,y,z)) && (isSolid(x,y,z) || HIDDEN_BLOCKS[type])) continue;
                             let exposed = true;
-                            if(type===24) {
-                                exposed=waterAmount(x,y,z)<8 || [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]].some(([dx,dy,dz])=>waterAmount(x+dx,y+dy,z+dz)<8);
-                            } else if (y < h) {
+                            if(type===24||type===LAVA_ID) {
+                                exposed=liquidAmount(type,x,y,z)<8 || HEAT_OFFSETS.some(([dx,dy,dz])=>liquidAmount(type,x+dx,y+dy,z+dz)<8);
+                            } else if (y < h || constructionTypeAt(x,y,z)!==null) {
                                 // 使用极速透明检测函数，大幅减少多余计算
                                 exposed = isTransparent(x, y+1, z) || 
                                           isTransparent(x+1, y, z) || 
@@ -4185,8 +4157,8 @@
                 } else {
                     matrix.identity();
                     matrix.setPosition(b.x, b.y, b.z);
-                    if(b.type===24) {
-                        const height=waterAmount(b.x,b.y,b.z)/8;
+                    if(b.type===24||b.type===LAVA_ID) {
+                        const height=liquidAmount(b.type,b.x,b.y,b.z)/8;
                         matrix.makeScale(1,height,1);matrix.setPosition(b.x,b.y-0.5+height/2,b.z);
                     }
                 }
@@ -4460,7 +4432,7 @@
         function getEnvironmentTypeAt(x, y, z) {
             const bx=Math.floor(x+0.5),by=Math.floor(y+0.5),bz=Math.floor(z+0.5);
             const type=isTinyMode() ? getMicroType(microCellAt(x,y,z)) : getBlock(bx,by,bz);
-            return type===24 && getBlock(bx,by,bz)===24 && y>=by-0.5+waterAmount(bx,by,bz)/8 ? 0 : type;
+            return isFluidBlock(type)&&getBlock(bx,by,bz)===type&&y>=by-0.5+liquidAmount(type,bx,by,bz)/8?0:type;
         }
 
         function getPlayerEnvironment(pos = camera.position) {
@@ -4479,7 +4451,7 @@
                 if (type !== 24 && type !== LAVA_ID) continue;
                 const corner = [x/n-0.5, y/n-0.5, z/n-0.5];
                 const [bx,by,bz]=corner.map(v=>Math.floor(v+size/2+0.5));
-                const waterTop=getBlock(bx,by,bz)===24?Math.min(corner[1]+size,by-0.5+waterAmount(bx,by,bz)/8):corner[1]+size;
+                const waterTop=getBlock(bx,by,bz)===type?Math.min(corner[1]+size,by-0.5+liquidAmount(type,bx,by,bz)/8):corner[1]+size;
                 const overlap=corner.reduce((volume,v,i) => volume * Math.max(0, Math.min(max[i],i===1?waterTop:v+size)-Math.max(min[i],v)), 1);
                 if(type===LAVA_ID) lavaVolume+=overlap;else waterVolume+=overlap;
             }
@@ -4931,6 +4903,7 @@
         }
 
         function isSolidType(b) {
+            if(b===FIRE_ID)return false;
             if(HIDDEN_BLOCKS[b] || b===SHOWER_ID || b===NETHER_PORTAL_ID || b===92) return false;
             // Ladders, open doors, water, rails, redstone, levers, and grass are passable. Leaves are solid.
             if (b === 0 || b === 7 || b === 10 || b === 11 || b === 19 || b === 20 || b === 24 || b === 25 || b === 26 || b === 27 || b === 28 || b === 30 || b === 31 || b === 42 || b === LAVA_ID || b === GLASS_SENSOR_DOOR_OPEN_ID || b === PRESSURE_PLATE_ID) return false;
@@ -6562,6 +6535,7 @@
         document.addEventListener('mousedown', (e) => {
             if (!controls.isLocked) return;
             e.preventDefault();
+            if(handleThermalClick(e))return;
             if(handleExpansionClick(e)) return;
             if (e.button !== 0) cancelMining();
             if (currentBlock >= 67 && currentBlock <= 71) {
@@ -6857,7 +6831,8 @@
 
                     if (matId === BUCKET_ID && targetType === LAVA_ID) {
                         setBlock(hit.x, hit.y, hit.z, 0);
-                        playerInventory[LAVA_ID] = (playerInventory[LAVA_ID] || 0) + 1;
+                        consumeInventoryItem(BUCKET_ID);
+                        playerInventory[LAVA_BUCKET_ID] = (playerInventory[LAVA_BUCKET_ID] || 0) + 1;
                         updateHotbarUI();
                         updateInventoryCounts();
                         showToast("Lava scooped into the bucket.");
@@ -7713,6 +7688,8 @@
                 }
             }
             
+            if (!inLava && !inWater) updateCraterVisibility();
+
             if (currentDimension === 'nether') {
                 dirLight.intensity=0.35;
             } else if (selectedTerrain !== 'moon') {
@@ -7807,6 +7784,7 @@
         }
 
         initWorldExpansion();
+        initThermalWorld();
         initMultiplayer();
         initModIcons();
         animate();

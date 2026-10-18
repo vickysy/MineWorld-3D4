@@ -19,6 +19,7 @@ async function assertScenePixels(page) {
     try {
         const host=await browser.newPage({viewport:{width:1360,height:900}}),guest=await browser.newPage({viewport:{width:1280,height:900}});
         for(const page of [host,guest]) {
+            page.setDefaultNavigationTimeout(120000);
             page.on('pageerror',e=>errors.push(e.message));
             await page.goto(url);await page.waitForFunction(()=>expansionReady);
         }
@@ -67,14 +68,59 @@ async function assertScenePixels(page) {
 
         await host.evaluate(()=>{controls.unlock();});await host.waitForFunction(()=>!controls.isLocked);
         await host.getByRole('button',{name:'Resume Game',exact:true}).click();
+        await host.waitForFunction(()=>controls.isLocked);
+        await host.evaluate(()=>{creativeFlying=true;camera.position.y+=12;camera.lookAt(camera.position.x,camera.position.y,camera.position.z-10);velocity.set(0,0,0);});
         const start=await host.evaluate(()=>camera.position.toArray());
-        await host.keyboard.down('KeyW');await host.waitForTimeout(600);await host.keyboard.up('KeyW');
+        await host.keyboard.down('KeyW');
+        try {await host.waitForFunction(p=>Math.hypot(camera.position.x-p[0],camera.position.z-p[2])>0.1,start);}finally{await host.keyboard.up('KeyW');}
         const end=await host.evaluate(()=>camera.position.toArray());assert(Math.hypot(start[0]-end[0],start[2]-end[2])>0.1);
         await guest.waitForFunction(p=>Object.values(remotePlayers).some(m=>Math.hypot(m.position.x-p[0],m.position.z-p[2])<0.3),end);
         await guest.evaluate(()=>{const p=Object.values(remotePlayers)[0];camera.lookAt(p.position.clone().add(new THREE.Vector3(0,0.4,0)));});
         await assertScenePixels(guest);
         await guest.screenshot({path:'/private/tmp/mc-room-two-players.png'});
         console.log('PASS: Actual W movement arrives on the other player screen.');
+
+        const fireCell=[cell[0]+10,cell[1]+2,cell[2]];
+        await host.evaluate(p=>setBlock(...p,4),fireCell);await guest.waitForFunction(p=>getBlock(...p)===4,fireCell);
+        await guest.evaluate(p=>requestRoomThermal('ignite',p),fireCell);
+        await host.waitForFunction(p=>burningBlocks.has(p.join(',')),fireCell);
+        await guest.waitForFunction(p=>burningBlocks.has(p.join(',')),fireCell);
+        await host.evaluate(()=>{for(let i=0;i<16;i++)tickFire(0.25);});
+        await guest.waitForFunction(p=>getBlock(...p)===0,fireCell);
+        const stoneCell=[fireCell[0],fireCell[1]-1,fireCell[2]];
+        await host.evaluate(p=>setBlock(...p,3),stoneCell);await guest.waitForFunction(p=>getBlock(...p)===3,stoneCell);
+        await guest.evaluate(({p,air})=>requestRoomThermal('ignite',p,air),{p:stoneCell,air:fireCell});
+        await guest.waitForFunction(p=>getBlock(...p)===FIRE_ID&&burningBlocks.has(p.join(',')),fireCell);
+        await host.evaluate(p=>setBlock(p[0]+1,p[1],p[2],24),fireCell);
+        await guest.waitForFunction(p=>!burningBlocks.has(p.join(',')),fireCell);
+        await host.evaluate(p=>setBlock(...p,4),fireCell);await guest.waitForFunction(p=>getBlock(...p)===4,fireCell);
+        await host.evaluate(p=>{setBlock(p[0]+1,p[1],p[2],0);startBurning(...p);setBlock(p[0]+1,p[1],p[2],24);},fireCell);
+        await guest.waitForFunction(p=>getBlock(...p)===4&&!burningBlocks.has(p.join(',')),fireCell);
+        const lavaCell=[cell[0]+14,cell[1]+2,cell[2]];
+        await host.evaluate(p=>{for(const [dx,dy,dz] of HEAT_OFFSETS)setBlockNoRebuild(p[0]+dx,p[1]+dy,p[2]+dz,3,new Set());setBlockNoRebuild(...p,43,new Set());lavaAmounts.set(p.join(','),3);},lavaCell);
+        await guest.waitForFunction(p=>lavaAmount(...p)===3,lavaCell);
+        const pool=[cell[0]+24,cell[1]+3,cell[2]];
+        assert.equal(await guest.evaluate(p=>pourLavaBucket(...p),pool),128);
+        await host.waitForFunction(p=>getBlock(...p)===43||getBlock(p[0],p[1]-1,p[2])===43,pool);
+        const nuke=[cell[0]+120,cell[1],cell[2]+120];
+        await host.evaluate(p=>setBlockNoRebuild(...p,22,new Set()),nuke);await guest.waitForFunction(p=>getBlock(...p)===22,nuke);
+        await guest.evaluate(p=>igniteNuke(...p),nuke);
+        await host.waitForFunction(()=>craterColumns.size>7000&&!nukeJobs.length,{},{timeout:60000});
+        await guest.waitForFunction(()=>craterColumns.size>7000&&!nukeJobs.length,{},{timeout:60000});
+        assert.deepEqual(await host.evaluate(()=>Array.from(craterColumns)),await guest.evaluate(()=>Array.from(craterColumns)));
+        console.log('PASS: Guest ignition, fire on stone, water extinguishing, shallow lava levels and nuclear crater geometry synchronize.');
+        const launcher=[cell[0]+24,cell[1]+6,cell[2]+8],cctv=[cell[0]+22,cell[1]+6,cell[2]+8];
+        assert(await host.evaluate(p=>placeFurniture(144,...p),launcher));assert(await host.evaluate(p=>placeFurniture(138,...p),cctv));
+        await guest.waitForFunction(p=>furnitureRecord(...p)?.id===144,launcher);
+        await guest.waitForFunction(p=>furnitureRecord(...p)?.id===138,cctv);
+        await guest.evaluate(p=>{furnitureRecord(...p).data.pan=-90;queueRoomBlockChange(...p);},cctv);
+        await host.waitForFunction(p=>furnitureRecord(...p)?.data.pan===-90,cctv);
+        assert(await guest.evaluate(({p,target})=>launchNuclearMissile(furnitureRecord(...p),target,0),{p:launcher,target:nuke}));
+        await host.waitForFunction(()=>nuclearMissiles.length===1);await guest.waitForFunction(()=>nuclearMissiles.length===1);
+        await host.evaluate(()=>updateNuclearMissiles(9));await guest.evaluate(()=>updateNuclearMissiles(9));
+        await host.waitForFunction(()=>!nukeJobs.length,{},{timeout:60000});await guest.waitForFunction(()=>!nukeJobs.length,{},{timeout:60000});
+        assert.deepEqual(await host.evaluate(()=>Array.from(craterColumns)),await guest.evaluate(()=>Array.from(craterColumns)));
+        console.log('PASS: Guest camera pan and tablet launch reach the host; both players receive the missile and the same crater.');
 
         await guest.evaluate(()=>{controls.unlock();});await guest.waitForFunction(()=>!controls.isLocked);
         await guest.locator('#pause-room-btn').click();await guest.locator('#leave-room-btn').click();
@@ -93,7 +139,8 @@ async function assertScenePixels(page) {
         assert.deepEqual(errors,[]);
         console.log('PASS: Leave/rejoin preserves world edits; host closing gives a clear message; responsive room UI and no page exceptions.');
 
-        const failure=await browser.newPage();await failure.addInitScript(()=>window.requestAnimationFrame=()=>0);await failure.goto(url);
+        await host.close();await guest.close();
+        const failure=await browser.newPage();failure.setDefaultNavigationTimeout(120000);await failure.addInitScript(()=>window.requestAnimationFrame=()=>0);await failure.goto(url);
         await failure.waitForFunction(()=>expansionReady);
         await failure.clock.install();
         await failure.evaluate(()=>{
