@@ -119,6 +119,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
         assert(await page.getByRole('button',{name:'Fire One',exact:true}).isEnabled());
         await page.screenshot({path:'/private/tmp/mc-cannon-aim-desktop.png'});
         await page.setViewportSize({width:390,height:844});
+        await page.waitForFunction(()=>document.documentElement.scrollWidth<=innerWidth,null,{polling:100,timeout:5000});
         assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
         await page.screenshot({path:'/private/tmp/mc-cannon-aim-mobile.png'});
         await page.getByRole('button',{name:'Fire One',exact:true}).click();
