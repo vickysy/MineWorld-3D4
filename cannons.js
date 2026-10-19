@@ -123,20 +123,24 @@ function buildMachineCommand(plan) {
     const base=[Math.round(camera.position.x)+d.x*7,Math.round(camera.position.y-getPlayerHeight()-0.5),Math.round(camera.position.z)+d.z*7];
     const point=(u,y,v)=>[base[0]+d.z*u+d.x*v,base[1]+y,base[2]-d.x*u+d.z*v];
     const cells=new Map(),pistons=[],put=(u,y,v,type)=>cells.set(point(u,y,v).join(','),[...point(u,y,v),type]);
-    for(let u=-4;u<=4;u++)for(let v=-2;v<=2;v++)put(u,0,v,3);
+    const edge=plan.machine==='door'?3:4;
+    for(let u=-4;u<=edge;u++)for(let v=-2;v<=2;v++)put(u,0,v,3);
     if(plan.machine==='cannon') {
         put(0,1,0,PISTON_ID);pistons.push({at:point(0,1,0),dir:d,mode:'cannon'});
         for(let y=1;y<=plan.rounds;y++)put(0,y,1,TNT_ID);
         put(-1,1,0,28);put(-2,1,0,30);
     } else {
         for(const side of [-1,1])for(let y=1;y<=2;y++) {
-            put(side*3,y,0,PISTON_ID);put(side*2,y,0,6);
-            pistons.push({at:point(side*3,y,0),dir:{x:-side*d.z,y:0,z:side*d.x},mode:'door'});
+            const baseU=side===-1?-3:2;
+            put(baseU,y,0,PISTON_ID);put(baseU-side,y,0,6);
+            pistons.push({at:point(baseU,y,0),dir:{x:-side*d.z,y:0,z:side*d.x},mode:'door'});
         }
-        for(let u=-3;u<=3;u++){put(u,1,1,28);put(u,3,0,3);}
-        put(-4,1,1,30);
+        for(let u=-3;u<=2;u++)put(u,1,1,28);
+        for(let u=-4;u<=3;u++)put(u,3,0,3);
+        for(const u of [-4,3])for(let y=1;y<=2;y++)put(u,y,0,3);
+        put(-4,1,-1,30);
     }
-    for(let u=-4;u<=4;u++)for(let v=-2;v<=2;v++)for(let y=0;y<=4;y++) {
+    for(let u=-4;u<=edge;u++)for(let v=-2;v<=2;v++)for(let y=0;y<=4;y++) {
         const at=point(u,y,v),type=getBlock(...at);
         if((y===0?![0,1,2,3,23,42].includes(type):![0,42].includes(type))||!canEditPasswordCircuit(...at)||machineCellOccupied(...at)) {
             showCommandStatus('前方空间不足或有受保护装置。请找一块平坦空地再建造。');return false;

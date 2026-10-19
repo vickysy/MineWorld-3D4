@@ -5,6 +5,7 @@ Object.assign(COMMAND_ITEMS,{'岩浆桶':140,'打火器':141,'打火石':141,'�
 const lavaAmounts=new Map(),lavaQueue=new Map(),burningBlocks=new Map(),fireVisuals=new Map(),craterColumns=new Map();
 const HEAT_OFFSETS=[[1,0,0],[-1,0,0],[0,0,1],[0,0,-1],[0,-1,0],[0,1,0]];
 const LAVA_BUCKET_VOLUME=128;
+const LAVA_FLOW_INTERVAL=0.05,LAVA_FLOW_BATCH=256,LAVA_FALL_CELLS=4;
 const NUKE_BLAST_RADIUS=10;
 const FIRE_FUEL=new Set([4,5,7,8,9,10,11,12,14,15,16,25,42,82,83,84,90,91,92,97,118,126,137]);
 let lavaWriting=false,thermalBulkWrite=false,lavaElapsed=0,fireElapsed=0,thermalScanElapsed=0,nukeJobs=[];
@@ -42,43 +43,74 @@ function extinguishBurning(x,y,z) {
 function writeLava(x,y,z,amount,dirty) {
     const key=`${x},${y},${z}`;
     lavaWriting=true;
-    try {setBlockNoRebuild(x,y,z,amount>0?LAVA_ID:0,dirty);} finally {lavaWriting=false;}
+    try {if(setBlockNoRebuild(x,y,z,amount>0?LAVA_ID:0,dirty)===false)return false;} finally {lavaWriting=false;}
     if(amount>0)lavaAmounts.set(key,amount);else lavaAmounts.delete(key);
     queueLavaNeighbors(x,y,z);
+    return true;
 }
 
 function quenchLava(x,y,z,dirty) {
     if(getBlock(x,y,z)!==LAVA_ID)return false;
     const water=HEAT_OFFSETS.map(([dx,dy,dz])=>[x+dx,y+dy,z+dz]).find(p=>getBlock(...p)===24);
     if(!water)return false;
-    setBlockNoRebuild(x,y,z,OBSIDIAN_ID,dirty);
+    if(setBlockNoRebuild(x,y,z,OBSIDIAN_ID,dirty)===false)return false;
     // Water reacts before heat can remove it. A little steam leaves some of the water behind.
     writeWater(...water,Math.max(0,waterAmount(...water)-1),dirty);
     if(Math.hypot(x-camera.position.x,y-camera.position.y,z-camera.position.z)<24)spawnExplosionParticles(x,y+0.5,z,7);
     return true;
 }
 
+function canLavaFall(x,y,z) {
+    const below=getBlock(x,y-1,z);
+    return below===0||below===LAVA_ID&&lavaAmount(x,y-1,z)<8;
+}
+
+function transferLava(from,to,amount,dirty) {
+    const source=lavaAmount(...from),target=lavaAmount(...to),moved=Math.min(amount,source,8-target);
+    if(moved<=0||!lockedBlockWriteAllowed(...from,source===moved?0:LAVA_ID)||!lockedBlockWriteAllowed(...to,LAVA_ID))return 0;
+    writeLava(...from,source-moved,dirty);writeLava(...to,target+moved,dirty);
+    quenchLava(...to,dirty);return moved;
+}
+
+function stepLavaFlow(dirty) {
+    // Drain lower cells first. Falling lava cannot spread into a suspended horizontal sheet.
+    const cells=Array.from(lavaQueue.entries()).slice(0,LAVA_FLOW_BATCH).sort((a,b)=>a[1][1]-b[1][1]);
+    for(const [key,[x,y,z]] of cells) {
+        lavaQueue.delete(key);let amount=lavaAmount(x,y,z);if(!amount||!nearThermalPlayer(x,y,z))continue;
+        if(quenchLava(x,y,z,dirty))continue;
+        let landing=y;
+        for(let step=0;step<LAVA_FALL_CELLS;step++) {
+            const next=landing-1,type=getBlock(x,next,z);
+            if(type!==0&&!(type===LAVA_ID&&lavaAmount(x,next,z)<8))break;
+            if(!lockedBlockWriteAllowed(x,next,z,LAVA_ID))break;
+            landing=next;
+            // Inspect every crossed cell so fast flow never tunnels through water or a wall.
+            if(type===LAVA_ID||HEAT_OFFSETS.some(([dx,dy,dz])=>getBlock(x+dx,landing+dy,z+dz)===24))break;
+        }
+        if(landing<y) {transferLava([x,y,z],[x,landing,z],amount,dirty);continue;}
+        if(canLavaFall(x,y,z))continue;
+        const neighbors=[[1,0],[0,1],[-1,0],[0,-1]].map(([dx,dz])=>({at:[x+dx,y,z+dz],down:canLavaFall(x+dx,y,z+dz)}));
+        neighbors.sort((a,b)=>Number(b.down)-Number(a.down));
+        for(const {at,down} of neighbors) {
+            if(![0,LAVA_ID].includes(getBlock(...at)))continue;
+            const n=lavaAmount(...at),moved=down?Math.min(amount,8-n):Math.floor((amount-n)/2);
+            amount-=transferLava([x,y,z],at,moved,dirty);
+            if(!amount)break;
+        }
+        // Writes wake adjacent cells. A settled pool can sleep until its surroundings change.
+    }
+}
+
 function tickLavaFlow(delta) {
     if(!thermalAuthority()||commandJob||nukeJobs.length)return;
-    lavaElapsed+=delta;if(lavaElapsed<0.35)return;lavaElapsed=0;
-    const dirty=new Set(),cells=Array.from(lavaQueue.entries()).slice(0,48),editing=commandEditing;
-    commandEditing=true;
-    try {for(const [key,[x,y,z]] of cells) {
-        lavaQueue.delete(key);let amount=lavaAmount(x,y,z);if(!amount)continue;
-        if(quenchLava(x,y,z,dirty))continue;
-        const below=getBlock(x,y-1,z);
-        if(below===0||below===LAVA_ID) {
-            const n=lavaAmount(x,y-1,z),moved=Math.min(amount,8-n);
-            if(moved>0){writeLava(x,y-1,z,n+moved,dirty);amount-=moved;writeLava(x,y,z,amount,dirty);}
+    lavaElapsed=Math.min(0.2,lavaElapsed+delta);
+    if(lavaElapsed+1e-9<LAVA_FLOW_INTERVAL)return;
+    const dirty=new Set(),editing=commandEditing;commandEditing=true;
+    try {
+        while(lavaElapsed+1e-9>=LAVA_FLOW_INTERVAL) {
+            lavaElapsed=Math.max(0,lavaElapsed-LAVA_FLOW_INTERVAL);stepLavaFlow(dirty);
         }
-        if(!amount)continue;
-        for(const [dx,dz] of [[1,0],[0,1],[-1,0],[0,-1]]) {
-            if(![0,LAVA_ID].includes(getBlock(x+dx,y,z+dz)))continue;
-            const n=lavaAmount(x+dx,y,z+dz),moved=Math.floor((amount-n)/2);
-            if(moved>0){writeLava(x+dx,y,z+dz,n+moved,dirty);amount-=moved;writeLava(x,y,z,amount,dirty);}
-        }
-        queueLavaCell(x,y,z);
-    }} finally {commandEditing=editing;addDirtyChunksToQueue(dirty);}
+    } finally {commandEditing=editing;addDirtyChunksToQueue(dirty,true);}
 }
 
 function startBurning(x,y,z,remote=false) {
