@@ -331,14 +331,15 @@ function createFurnitureModel(id,data={}) {
         mesh.position.set(x,y,z+0.035);group.add(mesh);group.userData.screen={canvas,texture};
     };
     if(id===FRIDGE_ID) {
-        box(0.88,1.9,0.78,silver,0,0.45,0);
-        box(0.8,1.8,0.05,0x91a5ac,0,0.45,0.405);
+        for(const x of [-0.41,0.41])box(0.06,1.9,0.78,silver,x,0.45,0);
+        for(const y of [-0.47,1.37])box(0.88,0.06,0.78,silver,0,y,0);
+        box(0.8,1.8,0.05,0x91a5ac,0,0.45,-0.365);
         const door=new THREE.Group();door.position.set(-0.45,0.45,0.44);group.add(door);
         addModelBox(door,0.88,1.86,0.09,white,0.44,0,0);
         addModelBox(door,0.035,0.43,0.055,dark,0.74,0.14,0.07);
         addModelBox(door,0.85,0.025,0.01,0x889195,0.44,0.37,0.055);
-        for(const y of [-0.25,0.2,0.65,1.02]) box(0.74,0.035,0.12,white,0,y,0.46);
-        for(const [x,c] of [[-0.24,0xd34944],[0,0x73a858],[0.24,0xd0a747]]) box(0.12,0.16,0.1,c,x,0.32,0.47);
+        for(const y of [-0.25,0.2,0.65,1.02]) box(0.74,0.035,0.65,white,0,y,0);
+        for(const [x,c] of [[-0.24,0xd34944],[0,0x73a858],[0.24,0xd0a747]]) box(0.12,0.16,0.1,c,x,0.32,-0.14);
         group.userData.door=door;
     } else if(id===CONSOLE_ID) {
         box(0.34,0.86,0.54,dark,0,-0.03,0);
@@ -466,6 +467,7 @@ function openFurniturePanel(record) {
     } else if([COMPUTER_ID,94,96,SURVEILLANCE_TABLET_ID].includes(record.id)) {
         openSurveillanceComputer(record,content,button);
     } else if(record.id===FRIDGE_ID) {
+        button(record.data.open?'Close Door':'Open Door',()=>{record.data.open=!record.data.open;queueRoomBlockChange(record.x,record.y,record.z);openFurniturePanel(record);});
         for(const id of [39,40,...Object.keys(KITCHEN_FOOD).map(Number)]) {
             const row=document.createElement('div');row.className='home-row';content.appendChild(row);
             const label=document.createElement('span');label.textContent=`${getBlockName(id)}: ${data.food?.[id]||0} / 64`;row.appendChild(label);
@@ -712,7 +714,8 @@ function updateWorldExpansion(delta) {
     syncFurnitureMeshes();
     for(const [key,model] of furnitureMeshes) {
         const data=furnitureData.get(key)||{};
-        if(model.userData.door) model.userData.door.rotation.y=furnitureFocus===key?-Math.PI*0.55:0;
+        if(model.userData.door) model.userData.door.rotation.y=data.open?-Math.PI*0.55:0;
+        if(model.userData.cabinetDoors)model.userData.cabinetDoors.forEach((door,i)=>door.rotation.y=data.open?(i?1:-1)*Math.PI*0.55:0);
         if(seatedAt?.key===key && model.userData.itemId===CHAIR_ID) model.rotation.y=camera.rotation.y;
         paintDeviceScreen(model,data,performance.now()/1000);
         updateExtraFurniture(model,data,elapsed);
@@ -824,6 +827,7 @@ function parseWorldCommand(text) {
         const height=Math.max(48,Math.ceil(camera.position.y)+16);
         return {kind:'flood',height,label:`将整个主世界的水位升到 ${height} 格，保留建筑和地形。新生成的区域也会填水。`};
     }
+    const machine=parseMachineCommand(normalized);if(machine)return machine;
     const construction=parseConstructionCommand(normalized);if(construction)return construction;
     const sizes=commandDimensions(normalized);
     if(sizes && /(空间|房间|区域|水|正方体|立方体|房子)/.test(normalized)) {
@@ -855,6 +859,7 @@ function showCommandStatus(message) {document.getElementById('command-result').t
 
 function executeWorldCommand(plan) {
     if(commandJob) {showCommandStatus('正在执行，请等当前命令完成。');return false;}
+    if(plan.kind==='machine')return buildMachineCommand(plan);
     if(plan.kind==='construction')return startConstruction(plan);
     if(plan.kind==='find') {
         const slot=Object.entries(getInventorySlotMapping()).find(([,id])=>id===plan.id)?.[0];
@@ -874,6 +879,7 @@ function executeWorldCommand(plan) {
     }
     if(plan.kind==='undo') {
         if(!commandUndo) {showCommandStatus('没有可以撤销的命令。');return false;}
+        if(commandUndo.kind==='machine')return undoMachineCommand();
         if(commandUndo.kind==='construction')return undoConstruction();
         if(commandUndo.kind==='flood') {worldFloodHeight=commandUndo.height;for(const key of chunkMeshes.keys()) rebuildQueue.add(key);commandUndo=null;showCommandStatus('已撤销。');return true;}
         if(commandUndo.dimension!==currentDimension) {showCommandStatus('请回到执行命令的世界再撤销。');return false;}
@@ -953,7 +959,7 @@ function initWorldCommands() {
     document.getElementById('command-form').onsubmit=e=>{e.preventDefault();preview();};
     document.getElementById('execute-command').onclick=()=>{if(commandPreview) executeWorldCommand(commandPreview);};
     document.getElementById('world-command').oninput=()=>{commandPreview=null;document.getElementById('execute-command').disabled=true;};
-    for(const label of ['房子20×21 每层高3 10层','城楼加城墙 长50 宽50 厚5 高10；四角城楼 高12 宽4 长4','城楼四角 间隔20 高12','场地100×100×100','用水把全世界填满','查找冰箱','撤销']) {
+    for(const label of ['建造双重炮','建造活塞门','房子20×21 每层高3 10层','城楼加城墙 长50 宽50 厚5 高10；四角城楼 高12 宽4 长4','城楼四角 间隔20 高12','场地100×100×100','用水把全世界填满','查找冰箱','撤销']) {
         const b=document.createElement('button');b.textContent=label;b.onclick=()=>{document.getElementById('world-command').value=label;preview();};document.getElementById('command-presets').appendChild(b);
     }
 }

@@ -151,6 +151,26 @@ async function assertScenePixels(page) {
         assert.equal(await guest.evaluate(p=>getBlock(...p),machine),53);
         console.log('PASS: Guest lever drives host piston, hidden wire/direction and gate synchronize, both players see two TNT projectiles and the same distant impact.');
 
+        await host.evaluate(p=>{
+            setBlockNoRebuild(p[0]-1,p[1]-1,p[2],30,rebuildQueue);
+            pistonModes.set(p.join(','),'cannon');pistonPowerEdges.delete(p.join(','));queueRoomBlockChange(...p);
+        },machine);
+        await host.waitForFunction(p=>!pistonStates.has(p.join(',')),machine);
+        await host.evaluate(p=>{
+            setBlockNoRebuild(p[0]+1,p[1],p[2],TNT_ID,rebuildQueue);setBlockNoRebuild(p[0]+1,p[1]+1,p[2],TNT_ID,rebuildQueue);
+            for(let dx=26;dx<=34;dx++)for(let dz=-2;dz<=2;dz++)setBlockNoRebuild(p[0]+dx,p[1]-1,p[2]+dz,3,rebuildQueue);
+        },machine);
+        await guest.waitForFunction(p=>pistonModes.get(p.join(','))==='cannon'&&getBlock(p[0]+1,p[1]+1,p[2])===TNT_ID,machine);
+        await guest.evaluate(p=>{camera.position.set(p[0]-2,p[1]+1.1,p[2]);controls.isLocked=true;},machine);
+        await host.waitForFunction(p=>[...multiplayerRoom.positions.values()].some(pos=>Math.hypot(pos.x-p[0],pos.y-p[1],pos.z-p[2])<4),machine);
+        assert(await guest.evaluate(p=>fireCannon(p,[p[0]+30,p[1]-1,p[2]],true),machine));
+        await host.waitForFunction(()=>movingTNT.size===1);await guest.waitForFunction(()=>movingTNT.size===1);
+        assert(await host.evaluate(p=>getBlock(p[0]+1,p[1],p[2])===TNT_ID,machine));
+        await host.waitForFunction(()=>!movingTNT.size,{},{timeout:15000});await guest.waitForFunction(()=>!movingTNT.size,{},{timeout:15000});
+        await guest.waitForFunction(p=>getBlock(p[0]+30,p[1]-1,p[2])===0,machine);
+        assert(await guest.evaluate(p=>getBlock(p[0]+1,p[1],p[2])===TNT_ID,machine));
+        console.log('PASS: Guest aimed single-shot request reaches the host; both players see the chosen impact and lower TNT stays loaded.');
+
         const door=[machine[0],machine[1],machine[2]+8];
         await host.evaluate(p=>{
             const [x,y,z]=p;

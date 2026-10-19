@@ -269,13 +269,15 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
             currentBlock=3;
             const y=camera.position.y;
             const oldSize=microMinedBlocks.size;
+            const target=findMicroBlockHit(camera.position,camera.getWorldDirection(new THREE.Vector3()));
+            const drop=[1,2].includes(target?.type)?0.95:0.05;
             document.dispatchEvent(new MouseEvent('mousedown',{button:0}));
-            return {y,oldSize};
+            return {y,oldSize,drop};
         });
-        await live.waitForFunction(({y,oldSize})=>
-            microMinedBlocks.size===oldSize+1 && Math.abs(camera.position.y-(y-0.05))<0.001 && Math.abs(velocity.y)<1e-6,
+        await live.waitForFunction(({y,oldSize,drop})=>
+            microMinedBlocks.size===oldSize+1 && Math.abs(camera.position.y-(y-drop))<0.001 && Math.abs(velocity.y)<1e-6,
             natural,{timeout:15000});
-        console.log('PASS: Actual generated world and running animation loop land exactly one micro block down.');
+        console.log('PASS: Actual generated world lands on the next solid surface, including the hollow dirt floor.');
         await live.screenshot({path:'/private/tmp/micro-world-live.png'});
         assert.deepEqual(errors,[],'No errors in live gameplay');
     } finally {

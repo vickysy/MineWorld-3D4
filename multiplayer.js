@@ -1,4 +1,4 @@
-const ROOM_PROTOCOL='daniel-mc-room-5', ROOM_PREFIX='daniel-mc-room2-';
+const ROOM_PROTOCOL='daniel-mc-room-6', ROOM_PREFIX='daniel-mc-room2-';
 const ROOM_TIMEOUT_MS=30000, ROOM_MAX_SAVE=16*1024*1024, ROOM_PACKET_CELLS=128;
 let multiplayerRoom=null, multiplayerMode='host', currentRoomCode='', remotePlayers={};
 
@@ -264,6 +264,14 @@ function receiveRoomGuest(r,entry,p) {
     }
     if(!entry.ready||!r.worldReady)return;
     if(p.type==='lock-request'){receiveGuestLockAction(r,entry,p).catch(()=>sendRoomPacket(entry.conn,{type:'lock-reply',request:p.request,ok:false,message:'Lock request failed.'}));return;}
+    if(p.type==='cannon-request') {
+        const player=r.positions.get(entry.conn.peer),now=performance.now();
+        if(p.dimension!==currentDimension||!validMachineCell(p.at)||!player||player.dimension!==currentDimension||
+            Math.hypot(player.x-p.at[0],player.y-p.at[1],player.z-p.at[2])>9||!entry.owner||now-(entry.cannonTime||-1000)<500)return;
+        entry.cannonTime=now;
+        const ok=fireCannon(p.at,p.target,p.single!==false,entry.owner);
+        sendRoomPacket(entry.conn,{type:'cannon-result',ok});return;
+    }
     if(p.type==='launcher-request') {
         if(p.dimension!==currentDimension||!Array.isArray(p.at)||p.at.length!==3||!p.at.every(Number.isSafeInteger))return;
         const launcher=furnitureRecord(...p.at);
@@ -336,6 +344,8 @@ function receiveRoomHost(r,entry,p) {
         applyRoomCells(r,p.cells);r.seq=p.seq;
     } else if(['machines','machine-blast','password-locks'].includes(p.type)&&r.worldReady) {
         receiveMachinePacket(p);
+    } else if(p.type==='cannon-result'&&r.worldReady) {
+        showToast(p.ok?'Cannon fired.':'Cannon did not fire. Check ammunition and permissions.');
     } else if(p.type==='launcher-rejected'&&r.worldReady) {
         showToast('Host blocked the launch. Check buildings, confirm the target, and wait for the port to reload.');
     } else if(p.type==='launcher-shot'&&r.worldReady&&p.dimension===currentDimension) {

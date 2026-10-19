@@ -53,8 +53,8 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
             check(movingTNT.size===3&&[...movingTNT.values()].every(t=>t.launchDelay>0&&!t.impact),'Piston arms the full vertical stack before pushing');
             check(!explosionParticles.length&&getBlock(0,1,0)===PISTON_ID,'No early explosion destroys the launcher');
             machineTicks(0.7);
-            check([...movingTNT.values()].every(t=>t.impact&&t.mesh.position.x>4&&t.mesh.position.y>1),'Primed TNT is launched into a visible arc');
-            let furthest=0;for(let i=0;i<180;i++){tickRedstoneMachines(1/60);for(const t of movingTNT.values())furthest=Math.max(furthest,t.mesh.position.x);}
+            check([...movingTNT.values()].filter(t=>t.impact).length===1&&[...movingTNT.values()].filter(t=>!t.impact).length===2,'Only the upper TNT launches first; lower rounds wait');
+            let furthest=0;for(let i=0;i<300;i++){tickRedstoneMachines(1/60);for(const t of movingTNT.values())furthest=Math.max(furthest,t.mesh.position.x);}
             check(furthest>18&&!movingTNT.size&&explosionParticles.length>0,'Projectiles travel away and explode on landing');
             check(getBlock(0,1,0)===PISTON_ID&&getBlock(0,0,0)===28,'The launcher survives its distant blast');
             check([...worldMap].some(([k,t])=>t===0&&Number(k.split(',')[0])>18&&Number(k.split(',')[1])===0),'Landing blast changes actual distant ground');

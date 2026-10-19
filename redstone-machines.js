@@ -108,6 +108,7 @@ function handleMachineClick(e) {
     if(e.button===0&&hit.type===PASSWORD_LOCK_ID){minePasswordLock(hit.x,hit.y,hit.z);return true;}
     if(e.button!==2||isTinyMode())return false;
     const key=machineKey(hit.x,hit.y,hit.z);
+    if(handleCannonClick(hit))return true;
     if(hit.type===PASSWORD_LOCK_ID){openPasswordLockPanel(hit.x,hit.y,hit.z);return true;}
     if(hit.previous&&!canEditPasswordCircuit(...hit.previous,undefined,currentBlock)){showToast('Only the lock owner can change this circuit.');return true;}
     if(hit.type===BUTTON_ID){pressMachineButton(hit.x,hit.y,hit.z);return true;}
@@ -208,12 +209,13 @@ function movablePistonCell(x,y,z,type) {
     if(!isMovableByPiston(type)||hiddenRedstone.has(machineKey(x,y,z)))return false;
     return !microEdits.has(microParentKey(x,y,z))&&!microPlacements.has(microParentKey(x,y,z))&&!fineRoots.has(microParentKey(x,y,z));
 }
-function extendPiston(x,y,z) {
+function extendPiston(x,y,z,options={}) {
     if(!thermalAuthority())return false;
     const key=machineKey(x,y,z);if(pistonStates.has(key)||pistonStates.size>=512||getBlock(x,y,z)!==PISTON_ID)return false;
     const dir=getStoredPistonDirection(x,y,z),front=[x+dir.x,y+dir.y,z+dir.z];
     const pushed=[];
     let cannon=false;
+    if([...movingTNT.values()].some(t=>t.cannon===key&&t.launchDelay>0))return false;
     const primed=[...movingTNT.values()].filter(t=>!t.impact&&!t.launchDelay&&Math.abs(t.mesh.position.x-front[0])<0.6&&
         Math.abs(t.mesh.position.z-front[2])<0.6&&t.mesh.position.y>=front[1]-0.1&&t.mesh.position.y<front[1]+16);
     if(getBlock(...front)===TNT_ID||(primed.length&&[0,42].includes(getBlock(...front)))) {
@@ -224,8 +226,13 @@ function extendPiston(x,y,z) {
             if(getBlock(...at)!==TNT_ID)break;ammo.push(at);
         }
         if(movingTNT.size+ammo.length>128||machineCellOccupied(...front))return false;
-        for(const at of ammo)primeTNT(...at,{launch:dir});
-        for(const t of primed.slice(0,16)) {t.launch={...dir};t.launchDelay=0.45;t.fuse=4;t.velocity.set(0,0,0);}
+        const rounds=[...ammo.map(at=>({at})),...primed.map(t=>({at:t.mesh.position.toArray(),t}))].sort((a,b)=>b.at[1]-a.at[1]).slice(0,options.single?1:16);
+        for(const [i,round] of rounds.entries()) {
+            const launchDelay=0.45+i*CANNON_SHOT_INTERVAL;
+            if(round.t)Object.assign(round.t,{launch:{...dir},launchDelay,fuse:4,cannon:key,target:options.target?.slice()});
+            else primeTNT(...round.at,{launch:dir,launchDelay,cannon:key,target:options.target});
+            if(round.t)round.t.velocity.set(0,0,0);
+        }
         cannon=true;
     } else {
         let empty=false;
@@ -242,7 +249,7 @@ function extendPiston(x,y,z) {
         for(let i=pushed.length-1;i>=0;i--) {
             const p=pushed[i];setBlockNoRebuild(...p.to,p.type,rebuildQueue);setBlockNoRebuild(...p.from,0,rebuildQueue);
         }
-        setBlockNoRebuild(...front,PISTON_HEAD_ID,rebuildQueue);
+        if(!cannon||getBlock(...front)!==TNT_ID)setBlockNoRebuild(...front,PISTON_HEAD_ID,rebuildQueue);
     });
     machineRevision++;playSound('stone');return true;
 }
@@ -261,13 +268,14 @@ function retractPiston(x,y,z) {
 
 function serializeTNT(t) {
     return {id:t.id,at:t.mesh.position.toArray(),velocity:t.velocity.toArray(),fuse:t.fuse,age:t.age,
-        launchDelay:t.launchDelay,launch:t.launch,impact:t.impact};
+        launchDelay:t.launchDelay,launch:t.launch,impact:t.impact,cannon:t.cannon,target:t.target};
 }
 function validTNT(t) {
     return t&&typeof t.id==='string'&&t.id.length<80&&validMachinePoint(t.at)&&validMachinePoint(t.velocity)&&
         t.velocity.every(v=>Math.abs(v)<=80)&&(t.fuse===null||Number.isFinite(t.fuse)&&t.fuse>=0&&t.fuse<=10)&&
-        Number.isFinite(t.age)&&t.age>=0&&t.age<=600&&Number.isFinite(t.launchDelay)&&t.launchDelay>=0&&t.launchDelay<=1&&
-        (!t.launch||validPistonDirection(t.launch));
+        Number.isFinite(t.age)&&t.age>=0&&t.age<=600&&Number.isFinite(t.launchDelay)&&t.launchDelay>=0&&t.launchDelay<=16&&
+        (!t.launch||validPistonDirection(t.launch))&&(!t.cannon||typeof t.cannon==='string'&&validMachineCell(t.cannon.split(',').map(Number)))&&
+        (!t.target||validMachineCell(t.target)&&!!t.cannon&&validCannonTarget(t.cannon.split(',').map(Number),t.target));
 }
 function makeMovingTNT(data) {
     if(!validTNT(data)||movingTNT.size>=128)return null;
@@ -282,7 +290,7 @@ function primeTNT(x,y,z,options={}) {
     const launch=options.launch||null;
     while(movingTNT.has(`tnt-${nextTNT}`))nextTNT++;
     const t=makeMovingTNT({id:`tnt-${nextTNT++}`,at:[x,y,z],velocity:[0,0,0],fuse:options.falling?null:4,age:0,
-        launchDelay:launch?0.45:0,launch,impact:false});
+        launchDelay:launch?(options.launchDelay??0.45):0,launch,impact:false,cannon:options.cannon,target:options.target?.slice()});
     if(!t)return false;
     setBlockNoRebuild(x,y,z,0,rebuildQueue);return true;
 }
@@ -321,7 +329,9 @@ function tickMovingTNT(delta) {
                 if(t.launchDelay===0) {
                     const d=t.launch;
                     t.mesh.position.add(new THREE.Vector3(d.x,d.y,d.z));
-                    t.velocity.set(d.x*22,d.y*22+(d.y===0?9:0),d.z*22);t.impact=true;t.fuse=8;
+                    if(t.target)t.velocity.copy(cannonVelocity(t.mesh.position,t.target));
+                    else t.velocity.set(d.x*22,d.y*22+(d.y===0?9:0),d.z*22);
+                    t.impact=true;t.fuse=8;
                 }
             } else {
                 t.velocity.y=Math.max(-40,t.velocity.y-18*dt);
@@ -508,6 +518,7 @@ function saveRedstoneMachines() {
     return {...savePasswordLocks(),doorTimers:[...doorOpenTimers],tnt:[...movingTNT.values()].map(serializeTNT),pistons:[...pistonStates],directions:[...pistonDirections],modes:[...pistonModes],edges:[...pistonPowerEdges],buttons:[...buttonTimers],faces:[...buttonFaces],hidden:[...hiddenRedstone],nextTNT};
 }
 function clearRedstoneMachines() {
+    lastCannonClick=null;
     clearPasswordLocks();doorOpenTimers.clear();
     for(const t of [...movingTNT.values()])removeMovingTNT(t);
     for(const m of pistonVisuals.values())disposeModModel(m);
@@ -576,7 +587,7 @@ function receiveMachinePacket(p) {
     for(const data of p.tnt)if(validTNT(data)) {
         ids.add(data.id);let t=movingTNT.get(data.id);
         if(!t)t=makeMovingTNT(data);
-        else {t.remoteTarget.fromArray(data.at);t.velocity.fromArray(data.velocity);t.fuse=data.fuse;t.age=data.age;t.launchDelay=data.launchDelay;t.launch=data.launch;t.impact=!!data.impact;}
+        else {t.remoteTarget.fromArray(data.at);t.velocity.fromArray(data.velocity);t.fuse=data.fuse;t.age=data.age;t.launchDelay=data.launchDelay;t.launch=data.launch;t.impact=!!data.impact;t.cannon=data.cannon;t.target=data.target;}
     }
     for(const t of [...movingTNT.values()])if(!ids.has(t.id))removeMovingTNT(t);
     if(Array.isArray(p.pistons)&&p.pistons.length<=512) {

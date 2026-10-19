@@ -7,6 +7,39 @@ Object.assign(HOME_ITEMS,EXTRA_HOME_ITEMS);
 const cityCars=new Map(), cityCarSpawns=new Set();
 let drivingCar=null, carBraking=false, cityPopulationTimer=1, reflectionAvatar=null, reflecting=false;
 
+function isNaturalHomeVoxel(c,type) {
+    if(!HOME_ITEMS[type]&&type!==FRIDGE_TOP_ID&&type!==FURNITURE_PART_ID)return false;
+    const root=microAncestor(c,1);
+    if(microPlacements.get(microParentKey(c.x,c.y,c.z))?.has(microIndex(root.mx,root.my,root.mz)))return false;
+    for(let level=2;level<=(c.level||1);level++)if(fineVoxelEdits.has(detailKey(microAncestor(c,level))))return false;
+    return getBlock(c.x,c.y,c.z)===type;
+}
+
+function tinyHomeCollision(min,max) {
+    // Furniture keeps its actual legs, shelves and walls instead of an invisible full cube.
+    for(let x=Math.floor(min[0]+0.5);x<=Math.floor(max[0]+0.5);x++)
+        for(let y=Math.floor(min[1]+0.5);y<=Math.floor(max[1]+0.5);y++)
+            for(let z=Math.floor(min[2]+0.5);z<=Math.floor(max[2]+0.5);z++) {
+                const t=getBlock(x,y,z);
+                if(!HOME_ITEMS[t]&&t!==FRIDGE_TOP_ID&&t!==FURNITURE_PART_ID)continue;
+                const r=furnitureRecord(x,y,z);
+                if(r&&!furnitureMeshes.has(r.key))syncFurnitureMeshes();
+            }
+    const playerBox=new THREE.Box3(new THREE.Vector3(...min),new THREE.Vector3(...max)),box=new THREE.Box3();
+    for(const model of furnitureMeshes.values()) {
+        if(Math.abs(model.position.x-min[0])>4||Math.abs(model.position.y-min[1])>4||Math.abs(model.position.z-min[2])>4)continue;
+        model.updateMatrixWorld(true);
+        let hit=false;
+        model.traverseVisible(part=>{
+            if(hit||!part.isMesh||part.geometry.type!=='BoxGeometry'||part.material.depthWrite===false||part.name==='bowlWater')return;
+            part.geometry.computeBoundingBox();box.copy(part.geometry.boundingBox).applyMatrix4(part.matrixWorld);
+            if(box.intersectsBox(playerBox))hit=true;
+        });
+        if(hit)return true;
+    }
+    return false;
+}
+
 function extraHomeRecipes() {
     const list=[{ing:{4:3,36:1},out:82,count:1},{ing:{4:2,5:3},out:83,count:1},{ing:{4:1,5:1,37:1},out:84,count:1},
         {ing:{51:3,36:1},out:85,count:1},{ing:{51:2,36:1},out:86,count:1},{ing:{6:2,36:1},out:87,count:1},
@@ -84,8 +117,16 @@ function buildExtraFurniture(group,id,data) {
             };
         } else box(0.82,0.92,0.01,0xd0e2e6,0,0,-0.398);
     } else if(id===88) {
-        box(0.95,1.95,0.82,wood,0,0.47,0);
-        for(const x of [-0.23,0.23]) {box(0.43,1.77,0.04,0xc3a77c,x,0.49,0.435);box(0.025,0.25,0.04,dark,x<0?-0.06:0.06,0.47,0.47);}
+        for(const x of [-0.445,0.445])box(0.06,1.95,0.82,wood,x,0.47,0);
+        for(const y of [-0.475,0.45,1.415])box(0.89,0.06,0.82,wood,0,y,0);
+        box(0.89,1.89,0.05,wood,0,0.47,-0.385);
+        group.userData.cabinetDoors=[];
+        for(const side of [-1,1]) {
+            const door=new THREE.Group();door.position.set(side*0.45,0.49,0.435);group.add(door);
+            addModelBox(door,0.46,1.77,0.04,0xc3a77c,-side*0.225,0,0);
+            addModelBox(door,0.025,0.25,0.04,dark,-side*0.39,-0.02,0.035);
+            group.userData.cabinetDoors.push(door);
+        }
     } else if(id===89) {
         box(0.38,0.045,0.32,metal,0,-0.47,0);box(0.045,0.51,0.045,dark,0,-0.2,0);
         const shade=box(0.53,0.28,0.47,0xf4dba3,0,0.13,0,'shade');shade.material.emissive.setHex(data.on?0x9a6725:0);
@@ -128,6 +169,7 @@ function openExtraFurniture(record,content,button) {
         const input=document.createElement('textarea');input.rows=6;input.maxLength=2000;input.value=data.note||'';input.setAttribute('aria-label','Notes');input.oninput=()=>{data.note=input.value;data.on=true;};content.appendChild(input);
         button('Save',()=>{data.note=input.value;data.on=true;showToast('Notes saved.');});
     } else if(record.id===88) {
+        button(record.data.open?'Close Doors':'Open Doors',()=>{record.data.open=!record.data.open;queueRoomBlockChange(record.x,record.y,record.z);openFurniturePanel(record);});
         const select=document.createElement('select');select.setAttribute('aria-label','Stored item');
         for(const id of new Set(Object.values(getInventorySlotMapping()))) {const o=document.createElement('option');o.value=id;o.textContent=getBlockName(id);select.appendChild(o);}
         const count=document.createElement('p'),refresh=()=>{count.textContent=`Stored: ${data.storage?.[select.value]||0} / 64`;};select.onchange=refresh;refresh();content.append(select,count);

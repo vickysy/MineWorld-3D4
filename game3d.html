@@ -379,18 +379,19 @@
     <script src="three-r128.min.js"></script>
     <script src="three-pointer-lock-r128.js"></script>
     <script src="three-reflector-r128.js"></script>
-    <script src="world-expansion.js?v=20261018-machines"></script>
-    <script src="home-city.js?v=20261017-thermal1"></script>
+    <script src="world-expansion.js?v=20261019-cannons"></script>
+    <script src="home-city.js?v=20261019-tiny-home"></script>
     <script src="kitchen-home.js?v=20261016c"></script>
     <script src="city-life.js?v=20261016a"></script>
     <script src="surveillance.js?v=20261018-tools"></script>
     <script src="peerjs-1.5.5.min.js"></script>
-    <script src="multiplayer.js?v=20261018-locks"></script>
+    <script src="multiplayer.js?v=20261019-cannons"></script>
     <script src="thermal-world.js?v=20261018-machines"></script>
     <script src="launchers.js?v=20261018-castle-map"></script>
     <script src="construction.js?v=20261018-locks"></script>
-    <script src="redstone-machines.js?v=20261018-locks"></script>
+    <script src="redstone-machines.js?v=20261019-cannons"></script>
     <script src="password-locks.js?v=20261018-locks"></script>
+    <script src="cannons.js?v=20261019-cannons"></script>
 
     <script>
         // --- 场景、相机、渲染器 ---
@@ -3190,7 +3191,11 @@
             }
             const placed = microPlacements.get(microParentKey(c.x,c.y,c.z))?.get(microIndex(c.mx,c.my,c.mz));
             if (placed !== undefined) return placed;
-            return isMicroMined(c.x,c.y,c.z,c.mx,c.my,c.mz) ? 0 : getBlock(c.x,c.y,c.z);
+            if (isMicroMined(c.x,c.y,c.z,c.mx,c.my,c.mz)) return 0;
+            const type=getBlock(c.x,c.y,c.z);
+            // Dirt retains a one-micro-block shell. Explicit placements still fill its cavity.
+            if ([1,2].includes(type) && [c.mx,c.my,c.mz].every(v=>v>0 && v<MICRO_BLOCK_DIVISIONS-1)) return 0;
+            return type;
         }
 
         function offsetMicroCell(c, dx, dy, dz) {
@@ -3502,7 +3507,7 @@
             return result;
         }
 
-        // Only exposed faces are meshed. Solid interiors stay implicit, never empty.
+        // Mesh exposed surfaces, including both sides of a hollow dirt shell.
         function createMicroBlockGeometry(x, y, z) {
             const n = MICRO_BLOCK_DIVISIONS;
             const parent = microParentKey(x,y,z);
@@ -3576,6 +3581,11 @@
                 emit(a,n-1,b,2); emit(a,0,b,3);
                 emit(a,b,n-1,4); emit(a,b,0,5);
             }
+            if ([1,2].includes(getBlock(x,y,z))) for (let a=1;a<n-1;a++) for (let b=1;b<n-1;b++) {
+                emit(0,a,b,0); emit(n-1,a,b,1);
+                emit(a,0,b,2); emit(a,n-1,b,3);
+                emit(a,b,0,4); emit(a,b,n-1,5);
+            }
             for (const index of new Set([...removed,...placed.keys(),...(fineRoots.get(parent) || [])])) {
                 const cell = [index % n, Math.floor(index/n)%n, Math.floor(index/(n*n))];
                 if (refinedMicroCells.has(detailKey({x,y,z,mx:cell[0],my:cell[1],mz:cell[2],level:1}))) {
@@ -3623,6 +3633,10 @@
 
         function updateMicroVoxelOverlay() {
             microVoxelGroup.visible = isGameStarted;
+            if (isTinyMode()) {
+                const at=camera.position.toArray().map(Math.round);
+                if ([1,2].includes(getBlock(...at)) && !microRenderBlocks.has(microParentKey(...at))) markMicroNeighborhood(...at);
+            }
             for (const key of microRenderBlocks) {
                 const [dimension, coords] = key.split('|');
                 const [x,y,z] = coords.split(',').map(Number);
@@ -4946,6 +4960,7 @@
         function isTinySolidAtPoint(x, y, z) {
             const c = microCellAt(x,y,z);
             const type=getMicroType(c);
+            if (isNaturalHomeVoxel(c,type)) return tinyHomeCollision([x,y,z],[x+1e-9,y+1e-9,z+1e-9]);
             return isSolidType(type) && !isPassableHomeCell(c.x,c.y,c.z,type);
         }
 
@@ -4959,6 +4974,7 @@
             if (corner.some((v,i)=>v>=max[i] || v+size<=min[i])) return false;
             if (!refinedMicroCells.has(detailKey(c))) {
                 const type=getMicroType(c);
+                if (isTinyMode() && isNaturalHomeVoxel(c,type)) return false;
                 return isSolidType(type) && !isPassableHomeCell(c.x,c.y,c.z,type);
             }
             const childSize=size/10;
@@ -4975,6 +4991,7 @@
             const radius = getPlayerRadius(), epsilon = Math.min(playerScale,1)*0.00002;
             const min = [pos.x-radius+epsilon, pos.y-getPlayerHeight()+epsilon, pos.z-radius+epsilon];
             const max = [pos.x+radius-epsilon, pos.y+0.2*playerScale-epsilon, pos.z+radius-epsilon];
+            if (isTinyMode() && tinyHomeCollision(min,max)) return true;
             const level=isTinyMode() ? getMicroLevel() : 0, n=level ? microDivisions(level) : 1;
             const lo = min.map(v => Math.floor((v+0.5)*n));
             const hi = max.map(v => Math.floor((v+0.5)*n));
