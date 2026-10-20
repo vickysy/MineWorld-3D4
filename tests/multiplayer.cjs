@@ -66,6 +66,30 @@ async function assertScenePixels(page) {
         assert.equal(await host.evaluate(p=>furnitureRecord(...p).data.yaw,furniture),await guest.evaluate(p=>furnitureRecord(...p).data.yaw,furniture));
         console.log('PASS: Bidirectional placement/mining and complete two-block furniture synchronization.');
 
+        const home=await host.evaluate(cell=>{
+            const p=[cell[0]-12,cell[1]+8,cell[2]+8],tv=[p[0]+6,p[1],p[2]],lamp=[p[0]+6,p[1],p[2]+3];
+            for(let x=-1;x<=8;x++)for(let z=-1;z<=5;z++)setBlockNoRebuild(p[0]+x,p[1]-1,p[2]+z,3,rebuildQueue);
+            const saved=camera.position.clone();
+            for(const [id,at] of [[XL_SOFA_ID,p],[93,tv],[89,lamp]]){camera.position.set(at[0],at[1]+10,at[2]+10);if(!placeFurniture(id,...at))throw Error('Connected home fixture did not place');}
+            camera.position.copy(saved);
+            for(let z=0;z<=3;z++)setBlockNoRebuild(p[0]+5,p[1],p[2]+z,REDSTONE_DUST_ID,rebuildQueue);
+            const lever=[p[0]+4,p[1],p[2]+3];setBlockNoRebuild(...lever,31,rebuildQueue);
+            for(const at of [tv,lamp]){furnitureRecord(...at).data.redstone=true;queueRoomBlockChange(...at);}
+            return {p,tv,lamp,lever};
+        },cell);
+        await guest.waitForFunction(({p,tv,lamp})=>furnitureRecord(...p)?.data.parts.length===3&&furnitureRecord(...tv)?.data.on&&furnitureRecord(...lamp)?.data.on,home);
+        const guestHomePosition=await guest.evaluate(()=>({pos:camera.position.toArray(),flying:creativeFlying}));
+        await guest.evaluate(({tv})=>{creativeFlying=true;camera.position.set(tv[0],tv[1]+1.1,tv[2]+4);currentBlock=TV_REMOTE_ID;openRemotePanel();},home);
+        await guest.getByRole('button',{name:'Power',exact:true}).click();
+        await host.waitForFunction(tv=>furnitureRecord(...tv)?.data.on===false&&furnitureRecord(...tv)?.data.redstone===false,home.tv);
+        await guest.getByRole('button',{name:'Next Channel',exact:true}).click();
+        await host.waitForFunction(tv=>furnitureRecord(...tv)?.data.channel===1&&furnitureRecord(...tv)?.data.on,home.tv);
+        await guest.locator('#close-home').click();
+        await guest.evaluate(saved=>{camera.position.set(...saved.pos);creativeFlying=saved.flying;currentBlock=2;},guestHomePosition);
+        await host.evaluate(lever=>setBlockNoRebuild(...lever,30,rebuildQueue),home.lever);
+        await guest.waitForFunction(lamp=>furnitureRecord(...lamp)?.data.on===false,home.lamp);
+        console.log('PASS: Four-cell sofa synchronizes; one redstone circuit powers lamp/TV; guest remote switches the host TV and channel.');
+
         await host.evaluate(()=>{controls.unlock();});await host.waitForFunction(()=>!controls.isLocked);
         await host.getByRole('button',{name:'Resume Game',exact:true}).click();
         await host.waitForFunction(()=>controls.isLocked);
@@ -101,7 +125,10 @@ async function assertScenePixels(page) {
         await guest.waitForFunction(p=>lavaAmount(...p)===3,lavaCell);
         const pool=[cell[0]+24,cell[1]+3,cell[2]];
         assert.equal(await guest.evaluate(p=>pourLavaBucket(...p),pool),128);
-        await host.waitForFunction(p=>getBlock(...p)===43||getBlock(p[0],p[1]-1,p[2])===43,pool);
+        await host.waitForFunction(p=>[...worldMap].some(([key,type])=>{
+            if(type!==LAVA_ID)return false;const [x,y,z]=key.split(',').map(Number);
+            return Math.abs(x-p[0])<9&&Math.abs(z-p[2])<9&&y<p[1];
+        }),pool);
         const nuke=[cell[0]+120,cell[1],cell[2]+120];
         await host.evaluate(p=>setBlockNoRebuild(...p,22,new Set()),nuke);await guest.waitForFunction(p=>getBlock(...p)===22,nuke);
         await guest.evaluate(p=>igniteNuke(...p),nuke);

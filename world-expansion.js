@@ -19,7 +19,7 @@ function waterAmount(x,y,z) {
 
 function queueFluidCell(x,y,z) {
     if (currentDimension === 'nether' || waterFlowQueue.length >= 8192) return;
-    if (!nearThermalPlayer(x,y,z)) return;
+    if (!nearThermalPlayer(x,y,z) || getBlock(x,y,z)!==24) return;
     const key=`${x},${y},${z}`;
     if (!queuedWaterFlow.has(key)) { queuedWaterFlow.add(key);waterFlowQueue.push({x,y,z}); }
 }
@@ -31,23 +31,31 @@ function queueFluidNeighbors(x,y,z) {
 
 function writeWater(x,y,z,amount,dirty) {
     const key=`${x},${y},${z}`, type=amount>0?24:0;
-    setBlockNoRebuild(x,y,z,type,dirty);
+    const writing=waterWriting;waterWriting=true;
+    try {if(setBlockNoRebuild(x,y,z,type,dirty)===false)return false;} finally {waterWriting=writing;}
     if (amount>0) waterAmounts.set(key,amount);else waterAmounts.delete(key);
     queueFluidNeighbors(x,y,z);
+    return true;
+}
+
+function transferWater(from,to,amount,dirty) {
+    const source=waterAmount(...from),target=waterAmount(...to),moved=Math.min(amount,source,8-target);
+    if(moved<=0||!lockedBlockWriteAllowed(...from,source===moved?0:24)||!lockedBlockWriteAllowed(...to,24))return 0;
+    writeWater(...from,source-moved,dirty);writeWater(...to,target+moved,dirty);return moved;
 }
 
 function tickWaterFlow(delta=0.1) {
     if (currentDimension==='nether' || commandJob || !thermalAuthority()) return;
-    flowElapsed+=delta;
-    if(flowElapsed<0.1 || !waterFlowQueue.length) return;
-    flowElapsed=0;
-    const dirty=new Set(), count=Math.min(48,waterFlowQueue.length);
-    waterWriting=true;
-    try {
-        for(let i=0;i<count;i++) {
-            const {x,y,z}=waterFlowQueue.shift();queuedWaterFlow.delete(`${x},${y},${z}`);
+    flowElapsed=Math.min(0.2,flowElapsed+delta);
+    if(flowElapsed+1e-9<0.05)return;
+    const dirty=new Set(),editing=commandEditing;commandEditing=true;
+    try {while(flowElapsed+1e-9>=0.05) {
+        flowElapsed=Math.max(0,flowElapsed-0.05);
+        const batch=waterFlowQueue.splice(0,192).sort((a,b)=>a.y-b.y);
+        for(const {x,y,z} of batch) {
+            queuedWaterFlow.delete(`${x},${y},${z}`);
             let amount=waterAmount(x,y,z);
-            if(!amount) continue;
+            if(!amount||!nearThermalPlayer(x,y,z)) continue;
             let lava=false;
             for(const [dx,dy,dz] of [[1,0,0],[-1,0,0],[0,0,1],[0,0,-1],[0,-1,0],[0,1,0]]) {
                 if(getBlock(x+dx,y+dy,z+dz)===LAVA_ID) {
@@ -56,26 +64,26 @@ function tickWaterFlow(delta=0.1) {
             }
             if(lava) queueFluidNeighbors(x,y,z);
             amount=waterAmount(x,y,z);if(!amount)continue;
-            const below=getBlock(x,y-1,z);
-            if([0,24,25,42].includes(below)) {
-                const n=waterAmount(x,y-1,z), moved=Math.min(amount,8-n);
-                if(moved>0) {
-                    writeWater(x,y-1,z,n+moved,dirty);amount-=moved;
-                    writeWater(x,y,z,amount,dirty);
-                    if(!amount) continue;
-                }
+            let landing=y;
+            for(let fall=0;fall<3;fall++) {
+                const next=landing-1,type=getBlock(x,next,z);
+                if(![0,24,25,42].includes(type)||waterAmount(x,next,z)>=8||!lockedBlockWriteAllowed(x,next,z,24))break;
+                landing=next;
+                if(type===24||HEAT_OFFSETS.some(([dx,dy,dz])=>getBlock(x+dx,next+dy,z+dz)===LAVA_ID))break;
             }
-            for(const [dx,dz] of [[1,0],[0,1],[-1,0],[0,-1]]) {
-                const type=getBlock(x+dx,y,z+dz);
+            if(landing<y){transferWater([x,y,z],[x,landing,z],amount,dirty);continue;}
+            const neighbors=[[1,0],[0,1],[-1,0],[0,-1]].map(([dx,dz])=>{
+                const at=[x+dx,y,z+dz];return {at,down:[0,24,25,42].includes(getBlock(at[0],y-1,at[2]))&&waterAmount(at[0],y-1,at[2])<8};
+            }).sort((a,b)=>Number(b.down)-Number(a.down));
+            for(const {at,down} of neighbors) {
+                const type=getBlock(...at);
                 if(![0,24,25,42].includes(type)) continue;
-                const neighbor=waterAmount(x+dx,y,z+dz), moved=Math.floor((amount-neighbor)/2);
-                if(moved<=0) continue;
-                writeWater(x+dx,y,z+dz,neighbor+moved,dirty);amount-=moved;
-                writeWater(x,y,z,amount,dirty);
+                const neighbor=waterAmount(...at),moved=down?Math.min(amount,8-neighbor):Math.floor((amount-neighbor)/2);
+                amount-=transferWater([x,y,z],at,moved,dirty);
+                if(!amount)break;
             }
         }
-    } finally {waterWriting=false;}
-    addDirtyChunksToQueue(dirty);
+    }} finally {commandEditing=editing;addDirtyChunksToQueue(dirty,true);}
 }
 
 function expansionBlockChanged(x,y,z,oldType,type) {
@@ -405,6 +413,10 @@ function paintDeviceScreen(model,data,time) {
             ctx.fillStyle='#f5f7f2';ctx.fillRect(18,12,220,112);ctx.fillStyle='#263743';ctx.font='12px sans-serif';
             String(data.note).slice(0,120).match(/.{1,29}/g)?.slice(0,7).forEach((line,i)=>ctx.fillText(line,25,29+i*13));
         }
+        if([TV_ID,93].includes(model.userData.itemId)&&data.consoleScore!==undefined) {
+            ctx.fillStyle='#17343c';ctx.fillRect(0,0,256,144);ctx.fillStyle='#e7f2e9';ctx.font='bold 20px sans-serif';ctx.fillText(`Score: ${data.consoleScore}`,18,28);
+            for(let i=0;i<9;i++){ctx.fillStyle=i===data.consoleScore%9?'#e2b34d':'#497d89';ctx.fillRect(64+(i%3)*44,40+Math.floor(i/3)*32,36,24);}
+        }
     }
     screen.texture.needsUpdate=true;
 }
@@ -460,6 +472,7 @@ function openFurniturePanel(record) {
     blocker.style.display='none';
     const button=(label,action,parent=content)=>{const b=document.createElement('button');b.textContent=label;b.onclick=action;parent.appendChild(b);return b;};
     const data=record.data;
+    addHomePowerControl(record,content);
     if(record.id===SECURITY_CAMERA_ID) {
         openSecurityCameraPanel(record,content,button);
     } else if(record.id===NUCLEAR_LAUNCHER_ID) {
@@ -484,15 +497,15 @@ function openFurniturePanel(record) {
         button('Save',()=>{data.note=input.value;data.on=true;showToast('Notes saved.');});
     } else if(record.id===TV_ID || record.id===93) {
         const label=document.createElement('label'),power=document.createElement('input');power.type='checkbox';power.checked=!!data.on;
-        power.onchange=()=>{data.on=power.checked;};label.append(power,document.createTextNode(' Power'));content.appendChild(label);
+        power.onchange=()=>{data.on=power.checked;data.redstone=false;homeChanged(record);openFurniturePanel(record);};label.append(power,document.createTextNode(' Power'));content.appendChild(label);
         const select=document.createElement('select');select.setAttribute('aria-label','Channel');
         for(const [value,name] of [[0,'World Adventure'],[1,'World News']]) {const option=document.createElement('option');option.value=value;option.textContent=name;select.appendChild(option);}
-        select.value=data.channel||0;select.onchange=()=>{data.channel=Number(select.value);data.on=true;power.checked=true;};content.appendChild(select);
+        select.value=data.channel||0;select.onchange=()=>{data.channel=Number(select.value);data.on=true;power.checked=true;delete data.consoleScore;homeChanged(record);};content.appendChild(select);
     } else if(record.id===CONSOLE_ID || record.id===HANDHELD_ID) {
         data.on=true;let score=0,target=Math.floor(Math.random()*9);
         const result=document.createElement('p');result.textContent='Score: 0';content.appendChild(result);
         const grid=document.createElement('div');grid.className='home-game';content.appendChild(grid);
-        const redraw=()=>{for(let i=0;i<9;i++) {grid.children[i].classList.toggle('lit',i===target);grid.children[i].textContent=i===target?'◆':'';}result.textContent=`Score: ${score}`;};
+        const redraw=()=>{for(let i=0;i<9;i++) {grid.children[i].classList.toggle('lit',i===target);grid.children[i].textContent=i===target?'◆':'';}result.textContent=`Score: ${score}`;connectConsoleScreen(record,score);};
         for(let i=0;i<9;i++) button('',()=>{if(i!==target)return;score++;target=(target+1+Math.floor(Math.random()*8))%9;redraw();playSound('pickup');},grid).setAttribute('aria-label',`Tile ${i+1}`);
         redraw();
     } else openExtraFurniture(record,content,button);
@@ -532,9 +545,9 @@ function placeFurniture(id,x,y,z) {
     if(!HOME_ITEMS[id] || ![0,42].includes(getBlock(x,y,z))) return false;
     const height=[FRIDGE_ID,CHAIR_ID,88,112,SHOWER_ID,SHOWER_DOOR_ID].includes(id)?2:1;
     let yaw=Math.round(Math.atan2(camera.position.x-x,camera.position.z-z)/(Math.PI/2))*(Math.PI/2);
-    if(id===83||id===126) for(const [dx,dz] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+    if([83,126,XL_SOFA_ID].includes(id)) for(const [dx,dz] of [[-1,0],[1,0],[0,-1],[0,1]]) {
         const neighbor=furnitureRecord(x+dx,y,z+dz);
-        if(neighbor && [83,126].includes(neighbor.id)) {yaw=neighbor.data.yaw||0;break;}
+        if(neighbor && [83,126,XL_SOFA_ID].includes(neighbor.id)) {yaw=neighbor.data.yaw||0;break;}
     }
     if([112,SHOWER_DOOR_ID].includes(id))for(const [dx,dz] of [[-1,0],[1,0],[0,-1],[0,1]]) {
         const neighbor=furnitureRecord(x+dx,y,z+dz);
@@ -564,6 +577,7 @@ function placeFurniture(id,x,y,z) {
 
 function handleExpansionClick(e) {
     if(drivingCar) return true;
+    if(e.button===2&&currentBlock===TV_REMOTE_ID&&!e.shiftKey){openRemotePanel();return true;}
     if(e.button===2 && currentBlock===SURVEILLANCE_TABLET_ID && !e.shiftKey) {
         if(hasInventoryItem(SURVEILLANCE_TABLET_ID))openFurniturePanel({key:'held-surveillance-tablet',id:SURVEILLANCE_TABLET_ID,data:{}});
         else showToast('No surveillance tablet.');
@@ -601,12 +615,12 @@ function handleExpansionClick(e) {
     const usableHome=record && ([COMPUTER_ID,94,96,SECURITY_CAMERA_ID,SURVEILLANCE_TABLET_ID,NUCLEAR_LAUNCHER_ID,85,86,89,91,104,105,106,SHOWER_ID,SHOWER_DOOR_ID,BOOKSHELF_ID].includes(record.id)||KITCHEN_FOOD[record.id]||record.id===119&&record.data.foodItem);
     const joiningGlass=[112,SHOWER_DOOR_ID].includes(currentBlock);
     if(record && !e.shiftKey && !isToolItem(currentBlock) && (!HOME_ITEMS[currentBlock] || usableHome&&!joiningGlass)) {
-        if([CHAIR_ID,83,126].includes(record.id)) sitInChair(record);
+        if([CHAIR_ID,83,126,XL_SOFA_ID].includes(record.id)) sitInChair(record);
         else {
-            if(record.id===KEYBOARD_ID) {
-                const computer=Array.from(furnitureData).find(([key,data])=>data.id===COMPUTER_ID && key.startsWith(currentDimension+'|') &&
-                    new THREE.Vector3(...key.split('|')[1].split(',').map(Number)).distanceTo(new THREE.Vector3(hit.x,hit.y,hit.z))<3);
-                if(computer) {openFurniturePanel({...record,key:computer[0],id:COMPUTER_ID,data:computer[1]});return true;}
+            if(record.id===KEYBOARD_ID||record.id===MOUSE_ID) {
+                const computer=nearbyHome([COMPUTER_ID,94,96],record,4)[0];
+                if(computer) {openFurniturePanel(computer);return true;}
+                showToast('Place a computer within 4 blocks.');return true;
             }
             openFurniturePanel(record);
         }
@@ -634,7 +648,7 @@ function initWorldExpansion() {
     const homeRecipes=[{ing:{36:4,6:1,28:1},out:73,count:1},{ing:{51:2,36:2,28:2,38:1},out:74,count:1},
         {ing:{36:2,6:1,28:1,38:1},out:75,count:1},{ing:{6:3,36:2,28:1},out:76,count:1},
         {ing:{36:3,6:2,28:2},out:77,count:1},{ing:{36:1,28:2},out:78,count:1},{ing:{4:3,36:2},out:79,count:1}];
-    homeRecipes.push(...extraHomeRecipes());recipes.push(...homeRecipes);
+    homeRecipes.push(...extraHomeRecipes(),...connectedHomeRecipes());recipes.push(...homeRecipes);
     const style=document.createElement('style');style.textContent=`
         #inventory-tabs{flex-wrap:wrap} #tab-home .slot{width:108px;height:100px;flex-direction:column;gap:4px;box-sizing:border-box}
         #tab-build .hidden-block-slot{width:100px;height:104px;box-sizing:border-box;flex-direction:column;gap:4px;padding:5px;font-size:13px;color:white}
@@ -663,6 +677,8 @@ function initWorldExpansion() {
         const model=CAR_ITEMS[id]?createCityCar(undefined,CAR_ITEMS[id]):id===ENDER_EGG_ID?createEndermanModel():createFurnitureModel(id,{on:true});if(id===ENDER_EGG_ID){model.scale.setScalar(0.6);model.position.y=-0.3;}
         if(CAR_ITEMS[id]){model.scale.setScalar(0.52);model.position.y=-0.2;}
         if([93,118,126].includes(id)){model.scale.setScalar(id===118?0.65:0.8);model.position.x=-0.4;if(id===118)model.position.z=-0.35;}
+        if(id===XL_SOFA_ID){model.scale.setScalar(0.48);model.position.x=-0.72;}
+        if(id===DESK_ID){model.scale.setScalar(0.65);model.position.set(-0.35,0,-0.35);}
         iconScene.add(model);iconRenderer.render(iconScene,iconCamera);const img=document.createElement('img');img.alt='';img.src=iconRenderer.domElement.toDataURL();slot.append(img,document.createTextNode(name));
         (id===ENDER_EGG_ID?document.getElementById('tab-mods'):items).appendChild(slot);iconScene.remove(model);disposeModModel(model);
     }
@@ -692,7 +708,7 @@ function initWorldExpansion() {
     const panel=document.createElement('section');panel.id='home-panel';panel.hidden=true;
     panel.innerHTML='<div class="world-dialog" role="dialog" aria-modal="true" aria-labelledby="home-title"><header><h2 id="home-title"></h2><button id="close-home" aria-label="Close">&#215;</button></header><div id="home-content"></div></div>';
     document.body.appendChild(panel);document.getElementById('close-home').onclick=()=>closeFurniturePanel();
-    expansionReady=true;initWorldCommands();initHomeCity();updateInventoryCounts();
+    expansionReady=true;initWorldCommands();initHomeCity();initConnectedHome();updateInventoryCounts();
 }
 
 function updateWorldExpansion(delta) {
@@ -712,6 +728,7 @@ function updateWorldExpansion(delta) {
     if(furnitureTick<0.15) return;
     const elapsed=Math.min(0.5,furnitureTick);furnitureTick=0;
     syncFurnitureMeshes();
+    updateConnectedPower();
     for(const [key,model] of furnitureMeshes) {
         const data=furnitureData.get(key)||{};
         if(model.userData.door) model.userData.door.rotation.y=data.open?-Math.PI*0.55:0;

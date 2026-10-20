@@ -147,9 +147,7 @@ function buildExtraFurniture(group,id,data) {
         const screen=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:texture}));screen.position.set(cx,0,0.056);group.add(screen);group.userData.screen={canvas,texture};
         box(0.1,0.2,0.08,metal,cx,-0.37,-0.02);box(id===93?1.3:0.45,0.04,0.34,dark,cx,-0.47,0);
     } else if(id===95) {
-        box(0.48,0.95,0.75,dark,0,-0.02,0);box(0.43,0.9,0.02,0x354753,0,-0.02,0.39);
-        for(const y of [-0.29,0,0.29]) {box(0.27,0.21,0.025,0x539fbb,0,y,0.41);box(0.14,0.13,0.03,dark,0,y,0.425);}
-        box(0.045,0.045,0.025,0xa9e9ed,0.13,0.4,0.42);
+        buildGamingTower(group,data);
     } else if(id===97) {
         box(0.72,0.2,0.5,white,0,-0.37,0);box(0.62,0.04,0.42,0xf9f8ef,0,-0.25,0);
     } else if(id===98) {
@@ -159,22 +157,32 @@ function buildExtraFurniture(group,id,data) {
     if(KITCHEN_ITEMS[id])buildKitchenModel(group,id,data);
     if(CITY_LIFE_ITEMS[id])buildCityLifeModel(group,id,data);
     if(SURVEILLANCE_ITEMS[id])buildSurveillanceModel(group,id,data);
+    if(CONNECTED_HOME_ITEMS[id])buildConnectedHome(group,id,data);
 }
 
 function openExtraFurniture(record,content,button) {
     const data=record.data;
     if(record.id===128) {kickFootball(record);closeFurniturePanel();return;}
     if(KITCHEN_ITEMS[record.id])return openKitchenFurniture(record,content,button);
-    if([94,95,96].includes(record.id)) {
+    if(record.id===TV_REMOTE_ID){remoteControls(content,button);return;}
+    if(record.id===95) {
+        button(data.on?'Power Off':'Power On',()=>{data.redstone=false;data.on=!data.on;homeChanged(record);openFurniturePanel(record);});
+        button('Connect Monitor',()=>{
+            const monitor=nearbyHome([94],record,4)[0];
+            if(!monitor){showToast('Place a monitor within 4 blocks.');return;}
+            monitor.data.tower=record.key;homeChanged(monitor);showToast('Monitor connected.');
+        });
+    } else if([94,96].includes(record.id)) {
         const input=document.createElement('textarea');input.rows=6;input.maxLength=2000;input.value=data.note||'';input.setAttribute('aria-label','Notes');input.oninput=()=>{data.note=input.value;data.on=true;};content.appendChild(input);
         button('Save',()=>{data.note=input.value;data.on=true;showToast('Notes saved.');});
-    } else if(record.id===88) {
+    } else if(record.id===88||record.id===NIGHTSTAND_ID) {
+        if(record.id===88)
         button(record.data.open?'Close Doors':'Open Doors',()=>{record.data.open=!record.data.open;queueRoomBlockChange(record.x,record.y,record.z);openFurniturePanel(record);});
         const select=document.createElement('select');select.setAttribute('aria-label','Stored item');
         for(const id of new Set(Object.values(getInventorySlotMapping()))) {const o=document.createElement('option');o.value=id;o.textContent=getBlockName(id);select.appendChild(o);}
         const count=document.createElement('p'),refresh=()=>{count.textContent=`Stored: ${data.storage?.[select.value]||0} / 64`;};select.onchange=refresh;refresh();content.append(select,count);
-        button('Store',()=>{const id=Number(select.value);if((data.storage?.[id]||0)>=64||!hasInventoryItem(id))return;consumeInventoryItem(id);data.storage??={};data.storage[id]=(data.storage[id]||0)+1;refresh();updateInventoryCounts();});
-        button('Take',()=>{const id=Number(select.value);if(!(data.storage?.[id]>0))return;data.storage[id]--;playerInventory[id]=(playerInventory[id]||0)+1;refresh();updateInventoryCounts();});
+        button('Store',()=>{const id=Number(select.value);if((data.storage?.[id]||0)>=64||!hasInventoryItem(id))return;consumeInventoryItem(id);data.storage??={};data.storage[id]=(data.storage[id]||0)+1;refresh();updateInventoryCounts();homeChanged(record);});
+        button('Take',()=>{const id=Number(select.value);if(!(data.storage?.[id]>0))return;data.storage[id]--;playerInventory[id]=(playerInventory[id]||0)+1;refresh();updateInventoryCounts();homeChanged(record);});
     } else if(record.id===85) {
         button('Use Toilet',()=>{
             sitInChair(record);if(seatedAt?.key!==record.key)return;
@@ -184,7 +192,7 @@ function openExtraFurniture(record,content,button) {
         button('Flush',()=>{data.flushing=1.6;playSound('swim');showToast('Flushed.');});
     } else if(record.id===86 || record.id===89) {
         const label=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.checked=!!data.on;
-        input.onchange=()=>data.on=input.checked;label.append(input,document.createTextNode(record.id===86?' Tap':' Light'));content.appendChild(label);
+        input.onchange=()=>{data.on=input.checked;data.redstone=false;homeChanged(record);openFurniturePanel(record);};label.append(input,document.createTextNode(record.id===86?' Tap':' Light'));content.appendChild(label);
         if(record.id===86)button('Fill Bucket',()=>fillHomeWaterBucket(data));
     } else if(record.id===91) {
         openBookEditor(record,content,button);
@@ -195,6 +203,10 @@ function openExtraFurniture(record,content,button) {
 
 function updateExtraFurniture(model,data,delta) {
     updateKitchenFurniture(model,data,delta);
+    for(const fan of model.userData.pcFans||[]) {
+        if(data.on)fan.rotation.z+=delta*9;
+        fan.children.forEach(part=>{if(part.material.emissive)part.material.emissive.copy(data.on?part.material.color:new THREE.Color(0));});
+    }
     if(model.userData.stream)model.userData.stream.visible=!!data.on;
     if(model.userData.light) {model.userData.light.intensity=data.on?1.2:0;model.userData.shade.material.emissive.setHex(data.on?0x9a6725:0);}
     if(data.using>0) {

@@ -421,7 +421,7 @@ function updateCircuitVisuals() {
     rebuildCircuitPower();
     for(const [key,type] of machineCells)if(MACHINE_ITEMS[type]) {
         const at=key.split(',').map(Number);if(!nearThermalPlayer(...at))continue;
-        const links=type===REDSTONE_DUST_ID?wireNeighbors(...at).concat(redstoneNeighbors(...at).filter(n=>[30,31,53,52,BUTTON_ID].includes(getBlock(n.x,n.y,n.z))))
+        const links=type===REDSTONE_DUST_ID?wireNeighbors(...at).concat(redstoneNeighbors(...at).filter(n=>[26,27,30,31,53,52,BUTTON_ID,...HOME_POWER_ITEMS].includes(getBlock(n.x,n.y,n.z))))
             .map(n=>[n.x-at[0],n.y-at[1],n.z-at[2]]):[];
         const powered=type===REDSTONE_DUST_ID?poweredWireCells.has(key):type===PASSWORD_LOCK_ID?(passwordLocks.get(key)?.remaining||0)>0:(buttonTimers.get(key)||0)>0;
         const face=passwordLocks.get(key)?.face||buttonFaces.get(key)||{x:0,y:1,z:0};

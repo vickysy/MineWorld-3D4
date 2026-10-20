@@ -13,6 +13,8 @@ function kitchenRecipes() {
 }
 
 function kitchenParts(id) {
+    if(id===XL_SOFA_ID)return [[1,0,0],[2,0,0],[3,0,0]];
+    if(id===DESK_ID)return [[1,0,0],[0,0,1],[1,0,1]];
     if(id===93||id===126)return [[1,0,0]];
     if(id===118)return [[1,0,0],[0,0,1],[1,0,1]];
     return [];
@@ -159,7 +161,7 @@ function updateKitchenFurniture(model,data,delta) {
         model.userData.foodId=data.foodItem;model.userData.foodMesh=null;
         if(KITCHEN_FOOD[data.foodItem]) {const food=createFurnitureModel(data.foodItem,{});food.scale.setScalar(0.7);food.position.y=-0.08;model.add(food);model.userData.foodMesh=food;}
     }
-    if(model.userData.itemId===83||model.userData.itemId===126)updateSofaConnections(model,data);
+    if([83,126,XL_SOFA_ID].includes(model.userData.itemId))updateSofaConnections(model,data);
 }
 
 function fillHomeWaterBucket(data) {
@@ -249,7 +251,7 @@ function updateSofaConnections(model,data) {
     const sections=model.userData.sofaSections||[model],width=sections.length;
     const connected=offset=>{
         const p=model.position.clone().add(new THREE.Vector3(...dir).multiplyScalar(offset)),r=furnitureRecord(Math.round(p.x),Math.round(p.y),Math.round(p.z));
-        return r && [83,126].includes(r.id) && Math.cos((r.data.yaw||0)-(data.yaw||0))>0.99;
+        return r && [83,126,XL_SOFA_ID].includes(r.id) && Math.cos((r.data.yaw||0)-(data.yaw||0))>0.99;
     };
     sections.forEach((section,i)=>{section.userData.sofaArms[0].visible=i===0&&!connected(-1);section.userData.sofaArms[1].visible=i===width-1&&!connected(width);});
 }

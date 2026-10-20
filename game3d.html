@@ -379,19 +379,21 @@
     <script src="three-r128.min.js"></script>
     <script src="three-pointer-lock-r128.js"></script>
     <script src="three-reflector-r128.js"></script>
-    <script src="world-expansion.js?v=20261019-cannons"></script>
-    <script src="home-city.js?v=20261019-tiny-home"></script>
-    <script src="kitchen-home.js?v=20261016c"></script>
+    <script src="world-expansion.js?v=20261020-connected"></script>
+    <script src="home-city.js?v=20261020-connected"></script>
+    <script src="kitchen-home.js?v=20261020-connected"></script>
     <script src="city-life.js?v=20261016a"></script>
     <script src="surveillance.js?v=20261018-tools"></script>
     <script src="peerjs-1.5.5.min.js"></script>
-    <script src="multiplayer.js?v=20261019-cannons"></script>
+    <script src="multiplayer.js?v=20261020-connected"></script>
     <script src="thermal-world.js?v=20261019-fast-lava"></script>
     <script src="launchers.js?v=20261018-castle-map"></script>
     <script src="construction.js?v=20261018-locks"></script>
-    <script src="redstone-machines.js?v=20261019-cannons"></script>
+    <script src="redstone-machines.js?v=20261020-connected"></script>
     <script src="password-locks.js?v=20261018-locks"></script>
     <script src="cannons.js?v=20261019-closed-gates"></script>
+    <script src="rail-vehicles.js?v=20261020-connected"></script>
+    <script src="connected-home.js?v=20261020-connected"></script>
 
     <script>
         // --- 场景、相机、渲染器 ---
@@ -2316,7 +2318,7 @@
                  60:72, 61:73, 62:74, 63:75, 64:76, 65:77, 66:78, 67:79,
                  70:82, 71:83, 72:84, 73:85, 74:86, 75:87, 76:88, 77:89, 78:90, 79:91, 80:92,
                  81:93, 82:94, 83:95, 84:96, 85:97, 86:98, 88:100, 89:101, 90:102, 91:103,
-                 ...Object.fromEntries(Object.keys({...KITCHEN_ITEMS,...CITY_LIFE_ITEMS,...HIDDEN_BLOCKS,...SURVEILLANCE_ITEMS,...THERMAL_ITEMS,...MACHINE_ITEMS,127:'Netherrack'}).map(id=>[Number(id)-12,Number(id)]))
+                 ...Object.fromEntries(Object.keys({...KITCHEN_ITEMS,...CITY_LIFE_ITEMS,...HIDDEN_BLOCKS,...SURVEILLANCE_ITEMS,...THERMAL_ITEMS,...MACHINE_ITEMS,...CONNECTED_HOME_ITEMS,127:'Netherrack'}).map(id=>[Number(id)-12,Number(id)]))
              };
         }
 
@@ -3043,7 +3045,7 @@
             if (worldMap.has(key)) {
                 const t = worldMap.get(key);
                 // Pass-through walls must not hide the room's adjacent solid faces.
-                if(HIDDEN_BLOCKS[t] || HOME_ITEMS[t] || t===FRIDGE_TOP_ID || t===FURNITURE_PART_ID || t===NETHER_PORTAL_ID || t===FIRE_ID) return true;
+                if(HIDDEN_BLOCKS[t] || HOME_ITEMS[t] || MACHINE_ITEMS[t] || t===PISTON_HEAD_ID || t===PRESSURE_PLATE_ID || t===FRIDGE_TOP_ID || t===FURNITURE_PART_ID || t===NETHER_PORTAL_ID || t===FIRE_ID) return true;
                 return [0, 6, 7, 8, 9, 10, 11, 16, 17, 18, 19, 20, 24, 25, 26, 27, 28, 30, 31, 42, LAVA_ID, BARRIER_ID, GLASS_SENSOR_DOOR_BOTTOM_ID, GLASS_SENSOR_DOOR_TOP_ID, GLASS_SENSOR_DOOR_OPEN_ID].includes(t);
             }
             if(isCraterVoid(bx,by,bz))return true;
@@ -3798,21 +3800,7 @@
         }
 
         function computeRailShape(x, y, z) {
-            const east = railConnects(x, y, z, 1, 0);
-            const west = railConnects(x, y, z, -1, 0);
-            const south = railConnects(x, y, z, 0, 1);
-            const north = railConnects(x, y, z, 0, -1);
-            let shape = { yaw: 0, pitch: 0, roll: 0, lift: 0 };
-
-            if ((east || west) && !(north || south)) shape.yaw = Math.PI / 2;
-            if ((east || west) && (north || south)) {
-                shape.yaw = east || west ? Math.PI / 4 : 0;
-            }
-            if (east && isRailBlockAt(x + 1, y + 1, z)) { shape.yaw = Math.PI / 2; shape.roll = -Math.PI / 7; shape.lift = 0.12; }
-            else if (west && isRailBlockAt(x - 1, y + 1, z)) { shape.yaw = Math.PI / 2; shape.roll = Math.PI / 7; shape.lift = 0.12; }
-            else if (south && isRailBlockAt(x, y + 1, z + 1)) { shape.yaw = 0; shape.pitch = Math.PI / 7; shape.lift = 0.12; }
-            else if (north && isRailBlockAt(x, y + 1, z - 1)) { shape.yaw = 0; shape.pitch = -Math.PI / 7; shape.lift = 0.12; }
-            return shape;
+            return railSpec(x,y,z);
         }
 
         function updateRailShapeAt(x, y, z) {
@@ -4146,9 +4134,11 @@
                             }
                             
                             if (exposed) {
-                                if (!typeCounts[type]) typeCounts[type] = 0;
-                                typeCounts[type]++;
-                                blockData.push({ x, y, z, type });
+                                const rail=(type===26||type===27)?computeRailShape(x,y,z):null;
+                                const renderKey=rail?`${type}|${rail.key}`:type;
+                                if (!typeCounts[renderKey]) typeCounts[renderKey] = 0;
+                                typeCounts[renderKey]++;
+                                blockData.push({ x, y, z, type,renderKey,rail });
                             }
                         }
                     }
@@ -4158,20 +4148,22 @@
             // 创建 InstancedMesh 字典
             const instancedMeshes = {};
             const matrix = new THREE.Matrix4();
-            const railQuat = new THREE.Quaternion();
-            const railEuler = new THREE.Euler();
-            const railScale = new THREE.Vector3(1, 1, 1);
-            const railPos = new THREE.Vector3();
             const typeIndices = {};
 
             for (let type in typeCounts) {
                 let count = typeCounts[type];
                 let typeInt = parseInt(type);
                 let geo = boxGeo;
+                let material=materials[typeInt];
                 if (typeInt === 16 || typeInt === 25 || typeInt === 30 || typeInt === 42) geo = torchGeo; // 火把、海带、拉杆、小草
                 else if (typeInt === 26 || typeInt === 27 || typeInt === 28 || typeInt === PRESSURE_PLATE_ID) geo = flatGeo; // 铁轨、红石、压力板
+                if(typeInt===26||typeInt===27) {
+                    geo=railGeometry(blockData.find(b=>b.renderKey===type).rail,typeInt===27);
+                    railRenderMaterial??=new THREE.MeshLambertMaterial({vertexColors:true});
+                    material=railRenderMaterial;
+                }
                 
-                let iMesh = new THREE.InstancedMesh(geo, isTinyMode() && geo === boxGeo ? getMicroMaterials(typeInt) : materials[type], count);
+                let iMesh = new THREE.InstancedMesh(geo, isTinyMode() && geo === boxGeo ? getMicroMaterials(typeInt) : material, count);
                 iMesh.userData.blockIndices = new Map();
                 iMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
                 instancedMeshes[type] = iMesh;
@@ -4181,24 +4173,16 @@
 
             // 填充矩阵数据
             for (let b of blockData) {
-                if (b.type === 26 || b.type === 27) {
-                    const shape = railShapes.get(`${b.x},${b.y},${b.z}`) || computeRailShape(b.x, b.y, b.z);
-                    railPos.set(b.x, b.y + (shape.lift || 0), b.z);
-                    railEuler.set(shape.pitch || 0, shape.yaw || 0, shape.roll || 0);
-                    railQuat.setFromEuler(railEuler);
-                    matrix.compose(railPos, railQuat, railScale);
-                } else {
-                    matrix.identity();
-                    matrix.setPosition(b.x, b.y, b.z);
-                    if(b.type===24||b.type===LAVA_ID) {
-                        const height=liquidAmount(b.type,b.x,b.y,b.z)/8;
-                        matrix.makeScale(1,height,1);matrix.setPosition(b.x,b.y-0.5+height/2,b.z);
-                    }
+                matrix.identity();
+                matrix.setPosition(b.x, b.y, b.z);
+                if(b.type===24||b.type===LAVA_ID) {
+                    const height=liquidAmount(b.type,b.x,b.y,b.z)/8;
+                    matrix.makeScale(1,height,1);matrix.setPosition(b.x,b.y-0.5+height/2,b.z);
                 }
-                let idx = typeIndices[b.type];
-                instancedMeshes[b.type].setMatrixAt(idx, matrix);
-                instancedMeshes[b.type].userData.blockIndices.set(`${b.x},${b.y},${b.z}`, typeIndices[b.type]);
-                typeIndices[b.type]++;
+                let idx = typeIndices[b.renderKey];
+                instancedMeshes[b.renderKey].setMatrixAt(idx, matrix);
+                instancedMeshes[b.renderKey].userData.blockIndices.set(`${b.x},${b.y},${b.z}`, idx);
+                typeIndices[b.renderKey]++;
             }
 
             for (let type in instancedMeshes) {
@@ -4415,7 +4399,7 @@
         // updateChunks(camera.position);
 
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
-        let holdingSpace = false, holdingDescend = false;
+        let holdingSpace = false, holdingDescend = false, swimInputHeld=false;
         const sprintKeys = new Set();
         let creativeFlying = false;
         let lastSpaceTapAt = -Infinity;
@@ -4434,6 +4418,7 @@
         function clearMovementInput() {
             moveForward = moveBackward = moveLeft = moveRight = false;
             holdingSpace = holdingDescend = false;
+            swimInputHeld=false;
             sprintKeys.clear();
             jumpPadBoostTimer = 0;
             lastSpaceTapAt = -Infinity;
@@ -4593,6 +4578,7 @@
                 case 'Space': {
                     if (!controls.isLocked || !isGameStarted || isSleeping) break;
                     e.preventDefault();
+                    swimInputHeld=true;
                     if (e.repeat) break;
                     const now = performance.now();
                     if (canCreativeFly() && now-lastSpaceTapAt <= FLIGHT_DOUBLE_TAP_MS) {
@@ -4633,7 +4619,7 @@
                 case 'KeyD': moveRight = false; break;
                 case 'ShiftLeft':
                 case 'ShiftRight': sprintKeys.delete(e.code); break;
-                case 'Space': holdingSpace = false; break; // 松开空格停止上浮
+                case 'Space': holdingSpace = false; swimInputHeld=false; break; // 松开空格停止上浮
                 case 'KeyB': holdingDescend = false; break;
             }
         });
@@ -4649,11 +4635,11 @@
             if (onLadder) resolvePreciseFloorContact();
             const inLavaPhys=environment.lavaFraction>0.00001;
             const liquidFraction=Math.min(1,environment.waterFraction+environment.lavaFraction);
-            const inWaterPhys = liquidFraction > 0.00001;
             const physicsScale = activeMech ? 1 : playerScale;
             let onGroundPhys = isTinyMode() || playerScale>1 || activeMech
                 ? checkScaledCollision(camera.position.clone().add(new THREE.Vector3(0,-0.004*Math.min(playerScale,1),0)))
                 : isSolid(bx, Math.round(camera.position.y - getPlayerHeight() - Math.max(0.01, 0.1 * physicsScale)), bz);
+            const inWaterPhys = liquidFraction >= 0.25 || (!onGroundPhys && liquidFraction > 0.05);
 
             // --- 物理引擎 ---
             if (inWaterPhys && !creativeFlying) {
@@ -4674,10 +4660,11 @@
                 if (moveBackward) velocity.y = -4 * physicsScale;
             } else if (inWaterPhys) {
                 // Buoyancy balances at the surface; drag prevents a long fall from carrying through the water.
-                velocity.y += (liquidFraction - 0.65) * 24 * physicsScale * playerDelta;
+                velocity.y += (liquidFraction - 0.55) * 24 * physicsScale * playerDelta;
                 velocity.y *= Math.exp(-(inLavaPhys?8:5) * playerDelta);
-                velocity.y = Math.max(-3*physicsScale, Math.min(3*physicsScale, velocity.y));
-                if (holdingSpace) velocity.y = (inLavaPhys?2:4) * physicsScale;
+                velocity.y = Math.max(-1.6*physicsScale, Math.min(3*physicsScale, velocity.y));
+                if (holdingSpace||swimInputHeld) velocity.y = (inLavaPhys?2:3.2) * physicsScale;
+                else if(holdingDescend)velocity.y=-2*physicsScale;
             } else if (holdingSpace) {
                 if (onGroundPhys && (!activeMech || activeMech.form==='robot')) velocity.y = 8 * physicsScale;
                 holdingSpace = false;
@@ -4737,7 +4724,7 @@
                 camera.position.copy(before);
                 const hitX = moveTinyAxis('x', motion.x);
                 const hitZ = moveTinyAxis('z', motion.z);
-                if (hitX || hitZ) { velocity.x = 0; velocity.z = 0; }
+                if ((hitX || hitZ) && !(activeMech?.form==='vehicle'&&onGroundPhys&&tryMechStep(before,motion))) { velocity.x = 0; velocity.z = 0; }
                 if (moveTinyAxis('y', velocity.y * playerDelta)) velocity.y = 0;
             } else {
                 controls.moveRight(-velocity.x * playerDelta);
@@ -6111,180 +6098,7 @@
             }
         }
 
-        function updateMinecarts(delta) {
-            if (ridingMinecart) {
-                document.getElementById('minecart-ui').style.display = 'block';
-                // 让玩家一直跟着矿车
-                camera.position.set(ridingMinecart.mesh.position.x, ridingMinecart.mesh.position.y + 0.8, ridingMinecart.mesh.position.z);
-                velocity.set(0, 0, 0); // 取消玩家自身的移动
-            } else {
-                document.getElementById('minecart-ui').style.display = 'none';
-            }
-
-            for (let mc of minecarts) {
-                let bx = Math.round(mc.mesh.position.x);
-                let rawY = Math.round(mc.mesh.position.y - 0.25);
-                let bz = Math.round(mc.mesh.position.z);
-                let type = getBlock(bx, rawY, bz);
-                let by = rawY;
-                
-                // 宽容判定：处理上下坡时坐标跨界导致的 Y 轴取整误差
-                if (type !== 26 && type !== 27) {
-                    if ([26, 27].includes(getBlock(bx, rawY - 1, bz))) {
-                        by = rawY - 1;
-                        type = getBlock(bx, by, bz);
-                    } else if ([26, 27].includes(getBlock(bx, rawY + 1, bz))) {
-                        by = rawY + 1;
-                        type = getBlock(bx, by, bz);
-                    }
-                }
-                
-                let distToCenter = Math.sqrt((mc.mesh.position.x - bx)**2 + (mc.mesh.position.z - bz)**2);
-                
-                // 如果矿车在轨道上
-                if (type === 26 || type === 27) {
-                    mc.derailed = false;
-                    mc.mesh.rotation.y = mc.mesh.rotation.y; // 停止疯狂打转
-                    mc.mesh.rotation.x = 0;
-                    mc.mesh.rotation.z = 0;
-
-                    let isPowered = false;
-                    if (type === 27) {
-                        // 检查红石供电
-                        if (getBlock(bx+1, by, bz) === 28 || getBlock(bx-1, by, bz) === 28 || 
-                            getBlock(bx, by, bz+1) === 28 || getBlock(bx, by, bz-1) === 28) {
-                            isPowered = true;
-                        }
-                    }
-                    
-                    if (mc.isRiding) {
-                        if (mc.vx === 0 && mc.vz === 0) {
-                            // 根据玩家视角启动
-                            let dir = new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
-                            if (Math.abs(dir.x) > Math.abs(dir.z)) {
-                                mc.vx = Math.sign(dir.x) * (isPowered ? 8 : 4);
-                            } else {
-                                mc.vz = Math.sign(dir.z) * (isPowered ? 8 : 4);
-                            }
-                        } else {
-                            // 保持速度，可以通过按 W 和 S 键在轨道上加速/减速/倒车
-                            let speedCap = isPowered ? 10 : 5;
-                            let currentSpeed = Math.sqrt(mc.vx**2 + mc.vz**2);
-                            
-                            // 允许玩家用键盘控制矿车速度
-                            if (moveForward) currentSpeed += 5 * delta;
-                            if (moveBackward) currentSpeed -= 5 * delta;
-                            
-                            currentSpeed = Math.max(-speedCap, Math.min(speedCap, currentSpeed)); // 限制最高速度和倒车速度
-
-                            if (Math.abs(mc.vx) > Math.abs(mc.vz)) {
-                                mc.vx = Math.sign(mc.vx || 1) * currentSpeed;
-                            } else {
-                                mc.vz = Math.sign(mc.vz || 1) * currentSpeed;
-                            }
-                        }
-                    }
-                    
-                    // 转向逻辑
-                    if (distToCenter < 0.2 && (mc.vx !== 0 || mc.vz !== 0)) {
-                        let nextXDir = Math.round(bx + Math.sign(mc.vx));
-                        let nextZDir = Math.round(bz + Math.sign(mc.vz));
-                        let nextType = getBlock(nextXDir, by, nextZDir);
-                        let nextTypeUp = getBlock(nextXDir, by + 1, nextZDir);
-                        let nextTypeDown = getBlock(nextXDir, by - 1, nextZDir);
-                        
-                        let canGoStraight = [26, 27].includes(nextType) || [26, 27].includes(nextTypeUp) || [26, 27].includes(nextTypeDown);
-                        
-                        if (!canGoStraight) {
-                            let speed = Math.max(Math.abs(mc.vx), Math.abs(mc.vz));
-                            let signSpeed = mc.vx !== 0 ? Math.sign(mc.vx) * speed : Math.sign(mc.vz) * speed; // 保持速度符号以支持倒车
-
-                            if (mc.vx !== 0) {
-                                let canGoZ1 = [26, 27].includes(getBlock(bx, by, bz + 1)) || [26, 27].includes(getBlock(bx, by + 1, bz + 1)) || [26, 27].includes(getBlock(bx, by - 1, bz + 1));
-                                let canGoZ2 = [26, 27].includes(getBlock(bx, by, bz - 1)) || [26, 27].includes(getBlock(bx, by + 1, bz - 1)) || [26, 27].includes(getBlock(bx, by - 1, bz - 1));
-                                if (canGoZ1) { mc.vz = Math.abs(speed); mc.vx = 0; mc.mesh.position.x = bx; }
-                                else if (canGoZ2) { mc.vz = -Math.abs(speed); mc.vx = 0; mc.mesh.position.x = bx; }
-                                else { mc.vx = 0; mc.vz = 0; mc.mesh.position.x = bx; } // 尽头停下
-                            } else if (mc.vz !== 0) {
-                                let canGoX1 = [26, 27].includes(getBlock(bx + 1, by, bz)) || [26, 27].includes(getBlock(bx + 1, by + 1, bz)) || [26, 27].includes(getBlock(bx + 1, by - 1, bz));
-                                let canGoX2 = [26, 27].includes(getBlock(bx - 1, by, bz)) || [26, 27].includes(getBlock(bx - 1, by + 1, bz)) || [26, 27].includes(getBlock(bx - 1, by - 1, bz));
-                                if (canGoX1) { mc.vx = Math.abs(speed); mc.vz = 0; mc.mesh.position.z = bz; }
-                                else if (canGoX2) { mc.vx = -Math.abs(speed); mc.vz = 0; mc.mesh.position.z = bz; }
-                                else { mc.vx = 0; mc.vz = 0; mc.mesh.position.z = bz; } // 尽头停下
-                            }
-                        }
-                    }
-                    
-                    // 修正朝向 (只转90度，不再乱转)
-                    if (Math.abs(mc.vx) > Math.abs(mc.vz)) mc.mesh.rotation.y = Math.PI / 2;
-                    else if (Math.abs(mc.vz) > Math.abs(mc.vx)) mc.mesh.rotation.y = 0;
-                    
-                    mc.mesh.position.x += mc.vx * delta;
-                    mc.mesh.position.z += mc.vz * delta;
-                    
-                    // 精准爬坡与下坡逻辑（完美贴合铁轨，防止穿模脱轨，且平滑倾斜不会乱转）
-                    let exactY = by + 0.25;
-                    let dx = mc.mesh.position.x - bx;
-                    let dz = mc.mesh.position.z - bz;
-                    
-                    mc.mesh.rotation.x = 0;
-                    mc.mesh.rotation.z = 0;
-
-                    if (Math.abs(mc.vx) > Math.abs(mc.vz)) {
-                        // 沿 X 轴移动
-                        if (dx > 0 && [26, 27].includes(getBlock(bx + 1, by + 1, bz))) {
-                            exactY = by + 0.25 + dx; mc.mesh.rotation.z = -Math.PI / 8;
-                        } else if (dx < 0 && [26, 27].includes(getBlock(bx - 1, by + 1, bz))) {
-                            exactY = by + 0.25 - dx; mc.mesh.rotation.z = Math.PI / 8;
-                        } else if (dx > 0 && [26, 27].includes(getBlock(bx + 1, by - 1, bz))) {
-                            exactY = by + 0.25 - dx; mc.mesh.rotation.z = Math.PI / 8;
-                        } else if (dx < 0 && [26, 27].includes(getBlock(bx - 1, by - 1, bz))) {
-                            exactY = by + 0.25 + dx; mc.mesh.rotation.z = -Math.PI / 8;
-                        }
-                    } else {
-                        // 沿 Z 轴移动
-                        if (dz > 0 && [26, 27].includes(getBlock(bx, by + 1, bz + 1))) {
-                            exactY = by + 0.25 + dz; mc.mesh.rotation.x = Math.PI / 8;
-                        } else if (dz < 0 && [26, 27].includes(getBlock(bx, by + 1, bz - 1))) {
-                            exactY = by + 0.25 - dz; mc.mesh.rotation.x = -Math.PI / 8;
-                        } else if (dz > 0 && [26, 27].includes(getBlock(bx, by - 1, bz + 1))) {
-                            exactY = by + 0.25 - dz; mc.mesh.rotation.x = -Math.PI / 8;
-                        } else if (dz < 0 && [26, 27].includes(getBlock(bx, by - 1, bz - 1))) {
-                            exactY = by + 0.25 + dz; mc.mesh.rotation.x = Math.PI / 8;
-                        }
-                    }
-                    mc.mesh.position.y = exactY;
-                } else {
-                    // 脱轨逻辑重写：掉出轨道后，受重力和阻力影响，变成普通的物理实体
-                    mc.derailed = true;
-                    
-                    // 水平阻力摩擦
-                    mc.vx *= 0.90;
-                    mc.vz *= 0.90;
-                    if (Math.abs(mc.vx) < 0.05) mc.vx = 0;
-                    if (Math.abs(mc.vz) < 0.05) mc.vz = 0;
-                    
-                    mc.mesh.position.x += mc.vx * delta;
-                    mc.mesh.position.z += mc.vz * delta;
-
-                    // 重力掉落检测 (使用更精确的包围盒检测，防止卡死)
-                    let pX = Math.round(mc.mesh.position.x);
-                    let pZ = Math.round(mc.mesh.position.z);
-                    let bottomY = mc.mesh.position.y - 0.25; // 矿车底部 Y 坐标
-                    
-                    let floorBlock = getBlock(pX, Math.floor(bottomY), pZ);
-                    let isFloorSolid = floorBlock !== 0 && floorBlock !== 24 && floorBlock !== 25 && floorBlock !== 16;
-                    
-                    if (!isFloorSolid) {
-                        // 如果脚下没有实心方块，自由落体
-                        mc.mesh.position.y -= 15 * delta;
-                    } else {
-                        // 如果踩到实心地面，贴紧地面
-                        mc.mesh.position.y = Math.floor(bottomY) + 1.25; 
-                    }
-                }
-            }
-        }
+        function updateMinecarts(delta) { advanceMinecarts(delta); }
 
         // --- 鼠标交互 (精准射线与攻击实体) ---
         const raycaster = new THREE.Raycaster();
@@ -7007,22 +6821,7 @@
                     if (matId === 29) { // 放置矿车实体
                         if (targetType === 26 || targetType === 27) {
                             playSound('place');
-                            let minecartGroup = new THREE.Group();
-                            let matCart = new THREE.MeshLambertMaterial({ color: 0x606060 });
-                            let matIn = new THREE.MeshLambertMaterial({ color: 0x404040 });
-                            
-                            let bottom = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.1, 0.8), matCart);
-                            bottom.position.y = -0.2;
-                            let front = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.4, 0.1), matCart);
-                            front.position.set(0, 0.05, 0.35);
-                            let back = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.4, 0.1), matCart);
-                            back.position.set(0, 0.05, -0.35);
-                            let left = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.4, 0.8), matCart);
-                            left.position.set(-0.35, 0.05, 0);
-                            let right = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.4, 0.8), matCart);
-                            right.position.set(0.35, 0.05, 0);
-                            
-                            minecartGroup.add(bottom, front, back, left, right);
+                            let minecartGroup = createMinecartModel();
                             minecartGroup.position.set(hit.x, hit.y + 0.25, hit.z);
                             scene.add(minecartGroup);
                             minecarts.push({mesh: minecartGroup, vx: 0, vz: 0, isRiding: false, derailed: false});
