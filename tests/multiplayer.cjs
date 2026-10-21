@@ -54,6 +54,7 @@ async function assertScenePixels(page) {
         console.log('PASS: Actual public signaling + WebRTC; Create Room, waiting guest, Enter Room, shared seed/terrain/mode/spawn and two visible players.');
 
         assert.equal(await guest.evaluate(()=>gameDifficulty),'peaceful');
+        assert.equal(await guest.evaluate(()=>wildernessVersion),await host.evaluate(()=>wildernessVersion));
         const avatarPosition=await host.evaluate(()=>{const p=camera.position.toArray();camera.position.y+=12;creativeFlying=true;selectSlot(3);return p;});
         await guest.waitForFunction(()=>Object.values(remotePlayers).some(m=>m.userData.heldId===4));
         assert(await host.evaluate(()=>enterMech(71)));

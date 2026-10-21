@@ -6,7 +6,7 @@ const NATURE_PLANTS=new Set([158,159,160,161,...WATER_PLANTS]);
 const hiddenByBase=new Map([[1,132],[2,133],[3,134]]);
 const NATURE_COLORS={};
 const biomeCache=new Map(),cliffCache=new Map(),natureGeometries=new Map();
-let biomeCacheSeed=null,gameDifficulty='normal',itchTimer=0,natureTick=0,natureTime=0;
+let biomeCacheSeed=null,wildernessVersion=2,gameDifficulty='normal',itchTimer=0,natureTick=0,natureTime=0;
 let natureFish=[],caveVisits=new Set();
 
 function isWaterType(id){return id===24||WATER_PLANTS.has(id);}
@@ -14,6 +14,11 @@ function hostileMobsEnabled(){return !isCreativeMode()&&gameDifficulty!=='peacef
 function setDifficulty(value){
     gameDifficulty=value==='peaceful'?'peaceful':'normal';
     const select=document.getElementById('difficulty-select');if(select)select.value=gameDifficulty;
+}
+
+function setWildernessVersion(version){
+    wildernessVersion=version===1?1:2;
+    biomeCacheSeed=null;biomeCache.clear();cliffCache.clear();heightCache.clear();
 }
 
 // Interpolated samples of the world's seeded hash keep adjacent regions continuous.
@@ -32,16 +37,38 @@ function baseLandscapeHeight(x,z){
 }
 
 function cliffRegion(x,z){
-    const cx=Math.floor(x/128),cz=Math.floor(z/128),key=cx+','+cz;
+    const size=wildernessVersion===1?128:96;
+    const cx=Math.floor(x/size),cz=Math.floor(z/size),key=cx+','+cz;
     if(cliffCache.has(key))return cliffCache.get(key);
-    const ax=cx*128+40+Math.floor(hash(cx+812,cz)*25),az=cz*128+40+Math.floor(hash(cx,cz+921)*25);
+    const offset=wildernessVersion===1?40:36;
+    const ax=cx*size+offset+Math.floor(hash(cx+812,cz)*25),az=cz*size+offset+Math.floor(hash(cx,cz+921)*25);
     const [nx,nz]=[[1,0],[0,1],[-1,0],[0,-1]][Math.floor(hash(cx+31,cz+72)*4)];
     const floor=Math.ceil(Math.max(...[-7,-3,0].map(u=>baseLandscapeHeight(ax+nx*u,az+nz*u))))+1;
-    const region=floor>SEA_LEVEL+5&&hash(cx+87,cz-31)<.75?{x:ax,z:az,nx,nz,floor,rise:17+hash(cx-82,cz+11)*16}:null;
+    const legacy=wildernessVersion===1;
+    const region=floor>SEA_LEVEL+(legacy?5:3)&&hash(cx+87,cz-31)<(legacy?.75:.94)?{x:ax,z:az,nx,nz,floor,rise:(legacy?17:27)+hash(cx-82,cz+11)*(legacy?16:23)}:null;
     cliffCache.set(key,region);return region;
 }
 
 function cliffLocal(x,z){
+    if(wildernessVersion>=2){
+        // Evaluate neighboring anchors too: a landform cannot stop at a region boundary.
+        let best=null,nearest=null,distance=Infinity;
+        const cx=Math.floor(x/96),cz=Math.floor(z/96),ground=baseLandscapeHeight(x,z);
+        for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++){
+            const c=cliffRegion((cx+dx)*96,(cz+dz)*96);if(!c)continue;
+            const px=x-c.x,pz=z-c.z,u=px*c.nx+pz*c.nz,v=-px*c.nz+pz*c.nx;
+            if(u< -12||u>64||Math.abs(v)>46)continue;
+            const edge=(landscapeNoise(v/17,c.x,731)-.5)*8;
+            const side=1-THREE.MathUtils.smoothstep(Math.abs(v),13,46);
+            const front=THREE.MathUtils.smoothstep(u,edge-2,edge+7),back=1-THREE.MathUtils.smoothstep(u,20,64);
+            const crown=.75+landscapeNoise(u/23,v/19,903)*.32;
+            const height=ground+c.rise*side*front*back*crown;
+            const candidate={...c,u,v,height,edge},d=(u-12)**2+v*v;
+            if(d<distance){distance=d;nearest=candidate;}
+            if(front*side*back>0&&(!best||height>best.height))best=candidate;
+        }
+        return best||nearest;
+    }
     const c=cliffRegion(x,z);if(!c)return null;
     const dx=x-c.x,dz=z-c.z,u=dx*c.nx+dz*c.nz,v=-dx*c.nz+dz*c.nx;
     if(u< -10||u>48||Math.abs(v)>34)return null;
@@ -50,11 +77,15 @@ function cliffLocal(x,z){
 
 function biomeColumn(x,z){
     x=Math.round(x);z=Math.round(z);
-    if(biomeCacheSeed!==seed){biomeCache.clear();cliffCache.clear();biomeCacheSeed=seed;}
+    const identity=seed+':'+wildernessVersion;
+    if(biomeCacheSeed!==identity){biomeCache.clear();cliffCache.clear();biomeCacheSeed=identity;}
     const key=x+','+z;if(biomeCache.has(key))return biomeCache.get(key);
     const climate=landscapeNoise(x/80,z/80,311),wet=landscapeNoise(x/70,z/70,421);
     let height=baseLandscapeHeight(x,z);const cliff=cliffLocal(x,z);
-    if(cliff){
+    if(cliff&&wildernessVersion>=2){
+        height=Math.max(height,cliff.height);
+        if(cliff.u>=-8&&cliff.u<cliff.edge-1&&Math.abs(cliff.v)<4)height=cliff.floor-1;
+    }else if(cliff){
         const {u,v,floor,rise}=cliff,edge=(landscapeNoise(v/13,cliff.x,731)-.5)*5;
         const side=1-THREE.MathUtils.smoothstep(Math.abs(v),17,32);
         const front=THREE.MathUtils.smoothstep(u,edge-1,edge+2),back=1-THREE.MathUtils.smoothstep(u,16,46);
@@ -63,7 +94,8 @@ function biomeColumn(x,z){
         if(u>=-8&&u<edge-1&&Math.abs(v)<4)height=Math.min(height,floor-1);
     }
     height=Math.floor(height);
-    const biome=height<=SEA_LEVEL?'ocean':climate<.27||height>45?'snow':cliff&&cliff.u>0&&cliff.u<32&&Math.abs(cliff.v)<24?'cliffs':climate>.62&&wet>.44?'bamboo':climate<.56&&wet>.35?'autumn':'meadow';
+    const rocky=cliff&&cliff.u>0&&cliff.u<40&&Math.abs(cliff.v)<32&&height>cliff.floor+4;
+    const biome=height<=SEA_LEVEL?'ocean':climate<.27||height>(wildernessVersion===1?45:64)?'snow':(wildernessVersion===1?cliff&&cliff.u>0&&cliff.u<32&&Math.abs(cliff.v)<24:rocky)?'cliffs':climate>.62&&wet>.44?'bamboo':climate<.56&&wet>.35?'autumn':'meadow';
     const row={height,biome,warm:climate>.43,cliff};
     if(biomeCache.size>70000)biomeCache.clear();biomeCache.set(key,row);return row;
 }
@@ -76,7 +108,21 @@ function wildernessCave(x,y,z,h){
     const roof=mouth?5:4,archWidth=width-Math.max(0,dy-1)*.75;
     const tunnel=u>=-7&&u<=28&&dy>=0&&dy<roof&&Math.abs(v-bend)<archWidth;
     const chamber=((u-27)/7)**2+((v-1)/6)**2+((y-floor-2)/3.2)**2<1;
+    if(wildernessVersion>=2&&u>4&&h<floor+7)return false;
     return tunnel||chamber;
+}
+
+function findCliffsideSpawn(){
+    biomeColumn(0,0);
+    for(let attempt=0;attempt<80;attempt++){
+        const c=cliffRegion(Math.floor(Math.random()*900-450),Math.floor(Math.random()*900-450));if(!c)continue;
+        const x=c.x-16*c.nx+8*c.nz,z=c.z-16*c.nz-8*c.nx,h=getSurfaceHeight(x,z);
+        if(h<=SEA_LEVEL+1||!isSolid(x,h,z)||isWaterType(getBlock(x,h+1,z)))continue;
+        if(Math.max(...[[1,0],[-1,0],[0,1],[0,-1]].map(([dx,dz])=>Math.abs(h-getSurfaceHeight(x+dx,z+dz))))>1)continue;
+        if(getSurfaceHeight(c.x+8*c.nx,c.z+8*c.nz)<h+14)continue;
+        return {x,y:h+3,z,look:[c.x+8*c.nx,c.floor+7,c.z+8*c.nz]};
+    }
+    return null;
 }
 
 function wildernessBlock(x,y,z,h){

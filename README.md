@@ -179,3 +179,12 @@ field 100×100×100
 地形参考：[Minecraft 官方 Caves & Cliffs](https://www.minecraft.net/en-us/article/caves---cliffs--part-ii-out-today-java)。音频来源：[Zombie Moans 01](https://opengameart.org/content/zombie-moans-01-by-emopreben)。
 
 `tests/wilderness.cjs` 检查种子、生态、合成、浮力、和平模式与模型；`tests/wilderness-landmarks.cjs` 检查悬崖侧面可通行洞口、白色雪贴图、植物密度、录音解码/音量和真实开局操作；`tests/multiplayer.cjs` 通过真实双人连接检查变身、手持物及隐藏彩砖同步。
+
+## 地形完整性与村屋更新
+- 去掉区块建模时按相机上下 300 格跳过方块的逻辑。区块缓存现在包含完整可见地表和已挖掘的地下表面，高空飞行、深挖和返回原处不再留下由这项裁剪造成的缺块。
+- 新随机世界增加悬崖密度和高差。相邻区域共同计算岩壁轮廓，山体在区域边缘连续衔接；洞口前有与洞内相连的落脚地面。出生点优先选择能看见悬崖的干燥安全地面。
+- `wildernessVersion` 随存档和房间快照保存。没有此字段的旧存档使用上一版地形，避免把既有房屋周围的山地替换掉；新建世界使用新版。加载旧存档仍会应用地形漏绘修复。
+- 新世界自然村屋及 `Build Simple House` 使用带坡屋顶、挑檐、烟囱、门廊、高窗和木框的房屋，并有床、柜子、桌椅和台灯。自然村屋只选择干燥缓坡，地基填实，不在悬崖上挖大方坑，也不覆盖已有建筑。旧存档已经生成的房屋不自动拆建。
+- 两位玩家需要更新后重新创建房间；新旧地形版本的客户端不混用。
+
+`tests/terrain-integrity.cjs` 先在 800 格高空建模再返回地面，并检查跨区块的地下 360 多格洞室墙、顶、底及天空漏色；`tests/cliffs-houses.cjs` 比较同种子悬崖数量，检查区域连续性、村屋地基与真实右键开门行走、室内外画面、新旧存档读取。缩小挖掘另由 `tests/micro-world.cjs` 回归测试。

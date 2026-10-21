@@ -385,7 +385,7 @@
     <script src="city-life.js?v=20261021-wilderness"></script>
     <script src="surveillance.js?v=20261018-tools"></script>
     <script src="peerjs-1.5.5.min.js"></script>
-    <script src="multiplayer.js?v=20261021-wilderness"></script>
+    <script src="multiplayer.js?v=20261021-solid-terrain"></script>
     <script src="thermal-world.js?v=20261021-wilderness"></script>
     <script src="launchers.js?v=20261018-castle-map"></script>
     <script src="construction.js?v=20261018-locks"></script>
@@ -395,7 +395,8 @@
     <script src="rail-vehicles.js?v=20261020-connected"></script>
     <script src="connected-home.js?v=20261020-connected"></script>
     <script src="zombie-voices.js?v=20261021-recorded"></script>
-    <script src="wilderness.js?v=20261021-wilderness"></script>
+    <script src="wilderness.js?v=20261021-solid-terrain"></script>
+    <script src="village-houses.js?v=20261021-solid-terrain"></script>
 
     <script>
         // --- 场景、相机、渲染器 ---
@@ -1580,6 +1581,7 @@
                 worldSpawnPoint: worldSpawnPoint,
                 homeSpawnPoint: homeSpawnPoint,
                 selectedTerrain: selectedTerrain,
+                wildernessVersion: wildernessVersion,
                 gameMode: gameMode,
                 gameDifficulty: gameDifficulty
             };
@@ -1651,6 +1653,7 @@
                     // 恢复数据
                     seed = data.seed;
                     selectedTerrain = data.selectedTerrain || selectedTerrain || 'plains';
+                    setWildernessVersion(data.wildernessVersion ?? 1);
                     setTerrainChoice(selectedTerrain);
                     setGameModeChoice(data.gameMode || 'survival');
                     setDifficulty(data.gameDifficulty || 'normal');
@@ -3996,17 +3999,14 @@
             }
             if(currentDimension==='overworld' && worldFloodHeight!==null) top=Math.max(top,worldFloodHeight);
 
-	            const viewTop = Math.floor(camera.position.y + 120); // 增加上方视野，防止向上看时切断
-            const viewBottom = Math.floor(camera.position.y - 180); // 摄像机往下 180 格
-            // 如果玩家挖得很深，依然要保证最高点能够渲染到表面的建筑或树木，因此不能直接被 viewTop 截断得太死
-            // 为了防止在深坑里看不到地面的树和房子，当 yStart 被截断时，依然保留地表那一层的渲染
-            const yStart = top; // 取消 viewTop 的硬截断，因为我们要保留上下相连！
+            // A cached chunk must be complete at every camera altitude.
+            const yStart = top;
 
             for (let x = startX; x < startX + CHUNK_SIZE; x++) {
                 for (let z = startZ; z < startZ + CHUNK_SIZE; z++) {
                     const h = getSurfaceHeight(x, z);
                     
-	                    let scanBottom = viewBottom;
+                        let scanBottom = h - 2;
                     if (scannedRange) {
                         scanBottom = Math.min(scanBottom, scannedRange.minY);
                     }
@@ -4067,9 +4067,6 @@
 
 	                    // 从最高点一直往下检查到扫描底线
                     for (let y = yStart; y >= scanBottom; y--) {
-                        // 距离优化：如果这个方块距离玩家垂直距离实在太远（比如相差 300 层以上），为了性能可以稍微跳过，
-                        // 但对于 100 多层的深渊，必须完整渲染保证上下相连。
-                        if (Math.abs(y - camera.position.y) > 300) continue; 
                         let type = getBlock(x, y, z);
                         if(HOME_ITEMS[type] || MACHINE_ITEMS[type] || type===FRIDGE_TOP_ID || type===FURNITURE_PART_ID || type===FIRE_ID || type===PISTON_HEAD_ID) continue;
                         if (type !== 0) {
@@ -4166,6 +4163,11 @@
         function generateHouseData(cx, cz) {
             if(currentDimension==='nether') return;
             if(selectedTerrain==='city' && currentDimension==='overworld') {generateCityChunk(cx,cz);return;}
+            if(wildernessVersion===1)return legacyGenerateHouseData(cx,cz);
+            return generateCottageChunk(cx,cz);
+        }
+
+        function legacyGenerateHouseData(cx, cz) {
             let key = `house_${cx},${cz}`;
             if (worldMap.has(key)) return;
             worldMap.set(key, true);
@@ -4753,6 +4755,7 @@
         // --- 强制刷新所有区块并重生 ---
         function findSafeSpawn() {
             if(selectedTerrain==='city') return {x:1,y:16.5+getPlayerHeight(),z:1};
+            if(selectedTerrain==='random'&&wildernessVersion>=2){const spawn=findCliffsideSpawn();if(spawn)return spawn;}
             for (let attempt = 0; attempt < 200; attempt++) {
                 const x = Math.floor(Math.random() * 1000 - 500);
                 const z = Math.floor(Math.random() * 1000 - 500);
@@ -4805,6 +4808,7 @@
             
             // 更换种子并随机化出生点，避免每次出生在同一个地方
             seed = Math.random() * 1000;
+            setWildernessVersion(2);
             dayTime = Math.PI / 2;
             oxygen = 20;
             currentDimension = 'overworld';
@@ -4817,6 +4821,7 @@
             worldSpawnPoint = { ...spawn };
             homeSpawnPoint = null;
             camera.position.set(spawn.x, spawn.y, spawn.z);
+            if(spawn.look)camera.lookAt(new THREE.Vector3(...spawn.look));
             
             lastChunkX = -999;
             lastChunkZ = -999;
@@ -7192,6 +7197,12 @@
         }
 
         function buildHouseAt(baseX, baseY, baseZ, stories, hasYard, isTrade, isRoofStack) {
+            if(stories===1&&!hasYard&&!isRoofStack){
+                const site=cottageSite(baseX,baseZ);
+                if(!site){showToast('Choose dry, gently sloping ground for this house.');return false;}
+                buildCottage(baseX,site.y,baseZ,Math.floor(hash(baseX,baseZ)*3));
+                return true;
+            }
             // 如果是堆叠在楼顶，我们需要把附魔台拆掉，避免影响建造
             if (isRoofStack) {
                 setGenBlock(baseX, baseY, baseZ, 0);
