@@ -25,6 +25,7 @@ async function assertScenePixels(page) {
         }
         await host.getByRole('button',{name:'Creative',exact:true}).click();
         await host.getByRole('button',{name:'Moon',exact:true}).click();
+        await host.locator('#difficulty-select').selectOption('peaceful');
         await host.getByRole('button',{name:'Play with Others',exact:true}).click();
         await host.locator('#create-room-btn').click();
         await host.waitForFunction(()=>multiplayerRoom?.phase==='ready',{},{timeout:40000});
@@ -52,6 +53,23 @@ async function assertScenePixels(page) {
         await guest.waitForFunction(()=>Object.keys(remotePlayers).length===1);
         console.log('PASS: Actual public signaling + WebRTC; Create Room, waiting guest, Enter Room, shared seed/terrain/mode/spawn and two visible players.');
 
+        assert.equal(await guest.evaluate(()=>gameDifficulty),'peaceful');
+        const avatarPosition=await host.evaluate(()=>{const p=camera.position.toArray();camera.position.y+=12;creativeFlying=true;selectSlot(3);return p;});
+        await guest.waitForFunction(()=>Object.values(remotePlayers).some(m=>m.userData.heldId===4));
+        assert(await host.evaluate(()=>enterMech(71)));
+        await guest.waitForFunction(()=>Object.values(remotePlayers).some(m=>m.userData.mechId===71&&m.userData.form==='robot'&&!m.children[0].visible));
+        await guest.evaluate(()=>{const p=Object.values(remotePlayers)[0].position;camera.position.copy(p).add(new THREE.Vector3(5,3,7));camera.lookAt(p);creativeFlying=true;});
+        await guest.screenshot({path:'/private/tmp/mc-remote-bee.png'});
+        assert(await host.evaluate(()=>transformMech()));
+        await guest.waitForFunction(()=>Object.values(remotePlayers).some(m=>m.userData.form==='vehicle'&&!m.userData.mech.userData.cannon.visible));
+        assert(await host.evaluate(()=>exitMech()));
+        await host.evaluate(p=>{camera.position.fromArray(p);creativeFlying=false;selectSlot(174-12);},avatarPosition);
+        await guest.waitForFunction(()=>Object.values(remotePlayers).some(m=>m.userData.heldId===174&&m.userData.form==='human'&&m.children[0].visible));
+        assert(await guest.evaluate(()=>{const m=Object.values(remotePlayers)[0];return m.userData.held.material.map===materials[174].map;}));
+        await guest.evaluate(()=>{selectSlot(3);});
+        await host.waitForFunction(()=>Object.values(remotePlayers).some(m=>m.userData.heldId===4));
+        console.log('PASS: Real two-peer robot/vehicle/human transformations and actual held wood/red brick are visible, with shared Peaceful difficulty.');
+
         const cell=await host.evaluate(()=>{
             const p=[Math.round(camera.position.x)+4,Math.round(camera.position.y)+2,Math.round(camera.position.z)];
             setBlock(...p,59);return p;
@@ -59,6 +77,8 @@ async function assertScenePixels(page) {
         await guest.waitForFunction(p=>getBlock(...p)===59,cell);
         const guestCell=[cell[0]+1,cell[1],cell[2]];
         await guest.evaluate(p=>setBlock(...p,60),guestCell);await host.waitForFunction(p=>getBlock(...p)===60,guestCell);
+        await guest.evaluate(p=>setBlock(p[0]+1,p[1],p[2],430),guestCell);
+        await host.waitForFunction(p=>getBlock(p[0]+1,p[1],p[2])===430&&!isSolid(p[0]+1,p[1],p[2]),guestCell);
         await guest.evaluate(p=>mineBlock(new THREE.Vector3(...p),false),cell);await host.waitForFunction(p=>getBlock(...p)===0,cell);
         const furniture=[cell[0]+3,cell[1],cell[2]];
         assert(await host.evaluate(p=>placeFurniture(SHOWER_DOOR_ID,...p),furniture));

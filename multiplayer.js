@@ -1,4 +1,4 @@
-const ROOM_PROTOCOL='daniel-mc-room-7', ROOM_PREFIX='daniel-mc-room2-';
+const ROOM_PROTOCOL='daniel-mc-room-8', ROOM_PREFIX='daniel-mc-room2-';
 const ROOM_TIMEOUT_MS=30000, ROOM_MAX_SAVE=16*1024*1024, ROOM_PACKET_CELLS=128;
 let multiplayerRoom=null, multiplayerMode='host', currentRoomCode='', remotePlayers={};
 
@@ -227,10 +227,11 @@ function displayRoomPlayer(id,p) {
     if(id===multiplayerRoom?.peer.id||!validateRoomPosition(p))return;
     const model=remotePlayers[id]||(remotePlayers[id]=createRemotePlayer());
     model.visible=p.dimension===currentDimension;model.position.set(p.x,p.y-0.75*p.scale,p.z);model.rotation.y=p.ry;model.scale.setScalar(p.scale);
+    updateRemoteAppearance(model,p);
 }
 
 function roomCellValid(cell) {
-    return Array.isArray(cell)&&cell.length===4&&cell.every(Number.isSafeInteger)&&cell.slice(0,3).every(n=>Math.abs(n)<=100000)&&cell[3]>=0&&cell[3]<=153;
+    return Array.isArray(cell)&&cell.length===4&&cell.every(Number.isSafeInteger)&&cell.slice(0,3).every(n=>Math.abs(n)<=100000)&&cell[3]>=0&&(cell[3]<=153||!!NATURE_ITEMS[cell[3]]||!!HIDDEN_BLOCKS[cell[3]]);
 }
 
 function applyRoomCells(r,cells,actor=null) {
@@ -287,7 +288,7 @@ function receiveRoomGuest(r,entry,p) {
         return;
     }
     if(p.type==='pos'&&validateRoomPosition(p)) {
-        const pos={type:'pos',id:entry.conn.peer,x:p.x,y:p.y,z:p.z,ry:p.ry,scale:p.scale,dimension:p.dimension};
+        const pos={type:'pos',id:entry.conn.peer,x:p.x,y:p.y,z:p.z,ry:p.ry,scale:p.scale,dimension:p.dimension,...remoteAppearance(p)};
         r.positions.set(entry.conn.peer,pos);displayRoomPlayer(entry.conn.peer,pos);
         for(const e of r.connections.values())if(e.ready&&e!==entry)sendRoomPacket(e.conn,pos);
     } else if(p.type==='edit'&&p.dimension===currentDimension) {
@@ -371,7 +372,7 @@ function queueRoomBlockChange(x,y,z) {
 function updateMultiplayer(now=performance.now()) {
     const r=multiplayerRoom;if(!r?.worldReady||r.applying||now<r.nextTick)return;r.nextTick=now+100;
     if(r.entered) {
-        const pos={type:'pos',id:r.peer.id,x:camera.position.x,y:camera.position.y,z:camera.position.z,ry:camera.rotation.y,scale:playerScale,dimension:currentDimension};
+        const pos={type:'pos',id:r.peer.id,x:camera.position.x,y:camera.position.y,z:camera.position.z,ry:camera.rotation.y,scale:playerScale,dimension:currentDimension,...localRoomAppearance()};
         if(r.role==='host')r.positions.set(r.peer.id,pos);
         for(const entry of r.connections.values())if(entry.ready||r.role==='guest')sendRoomPacket(entry.conn,pos);
     }

@@ -379,14 +379,14 @@
     <script src="three-r128.min.js"></script>
     <script src="three-pointer-lock-r128.js"></script>
     <script src="three-reflector-r128.js"></script>
-    <script src="world-expansion.js?v=20261020-connected"></script>
+    <script src="world-expansion.js?v=20261021-wilderness"></script>
     <script src="home-city.js?v=20261020-connected"></script>
     <script src="kitchen-home.js?v=20261020-connected"></script>
-    <script src="city-life.js?v=20261016a"></script>
+    <script src="city-life.js?v=20261021-wilderness"></script>
     <script src="surveillance.js?v=20261018-tools"></script>
     <script src="peerjs-1.5.5.min.js"></script>
-    <script src="multiplayer.js?v=20261020-connected"></script>
-    <script src="thermal-world.js?v=20261019-fast-lava"></script>
+    <script src="multiplayer.js?v=20261021-wilderness"></script>
+    <script src="thermal-world.js?v=20261021-wilderness"></script>
     <script src="launchers.js?v=20261018-castle-map"></script>
     <script src="construction.js?v=20261018-locks"></script>
     <script src="redstone-machines.js?v=20261020-connected"></script>
@@ -394,6 +394,8 @@
     <script src="cannons.js?v=20261019-closed-gates"></script>
     <script src="rail-vehicles.js?v=20261020-connected"></script>
     <script src="connected-home.js?v=20261020-connected"></script>
+    <script src="zombie-voices.js?v=20261021-recorded"></script>
+    <script src="wilderness.js?v=20261021-wilderness"></script>
 
     <script>
         // --- 场景、相机、渲染器 ---
@@ -1375,6 +1377,7 @@
             if (!audioCtx) {
                 const AudioContext = window.AudioContext || window.webkitAudioContext;
                 audioCtx = new AudioContext();
+                loadZombieVoices();
             }
             if (audioCtx.state === 'suspended') {
                 audioCtx.resume();
@@ -1577,7 +1580,8 @@
                 worldSpawnPoint: worldSpawnPoint,
                 homeSpawnPoint: homeSpawnPoint,
                 selectedTerrain: selectedTerrain,
-                gameMode: gameMode
+                gameMode: gameMode,
+                gameDifficulty: gameDifficulty
             };
         }
 
@@ -1649,6 +1653,7 @@
                     selectedTerrain = data.selectedTerrain || selectedTerrain || 'plains';
                     setTerrainChoice(selectedTerrain);
                     setGameModeChoice(data.gameMode || 'survival');
+                    setDifficulty(data.gameDifficulty || 'normal');
                     currentDimension = data.currentDimension || 'overworld';
                     playerScale = Math.max(MIN_PLAYER_SCALE, Math.min(MAX_PLAYER_SCALE, Number(data.playerScale) || 1));
                     camera.position.set(data.camera.x, data.camera.y, data.camera.z);
@@ -1983,70 +1988,7 @@
                 osc.stop(now + 0.1);
 
             } else if (type === 'zombie' || type === 'zombie_hurt' || type === 'zombie_death') {
-                const isHurt = type === 'zombie_hurt';
-                const isDeath = type === 'zombie_death';
-                const duration = isDeath ? 1.15 : (isHurt ? 0.45 : 1.05);
-                const base = isDeath ? 64 : (isHurt ? 120 : 82 + Math.random() * 20);
-
-                const growl = audioCtx.createOscillator();
-                growl.type = 'sawtooth';
-                growl.frequency.setValueAtTime(base, now);
-                growl.frequency.linearRampToValueAtTime(isDeath ? 45 : base * 0.66, now + duration);
-
-                const moan = audioCtx.createOscillator();
-                moan.type = 'triangle';
-                moan.frequency.setValueAtTime(base * 1.45, now);
-                moan.frequency.linearRampToValueAtTime(isDeath ? 70 : base * 0.92, now + duration);
-
-                const wobble = audioCtx.createOscillator();
-                wobble.type = 'sine';
-                wobble.frequency.setValueAtTime(5.5 + Math.random() * 2, now);
-
-                const wobbleGain = audioCtx.createGain();
-                wobbleGain.gain.setValueAtTime(isHurt ? 7 : 12, now);
-                wobble.connect(wobbleGain);
-                wobbleGain.connect(growl.frequency);
-                wobbleGain.connect(moan.frequency);
-
-                const filter = audioCtx.createBiquadFilter();
-                filter.type = 'lowpass';
-                filter.frequency.setValueAtTime(isHurt ? 700 : 520, now);
-                filter.frequency.linearRampToValueAtTime(isDeath ? 260 : 360, now + duration);
-                filter.Q.setValueAtTime(4.5, now);
-
-                const gain = audioCtx.createGain();
-                gain.gain.setValueAtTime(0.001, now);
-                gain.gain.linearRampToValueAtTime(isHurt ? 0.65 : 0.48, now + 0.08);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-
-                const noiseBuf = audioCtx.createBuffer(1, audioCtx.sampleRate * duration, audioCtx.sampleRate);
-                const noiseData = noiseBuf.getChannelData(0);
-                for (let i = 0; i < noiseData.length; i++) {
-                    noiseData[i] = (Math.random() * 2 - 1) * Math.exp(-i / (audioCtx.sampleRate * duration * 0.65));
-                }
-                const noise = audioCtx.createBufferSource();
-                noise.buffer = noiseBuf;
-                const noiseFilter = audioCtx.createBiquadFilter();
-                noiseFilter.type = 'bandpass';
-                noiseFilter.frequency.setValueAtTime(isHurt ? 620 : 420, now);
-                noiseFilter.Q.setValueAtTime(1.4, now);
-                const noiseGain = audioCtx.createGain();
-                noiseGain.gain.setValueAtTime(isHurt ? 0.18 : 0.12, now);
-                noiseGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-
-                growl.connect(filter);
-                moan.connect(filter);
-                filter.connect(gain);
-                gain.connect(audioCtx.destination);
-                noise.connect(noiseFilter).connect(noiseGain).connect(audioCtx.destination);
-
-                growl.start(now);
-                moan.start(now);
-                wobble.start(now);
-                noise.start(now);
-                growl.stop(now + duration);
-                moan.stop(now + duration);
-                wobble.stop(now + duration);
+                playZombieVoice(type,now);
             }
         }
 
@@ -2207,7 +2149,7 @@
                 64:'Dry Sponge', 65:'Water Bucket', 67:'Villager Egg', 68:'Creeper Egg', 69:'Zombie Egg',
                 70:'Prime Truck Core', 71:'Bee Scout Core', 127:'Netherrack'
             };
-            return HIDDEN_BLOCKS[id]?.name || HOME_ITEMS[id] || (CAR_ITEMS[id]?CAR_MODELS[CAR_ITEMS[id]].name:id===ENDER_EGG_ID?'Enderman Egg':names[id]) || '';
+            return HIDDEN_BLOCKS[id]?.name || NATURE_ITEMS[id] || HOME_ITEMS[id] || (CAR_ITEMS[id]?CAR_MODELS[CAR_ITEMS[id]].name:id===ENDER_EGG_ID?'Enderman Egg':names[id]) || '';
         }
 
         function checkRecipes() {
@@ -2222,6 +2164,8 @@
             
             // 如果合成栏是空的，直接返回
             if (Object.keys(counts).length === 0) return;
+            const hidden=hiddenCraft(counts);
+            if(hidden){craftingOutput=hidden;return;}
 
             for(let r of recipes) {
                 let match = true;
@@ -2318,7 +2262,7 @@
                  60:72, 61:73, 62:74, 63:75, 64:76, 65:77, 66:78, 67:79,
                  70:82, 71:83, 72:84, 73:85, 74:86, 75:87, 76:88, 77:89, 78:90, 79:91, 80:92,
                  81:93, 82:94, 83:95, 84:96, 85:97, 86:98, 88:100, 89:101, 90:102, 91:103,
-                 ...Object.fromEntries(Object.keys({...KITCHEN_ITEMS,...CITY_LIFE_ITEMS,...HIDDEN_BLOCKS,...SURVEILLANCE_ITEMS,...THERMAL_ITEMS,...MACHINE_ITEMS,...CONNECTED_HOME_ITEMS,127:'Netherrack'}).map(id=>[Number(id)-12,Number(id)]))
+                 ...Object.fromEntries(Object.keys({...KITCHEN_ITEMS,...CITY_LIFE_ITEMS,...HIDDEN_BLOCKS,...SURVEILLANCE_ITEMS,...THERMAL_ITEMS,...MACHINE_ITEMS,...CONNECTED_HOME_ITEMS,...NATURE_ITEMS,127:'Netherrack'}).map(id=>[Number(id)-12,Number(id)]))
              };
         }
 
@@ -2659,6 +2603,7 @@
 
         function getBlockParticleColor(blockType) {
             blockType=HIDDEN_BLOCKS[blockType]?.base || blockType;
+            if(NATURE_COLORS[blockType]!==undefined)return NATURE_COLORS[blockType];
             const colors = {
                 1: 0x5fa83d, 2: 0x8b5a32, 3: 0x777777, 4: 0x8a5a2b, 5: 0x2f8f3a,
                 6: 0xbbeeff, 12: 0x8a5a2b, 13: 0x666666, 14: 0xaa3333, 16: 0xffcc55,
@@ -2943,6 +2888,8 @@
             let h = 15;
             if (currentDimension === 'nether') {
                 h = 8 + Math.sin(x*0.065)*6 + Math.cos(z*0.055)*5 + Math.sin((x-z)*0.035)*4;
+            } else if (selectedTerrain === 'random') {
+                h = biomeColumn(x,z).height;
             } else if (selectedTerrain === 'city') {
                 h = 16;
             } else if (selectedTerrain === 'plains') {
@@ -2993,6 +2940,7 @@
             const built=constructionTypeAt(x,y,z);if(built!==null)return floodBlockType(x,y,z,built);
 
             const h = getSurfaceHeight(x, z);
+            if(currentDimension==='overworld'&&selectedTerrain==='random')return floodBlockType(x,y,z,wildernessBlock(x,y,z,h));
             if (currentDimension === 'nether') {
                 if (y > h) return y<=6 ? LAVA_ID : 0;
                 if (y < h-7 && y>1 && Math.sin(x*0.12)+Math.cos(z*0.1)>1.5) return y<=6?LAVA_ID:0;
@@ -3008,7 +2956,7 @@
                     }
                     return 24; // 水
                 }
-                if (selectedTerrain !== 'moon' && selectedTerrain !== 'desert' && y === h + 1 && h > SEA_LEVEL + 1 && hash3(x, y, z, 91.4) < 0.12) {
+                if (selectedTerrain !== 'moon' && selectedTerrain !== 'desert' && y === h + 1 && h > SEA_LEVEL + 1 && hash3(x, y, z, 91.4) < 0.035) {
                     return 42; // 小草
                 }
                 return 0; // 空气
@@ -3041,11 +2989,15 @@
 
         // 极速透明方块检测函数
         function isTransparent(bx, by, bz) {
+            if(currentDimension==='overworld'&&selectedTerrain==='random'){
+                const t=getBlock(bx,by,bz);
+                return !isSolidType(t)||HIDDEN_BLOCKS[t]||HOME_ITEMS[t]||[6,8,9,16,17,18,47,48,49].includes(t);
+            }
             const key = `${bx},${by},${bz}`;
             if (worldMap.has(key)) {
                 const t = worldMap.get(key);
                 // Pass-through walls must not hide the room's adjacent solid faces.
-                if(HIDDEN_BLOCKS[t] || HOME_ITEMS[t] || MACHINE_ITEMS[t] || t===PISTON_HEAD_ID || t===PRESSURE_PLATE_ID || t===FRIDGE_TOP_ID || t===FURNITURE_PART_ID || t===NETHER_PORTAL_ID || t===FIRE_ID) return true;
+                if(NATURE_PLANTS.has(t) || HIDDEN_BLOCKS[t] || HOME_ITEMS[t] || MACHINE_ITEMS[t] || t===PISTON_HEAD_ID || t===PRESSURE_PLATE_ID || t===FRIDGE_TOP_ID || t===FURNITURE_PART_ID || t===NETHER_PORTAL_ID || t===FIRE_ID) return true;
                 return [0, 6, 7, 8, 9, 10, 11, 16, 17, 18, 19, 20, 24, 25, 26, 27, 28, 30, 31, 42, LAVA_ID, BARRIER_ID, GLASS_SENSOR_DOOR_BOTTOM_ID, GLASS_SENSOR_DOOR_TOP_ID, GLASS_SENSOR_DOOR_OPEN_ID].includes(t);
             }
             if(isCraterVoid(bx,by,bz))return true;
@@ -4111,6 +4063,8 @@
                         scanBottom = Math.min(scanBottom, scannedRange.minY);
                     }
 
+                    if(selectedTerrain==='random'&&currentDimension==='overworld')scanBottom=Math.min(scanBottom,4);
+
 	                    // 从最高点一直往下检查到扫描底线
                     for (let y = yStart; y >= scanBottom; y--) {
                         // 距离优化：如果这个方块距离玩家垂直距离实在太远（比如相差 300 层以上），为了性能可以稍微跳过，
@@ -4139,6 +4093,10 @@
                                 if (!typeCounts[renderKey]) typeCounts[renderKey] = 0;
                                 typeCounts[renderKey]++;
                                 blockData.push({ x, y, z, type,renderKey,rail });
+                                if(WATER_PLANTS.has(type)){
+                                    typeCounts[24]=(typeCounts[24]||0)+1;
+                                    blockData.push({x,y,z,type:24,renderKey:24,rail:null});
+                                }
                             }
                         }
                     }
@@ -4153,8 +4111,10 @@
             for (let type in typeCounts) {
                 let count = typeCounts[type];
                 let typeInt = parseInt(type);
+                if(typeInt===24){const mesh=waterSurfaceMesh(blockData.filter(b=>b.type===24));instancedMeshes[type]=mesh;scene.add(mesh);continue;}
                 let geo = boxGeo;
                 let material=materials[typeInt];
+                if(NATURE_PLANTS.has(typeInt))geo=natureGeometry(typeInt).clone();
                 if (typeInt === 16 || typeInt === 25 || typeInt === 30 || typeInt === 42) geo = torchGeo; // 火把、海带、拉杆、小草
                 else if (typeInt === 26 || typeInt === 27 || typeInt === 28 || typeInt === PRESSURE_PLATE_ID) geo = flatGeo; // 铁轨、红石、压力板
                 if(typeInt===26||typeInt===27) {
@@ -4173,14 +4133,25 @@
 
             // 填充矩阵数据
             for (let b of blockData) {
+                if(b.type===24)continue;
                 matrix.identity();
                 matrix.setPosition(b.x, b.y, b.z);
+                if(NATURE_PLANTS.has(b.type)&&b.type!==158){
+                    const s=.8+hash3(b.x,b.y,b.z,532)*.2;
+                    matrix.makeRotationY(Math.floor(hash3(b.x,b.y,b.z,531)*4)*Math.PI/2);
+                    matrix.scale(new THREE.Vector3(s,s,s));matrix.setPosition(b.x+(hash(b.x,b.z)-.5)*.22,b.y-.5+.5*s,b.z+(hash(b.z,b.x)-.5)*.22);
+                }
                 if(b.type===24||b.type===LAVA_ID) {
                     const height=liquidAmount(b.type,b.x,b.y,b.z)/8;
                     matrix.makeScale(1,height,1);matrix.setPosition(b.x,b.y-0.5+height/2,b.z);
                 }
                 let idx = typeIndices[b.renderKey];
                 instancedMeshes[b.renderKey].setMatrixAt(idx, matrix);
+                if(selectedTerrain==='random'&&currentDimension==='overworld'&&isSolidType(b.type)){
+                    const col=biomeColumn(b.x,b.z),c=col.cliff;
+                    const shade=c&&c.u>1&&Math.abs(c.v)<9&&b.y<col.height-2&&b.y<c.floor+8?Math.max(.3,.85-c.u*.026):1;
+                    instancedMeshes[b.renderKey].setColorAt(idx,new THREE.Color(shade,shade,shade));
+                }
                 instancedMeshes[b.renderKey].userData.blockIndices.set(`${b.x},${b.y},${b.z}`, idx);
                 typeIndices[b.renderKey]++;
             }
@@ -4204,6 +4175,7 @@
                 let baseX = cx * CHUNK_SIZE + 8;
                 let baseZ = cz * CHUNK_SIZE + 8;
                 let baseY = getSurfaceHeight(baseX, baseZ);
+                if(selectedTerrain==='random'&&(baseY<=SEA_LEVEL+2||wildernessCave(baseX,baseY,baseZ,baseY)))return;
                 
                 // 1. 先挖空内部，并打好地基（防止悬空和泥土穿模）
                 for(let dx=-4; dx<=5; dx++) {
@@ -4262,6 +4234,7 @@
 
         function generateTrees(cx, cz) {
             if(currentDimension==='nether') return;
+            if(selectedTerrain==='random'){growWildernessTrees(cx,cz);return;}
             if(selectedTerrain==='city' && currentDimension==='overworld') return;
             let key = `trees_${cx},${cz}`;
             if (worldMap.has(key)) return;
@@ -4453,7 +4426,8 @@
 
         function getEnvironmentTypeAt(x, y, z) {
             const bx=Math.floor(x+0.5),by=Math.floor(y+0.5),bz=Math.floor(z+0.5);
-            const type=isTinyMode() ? getMicroType(microCellAt(x,y,z)) : getBlock(bx,by,bz);
+            const raw=isTinyMode() ? getMicroType(microCellAt(x,y,z)) : getBlock(bx,by,bz);
+            const type=isWaterType(raw)?24:raw;
             return isFluidBlock(type)&&getBlock(bx,by,bz)===type&&y>=by-0.5+liquidAmount(type,bx,by,bz)/8?0:type;
         }
 
@@ -4468,7 +4442,8 @@
             let waterVolume = 0, lavaVolume = 0, onLadder = false;
             // Read the same voxel grid as collision, including placed miniature water and ladders.
             for (let x=lo[0]; x<=hi[0]; x++) for (let y=lo[1]; y<=hi[1]; y++) for (let z=lo[2]; z<=hi[2]; z++) {
-                const type = level ? getMicroType(microCell(x,y,z,level)) : getBlock(x,y,z);
+                const raw = level ? getMicroType(microCell(x,y,z,level)) : getBlock(x,y,z);
+                const type = isWaterType(raw)?24:raw;
                 if (type === 7) onLadder = true;
                 if (type !== 24 && type !== LAVA_ID) continue;
                 const corner = [x/n-0.5, y/n-0.5, z/n-0.5];
@@ -4676,7 +4651,7 @@
             direction.x = Number(moveRight) - Number(moveLeft);
             direction.normalize();
 
-            const tiredMultiplier = playerTired && !creativeFlying ? TIRED_WALK_MULTIPLIER : 1;
+            const tiredMultiplier = (playerTired && !creativeFlying ? TIRED_WALK_MULTIPLIER : 1)*(!isCreativeMode()&&itchTimer>0?.8:1);
             const waterSlowsMovement = inWaterPhys && !creativeFlying;
             const sprintMultiplier = sprintKeys.size && !activeMech && !ridingMinecart && !creativeFlying && !onLadder && !inWaterPhys
                 ? SPRINT_MULTIPLIER : 1;
@@ -4782,8 +4757,8 @@
                 const x = Math.floor(Math.random() * 1000 - 500);
                 const z = Math.floor(Math.random() * 1000 - 500);
                 const h = getSurfaceHeight(x, z);
-                const waterAtFeet = getBlock(x, h + 1, z) === 24 || getBlock(x, h, z) === 24;
-                if (!waterAtFeet && h > 8) {
+                const waterAtFeet = isWaterType(getBlock(x,h+1,z)) || isWaterType(getBlock(x,h,z));
+                if (!waterAtFeet && h > 8 && isSolid(x,h,z)) {
                     return { x, y: h + 5, z };
                 }
             }
@@ -4936,6 +4911,7 @@
         }
 
         function isSolidType(b) {
+            if(NATURE_PLANTS.has(b))return false;
             if(MACHINE_ITEMS[b])return false;
             if(b===FIRE_ID)return false;
             if(HIDDEN_BLOCKS[b] || b===SHOWER_ID || b===NETHER_PORTAL_ID || b===92) return false;
@@ -5288,7 +5264,7 @@
             if (!model) return;
             scene.remove(model);
             model.userData.screen?.texture.dispose();
-            model.traverse(obj=>{if(obj.isMesh) {obj.getRenderTarget?.().dispose();obj.geometry.dispose();obj.material.dispose();}});
+            model.traverse(obj=>{if(obj.isMesh) {obj.getRenderTarget?.().dispose();obj.geometry.dispose();for(const mat of (Array.isArray(obj.material)?obj.material:[obj.material]))mat.dispose();}});
         }
 
         function updateMechHUD() {
@@ -5862,7 +5838,7 @@
                 let dz = destination.z - z.mesh.position.z;
                 let len = Math.sqrt(dx*dx + dz*dz);
                 z.vx=0;z.vz=0;
-                if (len > (friendly && !target ? 2.6 : 0.85)) {
+                if ((friendly||hostileMobsEnabled()) && len > (friendly && !target ? 2.6 : 0.85)) {
                     // 僵尸像人一样慢慢平移走，不再跳墙。
                     z.vx = (dx/len) * (friendly?1.6:0.55);
                     z.vz = (dz/len) * (friendly?1.6:0.55);
@@ -5890,17 +5866,17 @@
                 // 僵尸发声
                 z.soundTimer -= delta;
                 if (z.soundTimer <= 0) {
-                    playSound('zombie');
-                    z.soundTimer = 3 + Math.random() * 5; // 每 3~8 秒叫一次
+                    if(z.mesh.position.distanceTo(camera.position)<12)playSound('zombie');
+                    z.soundTimer = 8 + Math.random() * 8;
                 }
 
                 // 碰到玩家造成伤害
                 z.attackCooldown=Math.max(0,(z.attackCooldown||0)-delta);
-                if(target && !target.dying && z.attackCooldown===0 && z.mesh.position.distanceTo(target.mesh.position)<1.5 && hasClearLineBetween(
+                if((friendly||hostileMobsEnabled()) && target && !target.dying && z.attackCooldown===0 && z.mesh.position.distanceTo(target.mesh.position)<1.5 && hasClearLineBetween(
                     z.mesh.position.clone().add(new THREE.Vector3(0,0.4,0)),target.mesh.position.clone().add(new THREE.Vector3(0,0.4,0)))) {
                     damageMob(target,1,friendly?'companion':'hostile');z.attackCooldown=0.9;
                 }
-	                if (!friendly && !target && z.mesh.position.distanceTo(camera.position) < 1.5 && hasClearLineBetween(
+	                if (hostileMobsEnabled() && !friendly && !target && z.mesh.position.distanceTo(camera.position) < 1.5 && hasClearLineBetween(
                     new THREE.Vector3(z.mesh.position.x, z.mesh.position.y + 0.9, z.mesh.position.z),
                     new THREE.Vector3(camera.position.x, camera.position.y - 0.4, camera.position.z)
                 )) {
@@ -5929,7 +5905,7 @@
                 let len = Math.sqrt(dx*dx + dz*dz);
                 
                 c.vx=0;c.vz=0;
-                if (len > (isCompanion(c)?2.6:0)) {
+                if ((isCompanion(c)||hostileMobsEnabled()) && len > (isCompanion(c)?2.6:0)) {
                     c.vx = (dx/len) * 1.5; 
                     c.vz = (dz/len) * 1.5;
                 }
@@ -5960,7 +5936,7 @@
 
                 // 靠近玩家自爆
                 let distToPlayer = c.mesh.position.distanceTo(camera.position);
-                if (!isCompanion(c) && !isCreativeMode() && distToPlayer < 3.0 && hasClearLineBetween(c.mesh.position,camera.position)) {
+                if (!isCompanion(c) && hostileMobsEnabled() && distToPlayer < 3.0 && hasClearLineBetween(c.mesh.position,camera.position)) {
                     c.vx = 0;
                     c.vz = 0;
                     c.fuseTimer += delta;
@@ -7528,8 +7504,8 @@
                     dirLight.intensity = Math.max(0.1, sunHeight * 0.8);
                     
                     // Keep deliberately spawned mod mobs available during daytime.
-                    for(let z of zombies) if(!z.eggId) scene.remove(z.mesh);
-                    zombies = zombies.filter(z=>z.eggId);
+                    for(let z of zombies) if(!z.eggId&&!z.caveResident) scene.remove(z.mesh);
+                    zombies = zombies.filter(z=>z.eggId||z.caveResident);
                     for(let c of creepers) if(!c.eggId) scene.remove(c.mesh);
                     creepers = creepers.filter(c=>c.eggId);
                     
@@ -7597,6 +7573,7 @@
             updateExplosionParticles(delta);
             updateCombatEffects(delta);
             updateWorldExpansion(delta);
+            updateWilderness(delta);
             updateMicroVoxelOverlay(delta);
 
             // 移动白云
@@ -7614,6 +7591,7 @@
                 updateSurveillance();
         }
 
+        initWilderness();
         initWorldExpansion();
         initThermalWorld();
         initRedstoneMachines();

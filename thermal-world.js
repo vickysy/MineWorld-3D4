@@ -51,7 +51,7 @@ function writeLava(x,y,z,amount,dirty) {
 
 function quenchLava(x,y,z,dirty) {
     if(getBlock(x,y,z)!==LAVA_ID)return false;
-    const water=HEAT_OFFSETS.map(([dx,dy,dz])=>[x+dx,y+dy,z+dz]).find(p=>getBlock(...p)===24);
+    const water=HEAT_OFFSETS.map(([dx,dy,dz])=>[x+dx,y+dy,z+dz]).find(p=>isWaterType(getBlock(...p)));
     if(!water)return false;
     if(setBlockNoRebuild(x,y,z,OBSIDIAN_ID,dirty)===false)return false;
     // Water reacts before heat can remove it. A little steam leaves some of the water behind.

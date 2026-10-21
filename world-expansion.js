@@ -14,12 +14,12 @@ let furnitureFocus = null, seatedAt = null, portalExitRequired = false, furnitur
 let worldFloodHeight = null, commandJob = null, commandUndo = null, commandPreview = null, commandEditing = false;
 
 function waterAmount(x,y,z) {
-    return getBlock(x,y,z) === 24 ? (waterAmounts.get(`${x},${y},${z}`) ?? 8) : 0;
+    return isWaterType(getBlock(x,y,z)) ? (waterAmounts.get(`${x},${y},${z}`) ?? 8) : 0;
 }
 
 function queueFluidCell(x,y,z) {
     if (currentDimension === 'nether' || waterFlowQueue.length >= 8192) return;
-    if (!nearThermalPlayer(x,y,z) || getBlock(x,y,z)!==24) return;
+    if (!nearThermalPlayer(x,y,z) || !isWaterType(getBlock(x,y,z))) return;
     const key=`${x},${y},${z}`;
     if (!queuedWaterFlow.has(key)) { queuedWaterFlow.add(key);waterFlowQueue.push({x,y,z}); }
 }
@@ -67,17 +67,17 @@ function tickWaterFlow(delta=0.1) {
             let landing=y;
             for(let fall=0;fall<3;fall++) {
                 const next=landing-1,type=getBlock(x,next,z);
-                if(![0,24,25,42].includes(type)||waterAmount(x,next,z)>=8||!lockedBlockWriteAllowed(x,next,z,24))break;
+                if(![0,24,25,42].includes(type)&&!NATURE_PLANTS.has(type)||waterAmount(x,next,z)>=8||!lockedBlockWriteAllowed(x,next,z,24))break;
                 landing=next;
-                if(type===24||HEAT_OFFSETS.some(([dx,dy,dz])=>getBlock(x+dx,next+dy,z+dz)===LAVA_ID))break;
+                if(isWaterType(type)||HEAT_OFFSETS.some(([dx,dy,dz])=>getBlock(x+dx,next+dy,z+dz)===LAVA_ID))break;
             }
             if(landing<y){transferWater([x,y,z],[x,landing,z],amount,dirty);continue;}
             const neighbors=[[1,0],[0,1],[-1,0],[0,-1]].map(([dx,dz])=>{
-                const at=[x+dx,y,z+dz];return {at,down:[0,24,25,42].includes(getBlock(at[0],y-1,at[2]))&&waterAmount(at[0],y-1,at[2])<8};
+                const at=[x+dx,y,z+dz],below=getBlock(at[0],y-1,at[2]);return {at,down:([0,24,25,42].includes(below)||NATURE_PLANTS.has(below))&&waterAmount(at[0],y-1,at[2])<8};
             }).sort((a,b)=>Number(b.down)-Number(a.down));
             for(const {at,down} of neighbors) {
                 const type=getBlock(...at);
-                if(![0,24,25,42].includes(type)) continue;
+                if(![0,24,25,42].includes(type)&&!NATURE_PLANTS.has(type)) continue;
                 const neighbor=waterAmount(...at),moved=down?Math.min(amount,8-neighbor):Math.floor((amount-neighbor)/2);
                 amount-=transferWater([x,y,z],at,moved,dirty);
                 if(!amount)break;
@@ -221,6 +221,7 @@ function saveWorldExpansion() {
 }
 
 function clearExpansionWorld() {
+    clearWilderness();
     restoreConstruction();
     clearThermalWorld();
     clearHomeCity();
@@ -303,7 +304,8 @@ function updateEndermen(delta) {
         m.teleportTimer-=delta;m.attackCooldown=Math.max(0,m.attackCooldown-delta);
         const eye=m.mesh.position.clone().add(new THREE.Vector3(0,2.1,0)),toward=eye.clone().sub(camera.position),forward=new THREE.Vector3();
         camera.getWorldDirection(forward);
-        if(!m.friendly && !isCreativeMode() && toward.length()<16 && forward.dot(toward.normalize())>0.995 && hasClearLineBetween(camera.position,eye)) m.anger=15;
+        if(!m.friendly && hostileMobsEnabled() && toward.length()<16 && forward.dot(toward.normalize())>0.995 && hasClearLineBetween(camera.position,eye)) m.anger=15;
+        if(!hostileMobsEnabled())m.anger=0;
         m.anger=Math.max(0,m.anger-delta);
         if(getBlock(Math.round(m.mesh.position.x),Math.round(m.mesh.position.y),Math.round(m.mesh.position.z))===24 ||
             (m.teleportTimer<=0 && m.anger>0 && m.mesh.position.distanceTo(camera.position)>10)) teleportEnderman(m);
@@ -322,7 +324,7 @@ function updateEndermen(delta) {
             m.mesh.userData[name].rotation.x=moving?Math.sin(m.walkTime)*0.2*sign:0;
         if(m.attackCooldown===0 && d<1.8 && hasClearLineBetween(m.mesh.position.clone().add(new THREE.Vector3(0,1,0)),dest)) {
             if(target) {damageMob(target,2,'companion');m.attackCooldown=1;}
-            else if(!m.friendly && m.anger>0 && !isCreativeMode()) {takeDamage(2);m.attackCooldown=1;}
+            else if(!m.friendly && m.anger>0 && hostileMobsEnabled()) {takeDamage(2);m.attackCooldown=1;}
         }
     }
 }

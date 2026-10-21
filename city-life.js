@@ -170,7 +170,7 @@ function visitCityLandmark(kind) {
 }
 
 function initCityLife() {
-    materials[127]=new THREE.MeshLambertMaterial({map:materials[3].map,color:0x9f5051});
+    materials[127]??=new THREE.MeshLambertMaterial({map:materials[3].map,color:0x9f5051});
     const slot=document.createElement('button');slot.className='slot';slot.id='inv-115';slot.textContent='Netherrack';slot.onclick=()=>selectSlot(115);document.getElementById('tab-build').appendChild(slot);
     Object.assign(COMMAND_ITEMS,{'地狱岩':127,'足球':128,'学校标牌':129,'市场标牌':130});
 }

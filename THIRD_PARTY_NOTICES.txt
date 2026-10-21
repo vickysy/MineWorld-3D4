@@ -1,3 +1,10 @@
+Zombie voice recordings: "Zombie Moans 01 - By EmoPreben" by EmoPreben.
+Source: https://opengameart.org/content/zombie-moans-01-by-emopreben
+License: CC0 1.0 Universal, https://creativecommons.org/publicdomain/zero/1.0/
+Converted to 22050 Hz mono PCM in assets/audio/zombie-moan-{1,2,3}.wav,
+and embedded in zombie-voices.js for offline/file URL compatibility.
+These are independent recordings, not audio extracted from Minecraft.
+
 three-reflector-r128.js is the unmodified Reflector addon from Three.js r128.
 Source: https://github.com/mrdoob/three.js/blob/r128/examples/js/objects/Reflector.js
 
