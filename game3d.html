@@ -385,7 +385,7 @@
     <script src="city-life.js?v=20261021-wilderness"></script>
     <script src="surveillance.js?v=20261018-tools"></script>
     <script src="peerjs-1.5.5.min.js"></script>
-    <script src="multiplayer.js?v=20261021-solid-terrain"></script>
+    <script src="multiplayer.js?v=20261027-thin-snow"></script>
     <script src="thermal-world.js?v=20261021-wilderness"></script>
     <script src="launchers.js?v=20261018-castle-map"></script>
     <script src="construction.js?v=20261018-locks"></script>
@@ -395,7 +395,7 @@
     <script src="rail-vehicles.js?v=20261020-connected"></script>
     <script src="connected-home.js?v=20261020-connected"></script>
     <script src="zombie-voices.js?v=20261021-recorded"></script>
-    <script src="wilderness.js?v=20261021-solid-terrain"></script>
+    <script src="wilderness.js?v=20261027-thin-snow"></script>
     <script src="village-houses.js?v=20261021-solid-terrain"></script>
 
     <script>
@@ -589,7 +589,7 @@
                 mesh = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.05), mat);
                 mesh.rotation.y = -Math.PI / 4;
             } else { // 默认方块
-                mesh = new THREE.Mesh(boxGeo, mat);
+                mesh = new THREE.Mesh(natureGeometry(blockId) || boxGeo, mat);
                 mesh.scale.set(0.3, 0.3, 0.3);
             }
             
@@ -1206,11 +1206,11 @@
         const matWoodTop = new THREE.MeshLambertMaterial({ map: createTexture('wood_top') });
         const matWood = [matWoodSide, matWoodSide, matWoodTop, matWoodTop, matWoodSide, matWoodSide];
         
-        const matLeaves = new THREE.MeshLambertMaterial({ map: createTexture('leaves'), transparent: true });
-        const matGlass = new THREE.MeshLambertMaterial({ map: createTexture('glass'), transparent: true });
+        const matLeaves = new THREE.MeshLambertMaterial({ map: createTexture('leaves'), alphaTest: 0.5 });
+        const matGlass = new THREE.MeshLambertMaterial({ map: createTexture('glass'), transparent: true, depthWrite: false, side: THREE.DoubleSide });
         const matBarrier = new THREE.MeshLambertMaterial({ map: createTexture('barrier'), transparent: true, opacity: 0.72, depthWrite: false });
-        const matGlassSensorDoor = new THREE.MeshLambertMaterial({ map: createTexture('glass_sensor_door'), transparent: true, opacity: 0.78 });
-        const matGlassSensorDoorOpen = new THREE.MeshLambertMaterial({ map: createTexture('glass_sensor_open'), transparent: true, opacity: 0.62, alphaTest: 0.05 });
+        const matGlassSensorDoor = new THREE.MeshLambertMaterial({ map: createTexture('glass_sensor_door'), transparent: true, opacity: 0.78, depthWrite: false, side: THREE.DoubleSide });
+        const matGlassSensorDoorOpen = new THREE.MeshLambertMaterial({ map: createTexture('glass_sensor_open'), transparent: true, opacity: 0.62, alphaTest: 0.05, depthWrite: false, side: THREE.DoubleSide });
         const matWhiteCobblestone = new THREE.MeshLambertMaterial({ map: createTexture('white_cobblestone') });
         const matLadder = new THREE.MeshLambertMaterial({ map: createTexture('ladder'), transparent: true });
         const matDoorB = new THREE.MeshLambertMaterial({ map: createTexture('door_bottom'), transparent: true });
@@ -2990,26 +2990,15 @@
             return getOreBlock(x, y, z, h) || 3;
         }
 
-        // 极速透明方块检测函数
+        // Collision and visual occlusion differ: leaves have holes and glass transmits light.
+        function occludesBlockFaces(type) {
+            return isSolidType(type) && !HIDDEN_BLOCKS[type] && !HOME_ITEMS[type] &&
+                !MACHINE_ITEMS[type] && !LEAF_TYPES.has(type) && type!==SNOW_LAYER_ID &&
+                ![6,8,9,16,17,18,47,48,49,PISTON_HEAD_ID,FRIDGE_TOP_ID,FURNITURE_PART_ID].includes(type);
+        }
+
         function isTransparent(bx, by, bz) {
-            if(currentDimension==='overworld'&&selectedTerrain==='random'){
-                const t=getBlock(bx,by,bz);
-                return !isSolidType(t)||HIDDEN_BLOCKS[t]||HOME_ITEMS[t]||[6,8,9,16,17,18,47,48,49].includes(t);
-            }
-            const key = `${bx},${by},${bz}`;
-            if (worldMap.has(key)) {
-                const t = worldMap.get(key);
-                // Pass-through walls must not hide the room's adjacent solid faces.
-                if(NATURE_PLANTS.has(t) || HIDDEN_BLOCKS[t] || HOME_ITEMS[t] || MACHINE_ITEMS[t] || t===PISTON_HEAD_ID || t===PRESSURE_PLATE_ID || t===FRIDGE_TOP_ID || t===FURNITURE_PART_ID || t===NETHER_PORTAL_ID || t===FIRE_ID) return true;
-                return [0, 6, 7, 8, 9, 10, 11, 16, 17, 18, 19, 20, 24, 25, 26, 27, 28, 30, 31, 42, LAVA_ID, BARRIER_ID, GLASS_SENSOR_DOOR_BOTTOM_ID, GLASS_SENSOR_DOOR_TOP_ID, GLASS_SENSOR_DOOR_OPEN_ID].includes(t);
-            }
-            if(isCraterVoid(bx,by,bz))return true;
-            const built=constructionTypeAt(bx,by,bz);if(built!==null)return [0,6,7,8,9].includes(built);
-            // 海平面下的天然地形如果没生成，可能是水或者沙子
-            if (by <= 12 && by > getSurfaceHeight(bx, bz)) {
-                return true; // 水也是透明的
-            }
-            return by > getSurfaceHeight(bx, bz);
+            return !occludesBlockFaces(getBlock(bx,by,bz));
         }
 
         function clearMicroVoxelOverlay() {
@@ -3144,15 +3133,29 @@
                     const override=fineVoxelEdits.get(detailKey(microAncestor(c,level)));
                     if (override!==undefined) type=override;
                 }
-                return type;
+                return type===SNOW_LAYER_ID && microSnowFill(c)<=0 ? 0 : type;
             }
             const placed = microPlacements.get(microParentKey(c.x,c.y,c.z))?.get(microIndex(c.mx,c.my,c.mz));
             if (placed !== undefined) return placed;
             if (isMicroMined(c.x,c.y,c.z,c.mx,c.my,c.mz)) return 0;
             const type=getBlock(c.x,c.y,c.z);
+            if (type===SNOW_LAYER_ID && c.my/MICRO_BLOCK_DIVISIONS>=SNOW_LAYER_HEIGHT) return 0;
             // Dirt retains a one-micro-block shell. Explicit placements still fill its cavity.
             if ([1,2].includes(type) && [c.mx,c.my,c.mz].every(v=>v>0 && v<MICRO_BLOCK_DIVISIONS-1)) return 0;
             return type;
+        }
+
+        function microSnowFill(c) {
+            let top=c.y-.5+SNOW_LAYER_HEIGHT;
+            const root=microAncestor(c,1);
+            if (microPlacements.get(microParentKey(c.x,c.y,c.z))?.get(microIndex(root.mx,root.my,root.mz))===SNOW_LAYER_ID)
+                top=c.y-.5+(root.my+SNOW_LAYER_HEIGHT)/MICRO_BLOCK_DIVISIONS;
+            for(let level=2;level<=(c.level||1);level++) {
+                const ancestor=microAncestor(c,level);
+                if(fineVoxelEdits.get(detailKey(ancestor))===SNOW_LAYER_ID)top=c.y-.5+(ancestor.my+SNOW_LAYER_HEIGHT)/microDivisions(level);
+            }
+            const n=microDivisions(c.level||1);
+            return THREE.MathUtils.clamp((top-(c.y-.5+c.my/n))*n,0,1);
         }
 
         function offsetMicroCell(c, dx, dy, dz) {
@@ -3312,7 +3315,17 @@
                 const c = microCell(...cell,level);
                 const type = getMicroType(c);
                 if (type && type !== 24 && type !== 25 && type !== LAVA_ID && type !== 42) {
-                    return { ...c, type, norm, distance };
+                    if(type===SNOW_LAYER_ID) {
+                        const size=microCellSize(c),min=new THREE.Vector3(c.x-.5+c.mx*size,c.y-.5+c.my*size,c.z-.5+c.mz*size);
+                        const max=min.clone().add(new THREE.Vector3(size,size*microSnowFill(c),size));
+                        const point=new THREE.Ray(origin,direction).intersectBox(new THREE.Box3(min,max),new THREE.Vector3());
+                        if(point && point.distanceTo(origin)<=maxDistance) {
+                            if(Math.abs(point.y-max.y)<size*1e-4)norm.set(0,1,0);
+                            return {...c,type,norm,distance:point.distanceTo(origin)};
+                        }
+                    } else {
+                        return { ...c, type, norm, distance };
+                    }
                 }
                 const next = Math.min(...tMax);
                 if (!Number.isFinite(next)) break;
@@ -3343,7 +3356,7 @@
             if (!materials[itemType] || !hasInventoryItem(itemType)) return false;
             let type=itemType===WATER_BUCKET_ID ? 24 : itemType;
             if (currentDimension==='nether' && type===24) return false;
-            const base=offsetMicroCell(hit,hit.norm.x,hit.norm.y,hit.norm.z);
+            const base=hit.type===SNOW_LAYER_ID ? {...hit} : offsetMicroCell(hit,hit.norm.x,hit.norm.y,hit.norm.z);
             const cells=[{cell:base,type}];
             if ([8,17,GLASS_SENSOR_DOOR_BOTTOM_ID].includes(type)) {
                 cells.push({cell:offsetMicroCell(base,0,1,0),type:type+1});
@@ -3352,7 +3365,7 @@
             }
             for (const part of cells) {
                 const existing=getMicroType(part.cell);
-                if (![0,24,25,42].includes(existing) || microCellTouchesPlayer(part.cell)) return false;
+                if (![0,24,25,42,SNOW_LAYER_ID].includes(existing) || microCellTouchesPlayer(part.cell)) return false;
             }
             if (!consumeInventoryItem(itemType)) return false;
             for (const part of cells) setMicroPlacement(part.cell,part.type);
@@ -3443,12 +3456,14 @@
                 if (base.map?.image) {
                     const pixels = document.createElement('canvas');
                     pixels.width = pixels.height = MICRO_BLOCK_DIVISIONS;
+                    pixels.getContext('2d').imageSmoothingEnabled = false;
                     pixels.getContext('2d').drawImage(base.map.image, 0, 0, pixels.width, pixels.height);
                     const canvas = document.createElement('canvas');
                     canvas.width = canvas.height = MICRO_BLOCK_DIVISIONS * 16;
                     const ctx = canvas.getContext('2d');
                     ctx.imageSmoothingEnabled = false;
                     ctx.drawImage(pixels, 0, 0, canvas.width, canvas.height);
+                    ctx.globalCompositeOperation = 'source-atop';
                     ctx.fillStyle = 'rgba(0,0,0,0.10)';
                     for (let p = 0; p < canvas.width; p += 16) {
                         ctx.fillRect(p, 0, 1, canvas.height);
@@ -3507,7 +3522,9 @@
                     return;
                 }
                 const neighbor=getMicroType(neighborCell);
-                if (isSolidType(neighbor) && ![6,47,48,49].includes(neighbor)) return;
+                if (occludesBlockFaces(neighbor)) return;
+                if (neighbor===type && LEAF_TYPES.has(type) && c.x===neighborCell.x && c.y===neighborCell.y && c.z===neighborCell.z) return;
+                if (neighbor===type && type===SNOW_LAYER_ID && microSnowFill(c)>.9999 && microSnowFill(neighborCell)>.9999) return;
                 if (neighbor===type && [6,24,43,47].includes(type)) return;
                 if (neighbor===type && HIDDEN_BLOCKS[type]) return;
                 const key = cellKey+':'+faceIndex;
@@ -3526,6 +3543,10 @@
                 for (const index of [0,1,2,0,2,3]) {
                     const [u,v] = corners[index];
                     const p = center.map((c,i) => c + (f.u[i]*u + f.v[i]*v)/(2*divs));
+                    if(type===SNOW_LAYER_ID) {
+                        const bottom=-.5+c.my/divs;
+                        p[1]=bottom+(p[1]-bottom)*microSnowFill(c);
+                    }
                     data.positions.push(...p);
                     data.normals.push(...f.n);
                     if (isPlaced) data.uvs.push((u+1)/2,(v+1)/2);
@@ -3538,6 +3559,7 @@
                 emit(a,n-1,b,2); emit(a,0,b,3);
                 emit(a,b,n-1,4); emit(a,b,0,5);
             }
+            if(getBlock(x,y,z)===SNOW_LAYER_ID)for(let a=0;a<n;a++)for(let b=0;b<n;b++)emit(a,Math.ceil(SNOW_LAYER_HEIGHT*n)-1,b,2);
             if ([1,2].includes(getBlock(x,y,z))) for (let a=1;a<n-1;a++) for (let b=1;b<n-1;b++) {
                 emit(0,a,b,0); emit(n-1,a,b,1);
                 emit(a,0,b,2); emit(a,n-1,b,3);
@@ -3637,6 +3659,7 @@
 
             let key = `${x},${y},${z}`;
             worldMap.set(key, type);
+            removeUnsupportedSnow(x,y,z,type);
             expansionBlockChanged(x,y,z,oldType,type);
             queueRoomBlockChange(x,y,z);
             
@@ -3686,6 +3709,7 @@
             if (curMinY === undefined || y < curMinY) columnMinY.set(colKey, y);
             const key = `${x},${y},${z}`;
             worldMap.set(key, type);
+            removeUnsupportedSnow(x,y,z,type);
             expansionBlockChanged(x,y,z,oldType,type);
             queueRoomBlockChange(x,y,z);
             const chunkKey=`${Math.floor(x/CHUNK_SIZE)},${Math.floor(z/CHUNK_SIZE)}`;
@@ -4111,7 +4135,7 @@
                 if(typeInt===24){const mesh=waterSurfaceMesh(blockData.filter(b=>b.type===24));instancedMeshes[type]=mesh;scene.add(mesh);continue;}
                 let geo = boxGeo;
                 let material=materials[typeInt];
-                if(NATURE_PLANTS.has(typeInt))geo=natureGeometry(typeInt).clone();
+                if(NATURE_PLANTS.has(typeInt)||typeInt===SNOW_LAYER_ID)geo=natureGeometry(typeInt).clone();
                 if (typeInt === 16 || typeInt === 25 || typeInt === 30 || typeInt === 42) geo = torchGeo; // 火把、海带、拉杆、小草
                 else if (typeInt === 26 || typeInt === 27 || typeInt === 28 || typeInt === PRESSURE_PLATE_ID) geo = flatGeo; // 铁轨、红石、压力板
                 if(typeInt===26||typeInt===27) {
@@ -4259,6 +4283,7 @@
                         if (baseY <= 11) continue; // 水里不长树
                         
                         let h = 4 + Math.floor(Math.abs(hash(x, z)) * 3); // 树干高度 4~6
+                        if (!naturalTreeSiteClear(x,baseY,z,h)) continue;
                         
                         // 树干
                         for (let y = 1; y <= h; y++) {
@@ -4928,6 +4953,7 @@
         function isTinySolidAtPoint(x, y, z) {
             const c = microCellAt(x,y,z);
             const type=getMicroType(c);
+            if(type===SNOW_LAYER_ID && y>=c.y-.5+(c.my+microSnowFill(c))*microCellSize(c))return false;
             if (isNaturalHomeVoxel(c,type)) return tinyHomeCollision([x,y,z],[x+1e-9,y+1e-9,z+1e-9]);
             return isSolidType(type) && !isPassableHomeCell(c.x,c.y,c.z,type);
         }
@@ -4942,6 +4968,7 @@
             if (corner.some((v,i)=>v>=max[i] || v+size<=min[i])) return false;
             if (!refinedMicroCells.has(detailKey(c))) {
                 const type=getMicroType(c);
+                if(type===SNOW_LAYER_ID && corner[1]+size*microSnowFill(c)<=min[1])return false;
                 if (isTinyMode() && isNaturalHomeVoxel(c,type)) return false;
                 return isSolidType(type) && !isPassableHomeCell(c.x,c.y,c.z,type);
             }
@@ -4971,7 +4998,7 @@
                         } else {
                             const parent=microParentKey(x,y,z);
                             if (!microEdits.has(parent) && !microPlacements.has(parent) && !fineRoots.has(parent)) {
-                                if (isSolid(x,y,z)) return true;
+                                if (isSolid(x,y,z) && (getBlock(x,y,z)!==SNOW_LAYER_ID || min[1]<y-.5+SNOW_LAYER_HEIGHT)) return true;
                                 continue;
                             }
                             const low=[x,y,z].map((v,i)=>Math.max(0,Math.floor((min[i]-v+0.5)*20)));
@@ -5026,7 +5053,7 @@
                     let bx = Math.round(pt.x + off[0]);
                     let by = Math.round(pt.y);
                     let bz = Math.round(pt.z + off[1]);
-                    if (isSolid(bx, by, bz)) {
+                    if (isSolid(bx, by, bz) && (getBlock(bx,by,bz)!==SNOW_LAYER_ID || pt.y<by-.5+SNOW_LAYER_HEIGHT)) {
                         return true; 
                     }
                 }
@@ -6592,6 +6619,7 @@
                 let pz = Math.round(checkPos.z);
                 
                 let b = getBlock(px, py, pz);
+                if(b===SNOW_LAYER_ID && checkPos.y>py-.5+SNOW_LAYER_HEIGHT)continue;
                 // 水(24)和海带(25)可以直接穿过，不算实体方块遮挡
                 if (b !== 0 && b !== 24 && b !== 25) {
                     hit = new THREE.Vector3(px, py, pz);
@@ -6838,7 +6866,8 @@
                         return;
                     }
 
-                    let placePos = targetType === 42 ? hit.clone() : hit.clone().add(norm);
+                    let placePos = targetType === 42 || targetType === SNOW_LAYER_ID ? hit.clone() : hit.clone().add(norm);
+                    if(matId===SNOW_LAYER_ID && (!isSolid(placePos.x,placePos.y-1,placePos.z) || getBlock(placePos.x,placePos.y-1,placePos.z)===SNOW_LAYER_ID))return;
                     let px = camera.position.x;
                     let py = camera.position.y;
                     let pz = camera.position.z;
@@ -6867,7 +6896,7 @@
                         }
                         
                         if (matId === 8) { 
-                            if (getBlock(placePos.x, placePos.y, placePos.z) === 0 && 
+                            if ([0,SNOW_LAYER_ID].includes(getBlock(placePos.x, placePos.y, placePos.z)) &&
                                 getBlock(placePos.x, placePos.y + 1, placePos.z) === 0) {
                                 setBlock(placePos.x, placePos.y, placePos.z, 8); 
                                 setBlock(placePos.x, placePos.y + 1, placePos.z, 9); 

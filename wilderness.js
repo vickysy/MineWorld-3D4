@@ -1,4 +1,6 @@
-const NATURE_ITEMS={154:'Snow',155:'Amber Leaves',156:'Crimson Leaves',157:'Golden Leaves',158:'Bamboo',159:'Bamboo Shoot',160:'Meadow Grass',161:'Fern',162:'Ribbon Seagrass',163:'Tall Seagrass',164:'Sea Fan',165:'Red Coral',166:'Blue Coral',167:'Pink Coral',168:'Yellow Coral',169:'Purple Coral'};
+const SNOW_LAYER_ID=186, SNOW_LAYER_HEIGHT=.1;
+const LEAF_TYPES=new Set([5,155,156,157]);
+const NATURE_ITEMS={154:'Snow Block',155:'Amber Leaves',156:'Crimson Leaves',157:'Golden Leaves',158:'Bamboo',159:'Bamboo Shoot',160:'Meadow Grass',161:'Fern',162:'Ribbon Seagrass',163:'Tall Seagrass',164:'Sea Fan',165:'Red Coral',166:'Blue Coral',167:'Pink Coral',168:'Yellow Coral',169:'Purple Coral',186:'Snow Layer'};
 const BRICK_COLORS=[['White',0xe3e6e4],['Light Gray',0xaeb3b5],['Gray',0x646b70],['Black',0x303438],['Red',0xb44238],['Orange',0xd47d42],['Yellow',0xe0c461],['Lime',0x97ba54],['Green',0x467d53],['Cyan',0x398e9c],['Light Blue',0x79b9d3],['Blue',0x426fa2],['Purple',0x855e9d],['Magenta',0xb75f96],['Pink',0xdf9da9],['Brown',0x89634e]];
 BRICK_COLORS.forEach(([name],i)=>NATURE_ITEMS[170+i]=name+' Brick');
 const WATER_PLANTS=new Set([162,163,164,165,166,167,168,169]);
@@ -138,14 +140,15 @@ function wildernessBlock(x,y,z,h){
             return 24;
         }
         if(y===h+1&&h>SEA_LEVEL+1){
+            if(col.biome==='snow')return SNOW_LAYER_ID;
             if(col.biome==='bamboo'&&r<.018)return 159;
             if(col.biome!=='snow'&&col.biome!=='cliffs'&&r<.035)return r<.024?160:161;
         }
         return 0;
     }
-    if(y===h)return h<=SEA_LEVEL+1?23:col.biome==='snow'?154:col.biome==='cliffs'?3:1;
+    if(y===h)return h<=SEA_LEVEL+1?23:col.biome==='cliffs'?3:1;
     if(col.cliff&&y>=col.cliff.floor&&y<h-1)return 3;
-    if(y>h-3)return h<=SEA_LEVEL+1?23:col.biome==='snow'?154:2;
+    if(y>h-3)return h<=SEA_LEVEL+1?23:2;
     return getOreBlock(x,y,z,h)||3;
 }
 
@@ -157,17 +160,36 @@ function growWildernessTrees(cx,cz){
         if(h<=SEA_LEVEL+1||wildernessCave(x,h,z,h))continue;
         const put=(a,b,c,id)=>{if(!worldMap.has(`${a},${b},${c}`))setGenBlock(a,b,c,id);};
         if(biome==='bamboo'){
-            if(r<.014&&landscapeNoise(x/10,z/10,229)>.48)for(let y=1;y<=4+Math.floor(hash(x,z)*4);y++)put(x,h+y,z,158);
+            const tall=4+Math.floor(hash(x,z)*4);
+            if(r<.014&&landscapeNoise(x/10,z/10,229)>.48&&naturalTreeSiteClear(x,h,z,tall))for(let y=1;y<=tall;y++)put(x,h+y,z,158);
             continue;
         }
         if(!naturalTreeAnchor(x,z)||r>(biome==='autumn'?.75:biome==='snow'?.30:.18)||biome==='cliffs')continue;
         const tall=4+Math.floor(hash(x,z)*3),leaf=biome==='autumn'?155+Math.floor(hash(x+9,z)*3):5;
+        if(!naturalTreeSiteClear(x,h,z,tall))continue;
         for(let y=1;y<=tall;y++)put(x,h+y,z,4);
         for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++)for(let dy=tall-2;dy<=tall+1;dy++){
             if(Math.abs(dx)+Math.abs(dz)+Math.abs(dy-tall)>3)continue;
-            put(x+dx,h+dy,z+dz,biome==='snow'&&dy===tall+1?154:leaf);
+            put(x+dx,h+dy,z+dz,leaf);
+            if(biome==='snow'&&(dy===tall+1||Math.abs(dx)+Math.abs(dz)+Math.abs(dy+1-tall)>3))put(x+dx,h+dy+1,z+dz,SNOW_LAYER_ID);
         }
     }
+}
+
+function naturalTreeSiteClear(x,y,z,tall){
+    // Air recorded by a building is intentional clearance, including its entrance.
+    for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++)for(let dy=1;dy<=tall+2;dy++){
+        const a=x+dx,b=y+dy,c=z+dz;
+        if(worldMap.has(`${a},${b},${c}`)||constructionTypeAt(a,b,c)!==null)return false;
+    }
+    return true;
+}
+
+function removeUnsupportedSnow(x,y,z,type){
+    if(isSolidType(type)||getBlock(x,y+1,z)!==SNOW_LAYER_ID)return;
+    resetMicroBlock(x,y+1,z);
+    worldMap.set(`${x},${y+1},${z}`,0);
+    queueRoomBlockChange(x,y+1,z);
 }
 
 function naturalTreeAnchor(x,z){
@@ -185,8 +207,12 @@ function natureTexture(id,color,brick=false){
     const canvas=document.createElement('canvas');canvas.width=canvas.height=64;const ctx=canvas.getContext('2d');
     const c=new THREE.Color(color);
     for(let y=0;y<64;y+=4)for(let x=0;x<64;x+=4){
-        const value=id===154?.97+((x*7+y*11)%4)/100:.89+((x*7+y*11+id*13)%19)/100;
+        const value=id===154||id===SNOW_LAYER_ID?.97+((x*7+y*11)%4)/100:.89+((x*7+y*11+id*13)%19)/100;
         ctx.fillStyle='#'+c.clone().multiplyScalar(value).getHexString();ctx.fillRect(x,y,4,4);
+    }
+    if(LEAF_TYPES.has(id)){
+        // Use the original green-leaf cutout, recolored without filling its holes.
+        ctx.globalCompositeOperation='destination-in';ctx.drawImage(matLeaves.map.image,0,0);
     }
     if(brick){ctx.fillStyle='#'+c.clone().multiplyScalar(.56).getHexString();
         for(let y=0;y<64;y+=16){ctx.fillRect(0,y,64,2);for(let x=(y/16%2)*16;x<64;x+=32)ctx.fillRect(x,y,2,16);}}
@@ -194,8 +220,12 @@ function natureTexture(id,color,brick=false){
 }
 
 function natureGeometry(id){
-    if(!NATURE_PLANTS.has(id))return null;
+    if(!NATURE_PLANTS.has(id)&&id!==SNOW_LAYER_ID)return null;
     if(natureGeometries.has(id))return natureGeometries.get(id);
+    if(id===SNOW_LAYER_ID){
+        const geo=new THREE.BoxGeometry(1,SNOW_LAYER_HEIGHT,1);geo.translate(0,-.5+SNOW_LAYER_HEIGHT/2,0);
+        natureGeometries.set(id,geo);return geo;
+    }
     const positions=[],normals=[],uvs=[];
     const box=(w,h,d,x,y,z)=>{
         const geo=new THREE.BoxGeometry(w,h,d).toNonIndexed();geo.translate(x,y,z);
@@ -236,9 +266,9 @@ function initWilderness(){
     materials[127]??=new THREE.MeshLambertMaterial({map:materials[3].map,color:0x9f5051});
     const colors=[0xffffff,0xc98032,0xb34448,0xe1bf4c,0x71a345,0xa7974d,0x78a94c,0x427f4a,0x508f63,0x39826b,0x687fa2,0xd2584e,0x528bc0,0xd8839e,0xe4ba52,0x9a66b6];
     for(const [text,name] of Object.entries(NATURE_ITEMS)){
-        const id=Number(text),color=id>=170?BRICK_COLORS[id-170][1]:colors[id-154];
+        const id=Number(text),color=id===SNOW_LAYER_ID?0xffffff:id>=170?BRICK_COLORS[id-170][1]:colors[id-154];
         NATURE_COLORS[id]=color;
-        materials[id]=new THREE.MeshLambertMaterial({map:natureTexture(id,color,id>=170)});
+        materials[id]=new THREE.MeshLambertMaterial({map:natureTexture(id,color,id>=170&&id<=185),...(LEAF_TYPES.has(id)?{alphaTest:.5}:{})});
         const slot=document.createElement('button');slot.className='slot nature-slot';slot.id=`inv-${id-12}`;slot.textContent=name;slot.onclick=()=>selectSlot(id-12);
         const swatch=document.createElement('img');swatch.alt='';swatch.src=materials[id].map.image.toDataURL();slot.prepend(swatch);document.getElementById('tab-build').append(slot);
     }

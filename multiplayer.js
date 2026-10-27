@@ -1,4 +1,4 @@
-const ROOM_PROTOCOL='daniel-mc-room-9', ROOM_PREFIX='daniel-mc-room2-';
+const ROOM_PROTOCOL='daniel-mc-room-10', ROOM_PREFIX='daniel-mc-room2-';
 const ROOM_TIMEOUT_MS=30000, ROOM_MAX_SAVE=16*1024*1024, ROOM_PACKET_CELLS=128;
 let multiplayerRoom=null, multiplayerMode='host', currentRoomCode='', remotePlayers={};
 

@@ -20,7 +20,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
    const first=biomeColumn(43,37);biomeCache.clear();check(JSON.stringify(first)===JSON.stringify(biomeColumn(43,37)),'Same seed repeats the landscape');
    seed=99;check(JSON.stringify(first)!==JSON.stringify(biomeColumn(43,37)),'Different seeds vary the landscape');seed=42;heightCache.clear();
    check(Math.max(...samples)-Math.min(...samples)>30,'Terrain has substantial height variation');
-   const snow=natureLocations.snow;check(getBlock(snow.x,snow.h,snow.z)===154,'Snow biome has mineable snow blocks');
+   const snow=natureLocations.snow;check(getBlock(snow.x,snow.h+1,snow.z)===SNOW_LAYER_ID&&getBlock(snow.x,snow.h,snow.z)===1,'Snow biome has thin snow over solid ground');
    let cave=null,plant=null;
    for(let x=-160;x<160&&!cave;x+=2)for(let z=-160;z<160&&!cave;z+=2){const h=getSurfaceHeight(x,z);for(let y=8;y<h-2;y++)if(getBlock(x,y,z)===0&&getBlock(x,y+1,z)===0&&isSolid(x,y-1,z)){cave={x,y,z};break;}}
    check(cave,'Caves have air space over solid floors');camera.position.set(cave.x,cave.y+1,cave.z);buildChunkMesh(Math.floor(cave.x/CHUNK_SIZE),Math.floor(cave.z/CHUNK_SIZE));

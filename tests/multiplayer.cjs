@@ -80,6 +80,9 @@ async function assertScenePixels(page) {
         await guest.evaluate(p=>setBlock(...p,60),guestCell);await host.waitForFunction(p=>getBlock(...p)===60,guestCell);
         await guest.evaluate(p=>setBlock(p[0]+1,p[1],p[2],430),guestCell);
         await host.waitForFunction(p=>getBlock(p[0]+1,p[1],p[2])===430&&!isSolid(p[0]+1,p[1],p[2]),guestCell);
+        await guest.evaluate(p=>setBlock(p[0],p[1]+1,p[2],SNOW_LAYER_ID),guestCell);
+        await host.waitForFunction(p=>getBlock(p[0],p[1]+1,p[2])===SNOW_LAYER_ID,guestCell);
+        assert.equal(await host.evaluate(()=>SNOW_LAYER_HEIGHT),await guest.evaluate(()=>SNOW_LAYER_HEIGHT));
         await guest.evaluate(p=>mineBlock(new THREE.Vector3(...p),false),cell);await host.waitForFunction(p=>getBlock(...p)===0,cell);
         const furniture=[cell[0]+3,cell[1],cell[2]];
         assert(await host.evaluate(p=>placeFurniture(SHOWER_DOOR_ID,...p),furniture));
