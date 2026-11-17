@@ -305,7 +305,10 @@ function showTNTBlast(at) {
 }
 function explodeMovingTNT(t) {
     const at=t.mesh.position.toArray().map(Math.round);removeMovingTNT(t);
-    const [x,y,z]=at;showTNTBlast(at);playSound('stone');
+    detonateAt(at);
+}
+function detonateAt(at) {
+    const [x,y,z]=at;showTNTBlast(at);playSound('explosion');
     for(let dx=-2;dx<=2;dx++)for(let dy=-2;dy<=2;dy++)for(let dz=-2;dz<=2;dz++) {
         if(dx*dx+dy*dy+dz*dz>6.25)continue;
         const p=[x+dx,y+dy,z+dz],type=getBlock(...p);

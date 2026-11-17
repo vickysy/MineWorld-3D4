@@ -88,6 +88,7 @@ function tickWaterFlow(delta=0.1) {
 
 function expansionBlockChanged(x,y,z,oldType,type) {
     if(!expansionReady) return;
+    ecologyBlockChanged(x,y,z,oldType,type);
     machineBlockChanged(x,y,z,oldType,type);
     thermalBlockChanged(x,y,z,oldType,type);
     if(!waterWriting) {
@@ -188,7 +189,7 @@ function travelThroughPortal(next) {
     ridingMinecart=null;
     for(const light of torchLights.values()) scene.remove(light);torchLights.clear();
     heightCache.clear();clearMicroVoxelOverlay();
-    for(const meshes of chunkMeshes.values()) for(const mesh of Object.values(meshes)) scene.remove(mesh);
+    for(const meshes of chunkMeshes.values()) for(const mesh of Object.values(meshes)) releaseChunkMesh(mesh);
     chunkMeshes.clear();chunkQueue.length=0;rebuildQueue.clear();lastChunkX=lastChunkZ=-999;
     if(saved?.returnPoint) {
         camera.position.fromArray(saved.returnPoint);
@@ -216,11 +217,12 @@ function travelThroughPortal(next) {
 }
 
 function saveWorldExpansion() {
-    return {construction:saveConstruction(),thermal:saveThermalWorld(),nextSecurityCameraNumber,city:saveHomeCity(),flood:worldFloodHeight,water:Array.from(waterAmounts),portals:Array.from(activePortals),dimensions:Array.from(dimensionWorlds),furniture:Array.from(furnitureData),
+    return {ecology:saveEcology(),construction:saveConstruction(),thermal:saveThermalWorld(),nextSecurityCameraNumber,city:saveHomeCity(),flood:worldFloodHeight,water:Array.from(waterAmounts),portals:Array.from(activePortals),dimensions:Array.from(dimensionWorlds),furniture:Array.from(furnitureData),
         endermen:endermen.filter(m=>!m.dying).map(m=>({x:m.mesh.position.x,y:m.mesh.position.y,z:m.mesh.position.z,eggId:m.eggId,hp:m.hp}))};
 }
 
 function clearExpansionWorld() {
+    restoreEcology();
     clearWilderness();
     restoreConstruction();
     clearThermalWorld();
@@ -235,6 +237,7 @@ function clearExpansionWorld() {
 }
 
 function restoreWorldExpansion(data={}) {
+    restoreEcology(data.ecology);
     restoreConstruction(data.construction);
     restoreThermalWorld(data.thermal);
     worldFloodHeight=Number.isFinite(data.flood)?data.flood:null;
@@ -425,8 +428,7 @@ function paintDeviceScreen(model,data,time) {
 
 function syncFurnitureMeshes() {
     const visible=new Set();
-    for(const [xyz,id] of worldMap) {
-        if(!HOME_ITEMS[id]) continue;
+    for(const [xyz,id] of furnitureCells) {
         const [x,y,z]=xyz.split(',').map(Number),key=`${currentDimension}|${xyz}`;
         if((Math.abs(x-camera.position.x)>64 || Math.abs(z-camera.position.z)>64) && !nearSurveillanceCamera(x,z)) continue;
         visible.add(key);
@@ -532,15 +534,7 @@ function standFromChair() {
 }
 
 function expansionRay(includeWater=false) {
-    const dir=new THREE.Vector3();camera.getWorldDirection(dir);
-    let previous=null;
-    for(let d=0;d<7;d+=0.025) {
-        const p=camera.position.clone().addScaledVector(dir,d),cell=[Math.round(p.x),Math.round(p.y),Math.round(p.z)];
-        const type=getBlock(...cell);
-        if(type!==0 && type!==25 && (type!==24 || includeWater)) return {x:cell[0],y:cell[1],z:cell[2],type,previous};
-        previous=cell;
-    }
-    return null;
+    return traceVoxelRay(camera.position,camera.getWorldDirection(new THREE.Vector3()),7,id=>id!==25&&(includeWater||id!==24));
 }
 
 function placeFurniture(id,x,y,z) {
@@ -588,7 +582,6 @@ function handleExpansionClick(e) {
     if(e.button===0 && KITCHEN_FOOD[currentBlock]) {offerHeldFood(currentBlock);return true;}
     if(e.button===2 && !isToolItem(currentBlock) && tryTradeWithMerchant()) return true;
     if(CAR_ITEMS[currentBlock]) {if(e.button===2) placeCityCarItem(currentBlock);return true;}
-    if(e.button===2 && !isToolItem(currentBlock) && tryEnterCityCar()) return true;
     if(e.button===0 && seatedAt) return true;
     if(currentBlock===ENDER_EGG_ID) {
         if(e.button===2) useSpawnEgg(ENDER_EGG_ID);return true;
@@ -702,6 +695,7 @@ function initWorldExpansion() {
         const row=document.createElement('div');row.className='recipe';const label=document.createElement('span');
         label.textContent=`${getBlockName(recipe.out)}: ${Object.entries(recipe.ing).map(([id,n])=>`${getBlockName(Number(id))} x${n}`).join(', ')}`;
         const craft=document.createElement('button');craft.textContent='Craft';craft.onclick=()=>{
+            if(!hasWorkbench()){showToast('Crafting Table Required');return;}
             if(!isCreativeMode() && Object.entries(recipe.ing).some(([id,n])=>(playerInventory[id]||0)<n)) {showToast('Not enough materials.');return;}
             for(const [id,n] of Object.entries(recipe.ing)) consumeInventoryItem(Number(id),n);
             playerInventory[recipe.out]=(playerInventory[recipe.out]||0)+recipe.count;selectSlot(recipe.out===14?10:recipe.out-12);updateInventoryCounts();playSound('place');

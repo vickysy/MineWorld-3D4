@@ -379,24 +379,26 @@
     <script src="three-r128.min.js"></script>
     <script src="three-pointer-lock-r128.js"></script>
     <script src="three-reflector-r128.js"></script>
-    <script src="world-expansion.js?v=20261021-wilderness"></script>
-    <script src="home-city.js?v=20261020-connected"></script>
+    <script src="world-expansion.js?v=20261117-world"></script>
+    <script src="home-city.js?v=20261110-repairs"></script>
     <script src="kitchen-home.js?v=20261020-connected"></script>
     <script src="city-life.js?v=20261021-wilderness"></script>
     <script src="surveillance.js?v=20261018-tools"></script>
     <script src="peerjs-1.5.5.min.js"></script>
-    <script src="multiplayer.js?v=20261027-thin-snow"></script>
+    <script src="multiplayer.js?v=20261117-world"></script>
     <script src="thermal-world.js?v=20261021-wilderness"></script>
-    <script src="launchers.js?v=20261018-castle-map"></script>
+    <script src="launchers.js?v=20261110-repairs"></script>
     <script src="construction.js?v=20261018-locks"></script>
-    <script src="redstone-machines.js?v=20261020-connected"></script>
+    <script src="redstone-machines.js?v=20261110-repairs"></script>
     <script src="password-locks.js?v=20261018-locks"></script>
     <script src="cannons.js?v=20261019-closed-gates"></script>
     <script src="rail-vehicles.js?v=20261020-connected"></script>
     <script src="connected-home.js?v=20261020-connected"></script>
     <script src="zombie-voices.js?v=20261021-recorded"></script>
-    <script src="wilderness.js?v=20261027-thin-snow"></script>
-    <script src="village-houses.js?v=20261021-solid-terrain"></script>
+    <script src="wilderness.js?v=20261117-world"></script>
+    <script src="ecology.js?v=20261117-world"></script>
+    <script src="terrain-horizon.js?v=20261117-world"></script>
+    <script src="village-houses.js?v=20261104-ecology"></script>
 
     <script>
         // --- 场景、相机、渲染器 ---
@@ -1617,8 +1619,7 @@
                     // 清理旧区块
                     for (let [key, meshes] of chunkMeshes) {
                         for (let type in meshes) {
-                            scene.remove(meshes[type]);
-                            if (meshes[type].geometry) meshes[type].geometry.dispose();
+                            releaseChunkMesh(meshes[type]);
                         }
                     }
                     chunkMeshes.clear();
@@ -2184,6 +2185,7 @@
                     }
                 }
                 if(match) {
+                    if(recipeNeedsWorkbench(r)&&!hasWorkbench()){craftingOutput.needsTable=true;continue;}
                     craftingOutput = { id: r.out, count: r.count };
                     break;
                 }
@@ -2209,13 +2211,14 @@
                 outEl.style.backgroundColor = '#4CAF50';
                 outEl.style.cursor = 'pointer';
             } else {
-                outEl.innerText = '';
+                outEl.innerText = craftingOutput.needsTable?'Table required':'';
                 outEl.style.backgroundColor = '#333';
                 outEl.style.cursor = 'default';
             }
         }
 
         window.craftSlotClick = function(index) {
+            if(index<0||index>=9||index>=4&&!hasWorkbench())return;
             if (craftingGrid[index] !== 0) {
                 let id = craftingGrid[index];
                 if (!isCreativeMode()) playerInventory[id] = (playerInventory[id] || 0) + 1;
@@ -2233,6 +2236,7 @@
         };
 
         window.craftOutputClick = function() {
+            checkRecipes();
             if (craftingOutput.id !== 0) {
                 let outId = craftingOutput.id;
                 let outCount = craftingOutput.count;
@@ -2534,22 +2538,26 @@
         };
 
         function spawnExplosionParticles(x, y, z, count = 90) {
-            for (let i = 0; i < count; i++) {
-                const size = 0.08 + Math.random() * 0.18;
+            const total=Math.min(180,Math.ceil(count*1.8),Math.max(0,650-explosionParticles.length));
+            for (let i = 0; i < total; i++) {
+                const smoke=i%3!==0;
+                const size = smoke?.3+Math.random()*.48:.08+Math.random()*.18;
                 const mat = new THREE.MeshBasicMaterial({
-                    color: Math.random() < 0.25 ? 0xd0d0d0 : 0xffffff,
+                    color: smoke?[0xb9bdc0,0xd6d8d8,0xf1f1ee][i%3]:0xffffff,
                     transparent: true,
                     opacity: 0.95,
+                    depthWrite:false,
                     fog: false
                 });
                 const mesh = new THREE.Mesh(new THREE.BoxGeometry(size, size, size), mat);
                 mesh.position.set(x + (Math.random() - 0.5) * 1.2, y + (Math.random() - 0.2) * 1.2, z + (Math.random() - 0.5) * 1.2);
-                const dir = new THREE.Vector3(Math.random() - 0.5, Math.random() * 0.8, Math.random() - 0.5).normalize();
-                const speed = 2.5 + Math.random() * 5.5;
-                const life = 1.2 + Math.random() * 0.8;
+                const dir = new THREE.Vector3(Math.random() - 0.5, Math.random()-.2, Math.random() - 0.5).normalize();
+                const speed = smoke?3+Math.random()*6:5+Math.random()*6;
+                const life = smoke?2.6+Math.random()*1.8:1.1+Math.random()*.8;
                 scene.add(mesh);
                 explosionParticles.push({
                     mesh,
+                    blastSmoke:smoke,
                     velocity: dir.multiplyScalar(speed),
                     life,
                     maxLife: life
@@ -2564,6 +2572,14 @@
                 if (p.debrisRadius) {
                     updateBlockDebris(p, delta);
                     p.mesh.material.opacity = 0.82 * Math.max(0, Math.min(1, p.life / (p.maxLife * 0.4)));
+                } else if(p.blastSmoke) {
+                    p.velocity.multiplyScalar(Math.exp(-1.6*delta));
+                    p.velocity.y+=.65*delta;
+                    p.mesh.position.addScaledVector(p.velocity,delta);
+                    const age=p.maxLife-p.life;
+                    p.mesh.scale.setScalar(1+age*.55);
+                    p.mesh.rotation.y+=delta*.3;
+                    p.mesh.material.opacity=.8*Math.min(1,Math.max(0,p.life/(p.maxLife*.75)));
                 } else {
                     p.velocity.y -= 2.2 * delta;
                     p.mesh.position.addScaledVector(p.velocity, delta);
@@ -2736,7 +2752,7 @@
         const rebuildQueue = new Set();
         function processRebuildQueue() {
             if (rebuildQueue.size === 0) return;
-            // 每次最多处理 2 个区块的重建，保证游戏丝滑不卡顿
+            const deadline=performance.now()+3;
             let count = 0;
             const toRemove = [];
             for (let key of rebuildQueue) {
@@ -2746,13 +2762,22 @@
                 }
                 toRemove.push(key);
                 count++;
-                if (count >= 2) break;
+                if (count >= 2 || performance.now()>=deadline) break;
             }
             for (let key of toRemove) {
                 rebuildQueue.delete(key);
             }
         }
-        const worldMap = new Map(); 
+        const sensorDoorCells=new Map(),furnitureCells=new Map();
+        const worldMap = new class extends Map {
+            set(k,v){
+                if(v===48||v===50)sensorDoorCells.set(k,v);else sensorDoorCells.delete(k);
+                if(HOME_ITEMS[v])furnitureCells.set(k,v);else furnitureCells.delete(k);
+                return super.set(k,v);
+            }
+            delete(k){sensorDoorCells.delete(k);furnitureCells.delete(k);return super.delete(k);}
+            clear(){sensorDoorCells.clear();furnitureCells.clear();super.clear();}
+        };
         const chunkMeshes = new Map(); 
         const CHUNK_SIZE = 16; // 增加区块大小，减少 draw call
         const RENDER_DISTANCE = 5; // 半径 5 个区块（80格），覆盖雾效可见范围并减少走路加载卡顿
@@ -2993,7 +3018,7 @@
         // Collision and visual occlusion differ: leaves have holes and glass transmits light.
         function occludesBlockFaces(type) {
             return isSolidType(type) && !HIDDEN_BLOCKS[type] && !HOME_ITEMS[type] &&
-                !MACHINE_ITEMS[type] && !LEAF_TYPES.has(type) && type!==SNOW_LAYER_ID &&
+                !MACHINE_ITEMS[type] && !LEAF_TYPES.has(type) && type!==SNOW_LAYER_ID && !isTrapdoor(type) &&
                 ![6,8,9,16,17,18,47,48,49,PISTON_HEAD_ID,FRIDGE_TOP_ID,FURNITURE_PART_ID].includes(type);
         }
 
@@ -3133,12 +3158,13 @@
                     const override=fineVoxelEdits.get(detailKey(microAncestor(c,level)));
                     if (override!==undefined) type=override;
                 }
-                return type===SNOW_LAYER_ID && microSnowFill(c)<=0 ? 0 : type;
+                return type===SNOW_LAYER_ID && microSnowFill(c)<=0 || isTrapdoor(type)&&!trapHasVolume(trapMicroBounds(c,type)) ? 0 : type;
             }
             const placed = microPlacements.get(microParentKey(c.x,c.y,c.z))?.get(microIndex(c.mx,c.my,c.mz));
-            if (placed !== undefined) return placed;
+            if (placed !== undefined) return isTrapdoor(placed)&&!trapHasVolume(trapMicroBounds(c,placed))?0:placed;
             if (isMicroMined(c.x,c.y,c.z,c.mx,c.my,c.mz)) return 0;
             const type=getBlock(c.x,c.y,c.z);
+            if(isTrapdoor(type)&&!trapHasVolume(trapMicroBounds(c,type)))return 0;
             if (type===SNOW_LAYER_ID && c.my/MICRO_BLOCK_DIVISIONS>=SNOW_LAYER_HEIGHT) return 0;
             // Dirt retains a one-micro-block shell. Explicit placements still fill its cavity.
             if ([1,2].includes(type) && [c.mx,c.my,c.mz].every(v=>v>0 && v<MICRO_BLOCK_DIVISIONS-1)) return 0;
@@ -3315,7 +3341,13 @@
                 const c = microCell(...cell,level);
                 const type = getMicroType(c);
                 if (type && type !== 24 && type !== 25 && type !== LAVA_ID && type !== 42) {
-                    if(type===SNOW_LAYER_ID) {
+                    if(isTrapdoor(type)) {
+                        const box=trapMicroBounds(c,type),point=new THREE.Ray(origin,direction).intersectBox(box,new THREE.Vector3());
+                        if(point&&point.distanceTo(origin)<=maxDistance){
+                            for(const axis of axes){if(Math.abs(point[axis]-box.min[axis])<1e-7){norm.set(0,0,0);norm[axis]=-1;break;}if(Math.abs(point[axis]-box.max[axis])<1e-7){norm.set(0,0,0);norm[axis]=1;break;}}
+                            return {...c,type,norm,distance:point.distanceTo(origin)};
+                        }
+                    } else if(type===SNOW_LAYER_ID) {
                         const size=microCellSize(c),min=new THREE.Vector3(c.x-.5+c.mx*size,c.y-.5+c.my*size,c.z-.5+c.mz*size);
                         const max=min.clone().add(new THREE.Vector3(size,size*microSnowFill(c),size));
                         const point=new THREE.Ray(origin,direction).intersectBox(new THREE.Box3(min,max),new THREE.Vector3());
@@ -3547,6 +3579,10 @@
                         const bottom=-.5+c.my/divs;
                         p[1]=bottom+(p[1]-bottom)*microSnowFill(c);
                     }
+                    if(isTrapdoor(type)){
+                        const bounds=trapMicroBounds(c,type);
+                        for(let axis=0;axis<3;axis++){const a=['x','y','z'][axis],base=[x,y,z][axis];p[axis]=THREE.MathUtils.clamp(p[axis],bounds.min[a]-base,bounds.max[a]-base);}
+                    }
                     data.positions.push(...p);
                     data.normals.push(...f.n);
                     if (isPlaced) data.uvs.push((u+1)/2,(v+1)/2);
@@ -3560,6 +3596,8 @@
                 emit(a,b,n-1,4); emit(a,b,0,5);
             }
             if(getBlock(x,y,z)===SNOW_LAYER_ID)for(let a=0;a<n;a++)for(let b=0;b<n;b++)emit(a,Math.ceil(SNOW_LAYER_HEIGHT*n)-1,b,2);
+            if(getBlock(x,y,z)===TRAPDOOR)for(let a=0;a<n;a++)for(let b=0;b<n;b++)emit(a,2,b,2);
+            if(getBlock(x,y,z)===TRAPDOOR_OPEN)for(let a=0;a<n;a++)for(let b=0;b<n;b++)emit(a,b,2,4);
             if ([1,2].includes(getBlock(x,y,z))) for (let a=1;a<n-1;a++) for (let b=1;b<n-1;b++) {
                 emit(0,a,b,0); emit(n-1,a,b,1);
                 emit(a,0,b,2); emit(a,n-1,b,3);
@@ -3729,24 +3767,21 @@
                 }
             }
 
-            const cx = Math.floor(x / CHUNK_SIZE);
-            const cz = Math.floor(z / CHUNK_SIZE);
-            dirtyChunks.add(`${cx},${cz}`);
-            dirtyChunks.add(`${cx - 1},${cz}`);
-            dirtyChunks.add(`${cx + 1},${cz}`);
-            dirtyChunks.add(`${cx},${cz - 1}`);
-            dirtyChunks.add(`${cx},${cz + 1}`);
+            markBlockChunks(x,z,dirtyChunks);
         }
 
-        function refreshBlockAndNeighbors(x, y, z) {
-            const dirtyChunks = new Set();
+        function markBlockChunks(x,z,dirtyChunks){
             const cx = Math.floor(x / CHUNK_SIZE);
             const cz = Math.floor(z / CHUNK_SIZE);
             dirtyChunks.add(`${cx},${cz}`);
-            dirtyChunks.add(`${cx - 1},${cz}`);
-            dirtyChunks.add(`${cx + 1},${cz}`);
-            dirtyChunks.add(`${cx},${cz - 1}`);
-            dirtyChunks.add(`${cx},${cz + 1}`);
+            if(x===cx*CHUNK_SIZE)dirtyChunks.add(`${cx-1},${cz}`);
+            if(z===cz*CHUNK_SIZE)dirtyChunks.add(`${cx},${cz-1}`);
+            if(x===(cx+1)*CHUNK_SIZE-1)dirtyChunks.add(`${cx+1},${cz}`);
+            if(z===(cz+1)*CHUNK_SIZE-1)dirtyChunks.add(`${cx},${cz+1}`);
+        }
+        function refreshBlockAndNeighbors(x, y, z) {
+            const dirtyChunks = new Set();
+            markBlockChunks(x,z,dirtyChunks);
             addDirtyChunksToQueue(dirtyChunks);
         }
 
@@ -3852,6 +3887,10 @@
         function processWaterFlowQueue(delta) { tickWaterFlow(delta); }
 
         function getDroppedItemForBlock(blockType) {
+            if(blockType===TRAPDOOR_OPEN)return TRAPDOOR;
+            if([188,189,190].includes(blockType))return BERRIES;
+            if([194,199,202].includes(blockType))return CHERRY_SAPLING;
+            if([195,200,203].includes(blockType))return APPLE_SAPLING;
             if(blockType===PISTON_HEAD_ID)return 0;
             if(blockType===FIRE_ID)return 0;
             if(blockType===NETHER_PORTAL_ID || blockType===FRIDGE_TOP_ID) return 0;
@@ -3942,6 +3981,7 @@
             setBlockNoRebuild(hit.x, hit.y, hit.z, 0, dirtyChunks);
             spawnBlockBreakParticles(hit.x, hit.y, hit.z, targetType);
             spawnDroppedItem(hit.x, hit.y, hit.z, minedItem);
+            if([42,160,161].includes(targetType)&&Math.random()<.3)spawnDroppedItem(hit.x,hit.y,hit.z,WHEAT_SEEDS);
             if(concealedWire)spawnDroppedItem(hit.x,hit.y,hit.z,28);
             enqueueWaterFlow(hit.x, hit.y, hit.z);
 
@@ -3989,17 +4029,15 @@
 
         function igniteNuke(x, y, z) {return beginNuclearBlast(x,y,z);}
 
+        function releaseChunkMesh(mesh) {
+            scene.remove(mesh);
+            mesh.dispose();
+            mesh.geometry.dispose();
+        }
+
         function buildChunkMesh(cx, cz) {
             const key = `${cx},${cz}`;
-            if (chunkMeshes.has(key)) {
-                // 清理旧的 InstancedMesh
-                for (let type in chunkMeshes.get(key)) {
-                let mesh = chunkMeshes.get(key)[type];
-                scene.remove(mesh);
-                if (mesh.geometry) mesh.geometry.dispose();
-                // We reuse materials, so no need to dispose them
-            }
-            }
+            const previous = chunkMeshes.get(key);
             
             const startX = cx * CHUNK_SIZE;
             const startZ = cz * CHUNK_SIZE;
@@ -4087,7 +4125,13 @@
                         scanBottom = Math.min(scanBottom, scannedRange.minY);
                     }
 
-                    if(selectedTerrain==='random'&&currentDimension==='overworld')scanBottom=Math.min(scanBottom,4);
+                    if(selectedTerrain==='random'&&currentDimension==='overworld'){
+                        // Only cliff columns (and their immediate walls) can border a natural cave.
+                        for(const [dx,dz] of [[0,0],[1,0],[-1,0],[0,1],[0,-1]]){
+                            const c=biomeColumn(x+dx,z+dz).cliff;
+                            if(c&&c.u>=-8&&c.u<=35&&Math.abs(c.v)<9)scanBottom=Math.min(scanBottom,c.floor-3);
+                        }
+                    }
 
 	                    // 从最高点一直往下检查到扫描底线
                     for (let y = yStart; y >= scanBottom; y--) {
@@ -4132,24 +4176,27 @@
             for (let type in typeCounts) {
                 let count = typeCounts[type];
                 let typeInt = parseInt(type);
-                if(typeInt===24){const mesh=waterSurfaceMesh(blockData.filter(b=>b.type===24));instancedMeshes[type]=mesh;scene.add(mesh);continue;}
+                if(typeInt===24){instancedMeshes[type]=waterSurfaceMesh(blockData.filter(b=>b.type===24));continue;}
                 let geo = boxGeo;
                 let material=materials[typeInt];
-                if(NATURE_PLANTS.has(typeInt)||typeInt===SNOW_LAYER_ID)geo=natureGeometry(typeInt).clone();
-                if (typeInt === 16 || typeInt === 25 || typeInt === 30 || typeInt === 42) geo = torchGeo; // 火把、海带、拉杆、小草
+                if(NATURE_PLANTS.has(typeInt)||typeInt===SNOW_LAYER_ID||isTrapdoor(typeInt)||typeInt===42)geo=natureGeometry(typeInt).clone();
+                if (typeInt === 16 || typeInt === 25 || typeInt === 30) geo = torchGeo;
                 else if (typeInt === 26 || typeInt === 27 || typeInt === 28 || typeInt === PRESSURE_PLATE_ID) geo = flatGeo; // 铁轨、红石、压力板
                 if(typeInt===26||typeInt===27) {
-                    geo=railGeometry(blockData.find(b=>b.renderKey===type).rail,typeInt===27);
+                    geo=railGeometry(blockData.find(b=>b.renderKey===type).rail,typeInt===27).clone();
                     railRenderMaterial??=new THREE.MeshLambertMaterial({vertexColors:true});
                     material=railRenderMaterial;
                 }
                 
-                let iMesh = new THREE.InstancedMesh(geo, isTinyMode() && geo === boxGeo ? getMicroMaterials(typeInt) : material, count);
+                const cube=geo===boxGeo;
+                // Each batch owns its geometry and instance buffers throughout its lifetime.
+                if(cube||geo===torchGeo||geo===flatGeo)geo=geo.clone();
+                let iMesh = new THREE.InstancedMesh(geo, isTinyMode() && cube ? getMicroMaterials(typeInt) : material, count);
+                iMesh.userData.fullCube=cube;
                 iMesh.userData.blockIndices = new Map();
                 iMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
                 instancedMeshes[type] = iMesh;
                 typeIndices[type] = 0;
-                scene.add(iMesh);
             }
 
             // 填充矩阵数据
@@ -4168,7 +4215,7 @@
                 }
                 let idx = typeIndices[b.renderKey];
                 instancedMeshes[b.renderKey].setMatrixAt(idx, matrix);
-                if(selectedTerrain==='random'&&currentDimension==='overworld'&&isSolidType(b.type)){
+                if(selectedTerrain==='random'&&currentDimension==='overworld'&&(isSolidType(b.type)||HIDDEN_BLOCKS[b.type])){
                     const col=biomeColumn(b.x,b.z),c=col.cliff;
                     const shade=c&&c.u>1&&Math.abs(c.v)<9&&b.y<col.height-2&&b.y<c.floor+8?Math.max(.3,.85-c.u*.026):1;
                     instancedMeshes[b.renderKey].setColorAt(idx,new THREE.Color(shade,shade,shade));
@@ -4177,11 +4224,22 @@
                 typeIndices[b.renderKey]++;
             }
 
-            for (let type in instancedMeshes) {
-                instancedMeshes[type].instanceMatrix.needsUpdate = true;
+            // Three r128 disables frustum culling for instances: its default bounds cover
+            // just the origin cube. Use bounds of the placed instances, including liquids.
+            const mins={},maxs={};
+            for(const b of blockData){
+                const k=b.renderKey;mins[k]=Math.min(mins[k]??Infinity,b.y);maxs[k]=Math.max(maxs[k]??-Infinity,b.y);
+            }
+            for (const [k,m] of Object.entries(instancedMeshes)) {
+                m.instanceMatrix.needsUpdate = true;
+                m.geometry.boundingSphere=new THREE.Sphere(new THREE.Vector3(startX+7.5,(mins[k]+maxs[k])/2,startZ+7.5),Math.hypot(9,9,(maxs[k]-mins[k])/2+2));
+                m.frustumCulled=true;
             }
 
+            if(previous)for(const mesh of Object.values(previous))releaseChunkMesh(mesh);
+            for(const mesh of Object.values(instancedMeshes))scene.add(mesh);
             chunkMeshes.set(key, instancedMeshes);
+            maskTerrainHorizon(cx,cz,true);
         }
 
         function generateHouseData(cx, cz) {
@@ -4294,7 +4352,7 @@
                         for (let lx = -2; lx <= 2; lx++) {
                             for (let lz = -2; lz <= 2; lz++) {
                                 for (let ly = h - 2; ly <= h + 1; ly++) {
-                                    if (Math.abs(lx) + Math.abs(lz) + Math.abs(ly - h) <= 3) {
+                                    if (canopyCell(x,z,lx,ly-h,lz)) {
                                         let lKey = `${x + lx},${baseY + ly},${z + lz}`;
                                         if (!worldMap.has(lKey)) {
                                             setGenBlock(x + lx, baseY + ly, z + lz, 5); 
@@ -4334,11 +4392,13 @@
         function updateChunks(playerPos) {
             const cx = Math.floor(playerPos.x / CHUNK_SIZE);
             const cz = Math.floor(playerPos.z / CHUNK_SIZE);
+            updateTerrainHorizon(cx,cz);
 	            
             if (cx !== lastChunkX || cz !== lastChunkZ) {
+                const teleport=Math.max(Math.abs(cx-lastChunkX),Math.abs(cz-lastChunkZ))>1;
                 lastChunkX = cx;
                 lastChunkZ = cz;
-                ensureImmediateChunks(cx, cz);
+                if(teleport)ensureImmediateChunks(cx,cz);else buildChunkIfMissing(cx,cz);
 	                
                 for (let x = cx - RENDER_DISTANCE; x <= cx + RENDER_DISTANCE; x++) {
                     for (let z = cz - RENDER_DISTANCE; z <= cz + RENDER_DISTANCE; z++) {
@@ -4353,10 +4413,10 @@
                     if ((Math.abs(kx - cx) > RENDER_DISTANCE + 1 || Math.abs(kz - cz) > RENDER_DISTANCE + 1) && !isSurveillanceChunk(kx,kz)) {
                         for (let type in meshes) {
                             let mesh = meshes[type];
-                            scene.remove(mesh);
-                            if (mesh.geometry) mesh.geometry.dispose();
+                            releaseChunkMesh(mesh);
                         }
                         chunkMeshes.delete(key);
+                        maskTerrainHorizon(kx,kz,false);
                     }
                 }
             }
@@ -4503,7 +4563,7 @@
             for (const key of microRenderBlocks) microDirtyBlocks.add(key);
             for (const meshes of chunkMeshes.values()) {
                 for (const [type, mesh] of Object.entries(meshes)) {
-                    if (mesh.geometry === boxGeo) mesh.material = isTinyMode() ? getMicroMaterials(Number(type)) : materials[type];
+                    if (mesh.userData.fullCube) mesh.material = isTinyMode() ? getMicroMaterials(Number(type)) : materials[type];
                 }
             }
         }
@@ -4555,6 +4615,7 @@
                     }
                     controls.unlock();
                     isInventoryOpen = true;
+                    setWorkbench(null);
                     blocker.style.display = 'flex';
                     document.getElementById('start-menu').style.display = 'none';
                     document.getElementById('pause-menu').style.display = 'none';
@@ -4634,13 +4695,11 @@
             const bx = Math.round(camera.position.x), bz = Math.round(camera.position.z);
             const environment = getPlayerEnvironment();
             const onLadder = environment.onLadder;
-            if (onLadder) resolvePreciseFloorContact();
+            if (onLadder || (!isTinyMode()&&velocity.y<=0)) resolvePreciseFloorContact();
             const inLavaPhys=environment.lavaFraction>0.00001;
             const liquidFraction=Math.min(1,environment.waterFraction+environment.lavaFraction);
             const physicsScale = activeMech ? 1 : playerScale;
-            let onGroundPhys = isTinyMode() || playerScale>1 || activeMech
-                ? checkScaledCollision(camera.position.clone().add(new THREE.Vector3(0,-0.004*Math.min(playerScale,1),0)))
-                : isSolid(bx, Math.round(camera.position.y - getPlayerHeight() - Math.max(0.01, 0.1 * physicsScale)), bz);
+            const onGroundPhys=checkScaledCollision(camera.position.clone().add(new THREE.Vector3(0,-0.004*Math.min(playerScale,1),0)));
             const inWaterPhys = liquidFraction >= 0.25 || (!onGroundPhys && liquidFraction > 0.05);
 
             // --- 物理引擎 ---
@@ -4741,11 +4800,7 @@
                     velocity.z = 0;
                 }
 
-                camera.position.y += velocity.y * playerDelta;
-                if (checkCollision(camera.position)) {
-                    camera.position.y -= velocity.y * playerDelta;
-                    velocity.y = 0;
-                }
+                if(moveTinyAxis('y',velocity.y*playerDelta))velocity.y=0;
             }
 
             if (creativeFlying && holdingDescend && velocity.y === 0 &&
@@ -4780,7 +4835,7 @@
         // --- 强制刷新所有区块并重生 ---
         function findSafeSpawn() {
             if(selectedTerrain==='city') return {x:1,y:16.5+getPlayerHeight(),z:1};
-            if(selectedTerrain==='random'&&wildernessVersion>=2){const spawn=findCliffsideSpawn();if(spawn)return spawn;}
+            if(selectedTerrain==='random'&&wildernessVersion>=2){const spawn=wildernessVersion>=3?findVariedSpawn():findCliffsideSpawn();if(spawn)return spawn;}
             for (let attempt = 0; attempt < 200; attempt++) {
                 const x = Math.floor(Math.random() * 1000 - 500);
                 const z = Math.floor(Math.random() * 1000 - 500);
@@ -4800,7 +4855,7 @@
             clearExpansionWorld();
             // 清理旧区块
             for (let meshes of chunkMeshes.values()) {
-                for (const mesh of Object.values(meshes)) scene.remove(mesh);
+                for (const mesh of Object.values(meshes)) releaseChunkMesh(mesh);
             }
             chunkMeshes.clear();
             rebuildQueue.clear();
@@ -4833,7 +4888,7 @@
             
             // 更换种子并随机化出生点，避免每次出生在同一个地方
             seed = Math.random() * 1000;
-            setWildernessVersion(2);
+            setWildernessVersion(3);
             dayTime = Math.PI / 2;
             oxygen = 20;
             currentDimension = 'overworld';
@@ -4953,6 +5008,7 @@
         function isTinySolidAtPoint(x, y, z) {
             const c = microCellAt(x,y,z);
             const type=getMicroType(c);
+            if(isTrapdoor(type)&&!trapMicroBounds(c,type).containsPoint(new THREE.Vector3(x,y,z)))return false;
             if(type===SNOW_LAYER_ID && y>=c.y-.5+(c.my+microSnowFill(c))*microCellSize(c))return false;
             if (isNaturalHomeVoxel(c,type)) return tinyHomeCollision([x,y,z],[x+1e-9,y+1e-9,z+1e-9]);
             return isSolidType(type) && !isPassableHomeCell(c.x,c.y,c.z,type);
@@ -4968,6 +5024,7 @@
             if (corner.some((v,i)=>v>=max[i] || v+size<=min[i])) return false;
             if (!refinedMicroCells.has(detailKey(c))) {
                 const type=getMicroType(c);
+                if(isTrapdoor(type))return trapIntersects(trapMicroBounds(c,type),min,max);
                 if(type===SNOW_LAYER_ID && corner[1]+size*microSnowFill(c)<=min[1])return false;
                 if (isTinyMode() && isNaturalHomeVoxel(c,type)) return false;
                 return isSolidType(type) && !isPassableHomeCell(c.x,c.y,c.z,type);
@@ -4998,6 +5055,8 @@
                         } else {
                             const parent=microParentKey(x,y,z);
                             if (!microEdits.has(parent) && !microPlacements.has(parent) && !fineRoots.has(parent)) {
+                                const type=getBlock(x,y,z);
+                                if(isTrapdoor(type)){if(trapIntersects(trapBounds(x-.5,y-.5,z-.5,type),min,max))return true;continue;}
                                 if (isSolid(x,y,z) && (getBlock(x,y,z)!==SNOW_LAYER_ID || min[1]<y-.5+SNOW_LAYER_HEIGHT)) return true;
                                 continue;
                             }
@@ -5053,7 +5112,9 @@
                     let bx = Math.round(pt.x + off[0]);
                     let by = Math.round(pt.y);
                     let bz = Math.round(pt.z + off[1]);
-                    if (isSolid(bx, by, bz) && (getBlock(bx,by,bz)!==SNOW_LAYER_ID || pt.y<by-.5+SNOW_LAYER_HEIGHT)) {
+                    const type=getBlock(bx,by,bz);
+                    if(isTrapdoor(type)&&!pointInTrap(pt.x+off[0],pt.y,pt.z+off[1],bx,by,bz,type))continue;
+                    if (isSolid(bx, by, bz) && (type!==SNOW_LAYER_ID || pt.y<by-.5+SNOW_LAYER_HEIGHT)) {
                         return true; 
                     }
                 }
@@ -5067,7 +5128,7 @@
             const py = camera.position.y;
             const pz = camera.position.z;
             const handled = new Set();
-            for (let [key, type] of worldMap.entries()) {
+            for (let [key, type] of sensorDoorCells) {
                 if (type !== GLASS_SENSOR_DOOR_BOTTOM_ID && type !== GLASS_SENSOR_DOOR_OPEN_ID) continue;
                 const [x, y, z] = key.split(',').map(Number);
                 let baseY = y;
@@ -5976,9 +6037,7 @@
                     let scale = 1 + (c.fuseTimer / 1.5) * 0.5;
                     c.mesh.scale.set(scale, scale, scale);
                     if (c.fuseTimer > 1.5) { // 1.5秒后爆炸
-                        playSound('glass'); // 借用爆炸声音
-                        takeDamage(4); // 炸掉4滴血
-                        igniteTNT(Math.round(c.mesh.position.x), Math.round(c.mesh.position.y), Math.round(c.mesh.position.z));
+                        if(thermalAuthority())detonateAt(c.mesh.position.toArray().map(Math.round));
                         scene.remove(c.mesh);
                         creepers.splice(i, 1);
                         continue;
@@ -6279,21 +6338,42 @@
             return 1;
         }
 
-        function traceCombatRay(origin, direction, range, includeMobs=true) {
+        function traceVoxelRay(origin,direction,range,accept) {
             const dir=direction.clone().normalize();
+            if(!dir.lengthSq())return null;
             const axes=['x','y','z'],cell=axes.map(a=>Math.floor(origin[a]+0.5+dir[a]*1e-8));
             const step=axes.map(a=>Math.sign(dir[a]));
             const stride=axes.map(a=>dir[a]?1/Math.abs(dir[a]):Infinity);
             const next=axes.map((a,i)=>dir[a]?(cell[i]+(step[i]>0?0.5:-0.5)-origin[a])/dir[a]:Infinity);
-            let distance=0,block=null;
+            let distance=0,normal=new THREE.Vector3();
             while(distance<=range) {
-                if(isSolid(...cell)) {block={x:cell[0],y:cell[1],z:cell[2],type:getBlock(...cell)};break;}
+                const type=getBlock(...cell);
+                if(type&&accept(type,...cell)){
+                    const [x,y,z]=cell;
+                    let d=distance,n=normal.clone(),hit=true;
+                    if(isTrapdoor(type)||type===SNOW_LAYER_ID){
+                        const bounds=isTrapdoor(type)?trapBounds(x-.5,y-.5,z-.5,type):
+                            new THREE.Box3(new THREE.Vector3(x-.5,y-.5,z-.5),new THREE.Vector3(x+.5,y-.5+SNOW_LAYER_HEIGHT,z+.5));
+                        const p=new THREE.Ray(origin,dir).intersectBox(bounds,new THREE.Vector3());
+                        hit=p!==null&&(d=p.distanceTo(origin))<=range;
+                        if(hit)for(const a of axes){
+                            if(Math.abs(p[a]-bounds.min[a])<1e-7||Math.abs(p[a]-bounds.max[a])<1e-7){n.set(0,0,0);n[a]=Math.abs(p[a]-bounds.min[a])<1e-7?-1:1;break;}
+                        }
+                    }
+                    if(hit)return {x,y,z,type,distance:d,norm:n,previous:n.lengthSq()?axes.map((a,i)=>cell[i]+n[a]):null};
+                }
                 const boundary=Math.min(...next);
                 if(!Number.isFinite(boundary)) break;
-                for(let i=0;i<3;i++) if(Math.abs(next[i]-boundary)<1e-9) {cell[i]+=step[i];next[i]+=stride[i];}
+                normal.set(0,0,0);
+                for(let i=0;i<3;i++) if(Math.abs(next[i]-boundary)<1e-9) {cell[i]+=step[i];next[i]+=stride[i];if(!normal.lengthSq())normal[axes[i]]=-step[i];}
                 distance=boundary;
             }
-            let closest=block?distance:range,entity=null;
+            return null;
+        }
+
+        function traceCombatRay(origin, direction, range, includeMobs=true) {
+            const dir=direction.clone().normalize(),block=traceVoxelRay(origin,dir,range,(type,x,y,z)=>isSolid(x,y,z));
+            let closest=block?block.distance:range,entity=null;
             const ray=new THREE.Ray(origin,dir),box=new THREE.Box3(),intersection=new THREE.Vector3();
             if(includeMobs) for(const mob of [...zombies,...creepers,...villagers,...animals,...endermen]) {
                 if(mob.dying || mob.mesh.parent!==scene) continue;
@@ -6372,9 +6452,13 @@
             if(hit.entity) damageMob(hit.entity,damage);
             if(hit.block && gun) {
                 const {x,y,z,type}=hit.block;
-                setBlock(x,y,z,0);
+                if([OBSIDIAN_ID,BARRIER_ID,PASSWORD_LOCK_ID].includes(type)||setBlock(x,y,z,0)===false)return true;
                 if([8,10,17,19].includes(type)) setBlock(x,y+1,z,0);
                 if([9,11,18,20].includes(type)) setBlock(x,y-1,z,0);
+                if([4,5,6,8,9,10,11,TRAPDOOR,TRAPDOOR_OPEN].includes(type)||LEAF_TYPES.has(type)){
+                    const through=traceCombatRay(camera.position,direction,range);
+                    if(through.entity){damageMob(through.entity,damage);combatFlash(through.point,0xffe8b0,.1);}
+                }
             }
             if(hit.entity || hit.block) combatFlash(hit.point,0xffe8b0,0.12);
             return !!(hit.entity || hit.block);
@@ -6388,8 +6472,14 @@
             if (!controls.isLocked) return;
             if(document.getElementById('home-panel')?.hidden===false||document.getElementById('command-panel')?.hidden===false)return;
             e.preventDefault();
+            if(e.button===2&&!e.shiftKey&&!drivingCar&&!isToolItem(currentBlock)&&tryEnterCityCar())return;
+            if(e.button===2&&e.shiftKey&&!isTinyMode()){
+                const target=expansionRay();
+                if(target&&isTrapdoor(getBlock(target.x,target.y-1,target.z))&&handleEcologyClick(e))return;
+            }
             if(handleMachineClick(e))return;
             if(handleThermalClick(e))return;
+            if(handleEcologyClick(e)) return;
             if(handleExpansionClick(e)) return;
             if (e.button !== 0) cancelMining();
             if (currentBlock >= 67 && currentBlock <= 71) {
@@ -6599,49 +6689,8 @@
 
             if (hitEntity) return; // 打中实体就不再挖方块了
             
-            // 2. 如果没打中实体，则进行方块交互
-            let hit = null;
-            let norm = null;
-            
-            // 射线检测，为了性能，我们不直接遍历所有 chunkMeshes 进行相交测试，
-            // 而是通过数学方法，从相机位置沿视线步进采样，直接查询 worldMap 字典。
-            // 这种基于体素网格的 DDA (Digital Differential Analyzer) 算法比检测几十万个 Mesh 要快成千上万倍。
-            
-            const rayDirFast = raycaster.ray.direction.clone().normalize();
-            const rayPosFast = raycaster.ray.origin.clone();
-            
-            let hitFound = false;
-            // 步进距离 0.1 格，最大距离 11 格
-            for (let d = 0; d <= 11; d += 0.1) {
-                let checkPos = rayPosFast.clone().addScaledVector(rayDirFast, d);
-                let px = Math.round(checkPos.x);
-                let py = Math.round(checkPos.y);
-                let pz = Math.round(checkPos.z);
-                
-                let b = getBlock(px, py, pz);
-                if(b===SNOW_LAYER_ID && checkPos.y>py-.5+SNOW_LAYER_HEIGHT)continue;
-                // 水(24)和海带(25)可以直接穿过，不算实体方块遮挡
-                if (b !== 0 && b !== 24 && b !== 25) {
-                    hit = new THREE.Vector3(px, py, pz);
-                    
-                    // 简单推导法线：判断光线是从哪个面打进去的
-                    // 后退一小步找空气方块作为放置面
-                    let backPos = rayPosFast.clone().addScaledVector(rayDirFast, d - 0.2);
-                    let bx = Math.round(backPos.x);
-                    let by = Math.round(backPos.y);
-                    let bz = Math.round(backPos.z);
-                    
-                    norm = new THREE.Vector3(bx - px, by - py, bz - pz);
-                    
-                    // 容错：如果法线是 0，强行给一个向上
-                    if (norm.x === 0 && norm.y === 0 && norm.z === 0) {
-                        norm.set(0, 1, 0);
-                    }
-                    
-                    hitFound = true;
-                    break;
-                }
-            }
+            const target=traceVoxelRay(raycaster.ray.origin,raycaster.ray.direction,11,id=>id!==24&&id!==25);
+            const hit=target?new THREE.Vector3(target.x,target.y,target.z):null,norm=target?.norm;
 
             if (hit) {
                 if (e.button === 0) { 
@@ -6867,6 +6916,7 @@
                     }
 
                     let placePos = targetType === 42 || targetType === SNOW_LAYER_ID ? hit.clone() : hit.clone().add(norm);
+                    if(![0,24,25,42,160,161,SNOW_LAYER_ID,LAVA_ID].includes(getBlock(placePos.x,placePos.y,placePos.z)))return;
                     if(matId===SNOW_LAYER_ID && (!isSolid(placePos.x,placePos.y-1,placePos.z) || getBlock(placePos.x,placePos.y-1,placePos.z)===SNOW_LAYER_ID))return;
                     let px = camera.position.x;
                     let py = camera.position.y;
@@ -7355,6 +7405,7 @@
         const HALF_DAY_SECONDS = 600;
         const DAY_TIME_SPEED = Math.PI / HALF_DAY_SECONDS;
 
+        let hudDue=0;
         function animate() {
             requestAnimationFrame(animate);
 
@@ -7369,13 +7420,15 @@
                 lastFpsTime = now;
             }
             
-            // 实时更新玩家坐标
+            if(now>=hudDue){
+            hudDue=now+125;
             document.getElementById('coord-x').innerText = `X: ${Math.round(camera.position.x)}`;
             document.getElementById('coord-y').innerText = `Y: ${Math.round(camera.position.y)}`;
             document.getElementById('coord-z').innerText = `Z: ${Math.round(camera.position.z)}`;
             document.getElementById('terrain-display').innerText = `Terrain: ${currentDimension==='nether'?'Nether':getTerrainName(selectedTerrain)}`;
             document.getElementById('mode-display').innerText = `Mode: ${isCreativeMode() ? (creativeFlying ? 'Creative / Flying' : 'Creative') : 'Survival'}`;
             updateRoomCodeFloat();
+            }
 
             // 第三人称摄像机跟随逻辑
             if (isThirdPerson && localPlayerModel) {
@@ -7392,7 +7445,8 @@
             }
 
             const time = performance.now();
-            let delta = (time - prevTime) / 1000;
+            const frameSeconds=(time-prevTime)/1000;
+            let delta = frameSeconds;
             if (delta > 0.05) delta = 0.05; // 防止区块生成卡帧后物理一次性跳太远
             const playerDelta = Math.min(delta, MAX_PLAYER_STEP);
             prevTime = time;
@@ -7507,7 +7561,7 @@
                     scene.background.setHex(0x000000);
                     if (scene.fog) {
                         scene.fog.color.setHex(0x000000);
-                        scene.fog.near = 40; scene.fog.far = 70;
+                        scene.fog.near = 172; scene.fog.far = 240;
                     }
                     dirLight.intensity = 0.6; // 月球上一直有微光
                     clouds.visible = false;
@@ -7523,13 +7577,13 @@
                         scene.background.setHSL(0.6, 0.5, 0.5 + sunHeight * 0.3);
                         if (scene.fog) {
                             scene.fog.color.setHSL(0.6, 0.5, 0.5 + sunHeight * 0.3);
-                            scene.fog.near = 40; scene.fog.far = 70;
+                            scene.fog.near = 172; scene.fog.far = 240;
                         }
                     } else {
                         scene.background.setHex(0x050510); // 黑夜星空色
                         if (scene.fog) {
                             scene.fog.color.setHex(0x050510);
-                            scene.fog.near = 40; scene.fog.far = 70;
+                            scene.fog.near = 172; scene.fog.far = 240;
                         }
                     }
                 }
@@ -7582,9 +7636,10 @@
 
                 // 异步处理区块生成与重建，防止主线程卡死导致“鼠标一粘就失灵”
                 processWaterFlowQueue(delta);
+                const hadRebuilds=rebuildQueue.size>0;
                 processRebuildQueue();
                 
-                if (chunkQueue.length > 0 && performance.now() - lastChunkBuildTime >= CHUNK_BUILD_INTERVAL_MS) {
+                if ((!hadRebuilds||performance.now()-lastChunkBuildTime>250) && chunkQueue.length > 0 && performance.now() - lastChunkBuildTime >= CHUNK_BUILD_INTERVAL_MS) {
                     // 按距离排序，优先加载离玩家近的
                     chunkQueue.sort((a, b) => {
                         let da = Math.abs(a.x - lastChunkX) + Math.abs(a.z - lastChunkZ);
@@ -7602,7 +7657,10 @@
             }
 
             if (controls.isLocked) {
-                updatePlayerMovement(playerDelta);
+                if(drivingCar){
+                    const dt=Math.min(frameSeconds,.2),steps=Math.max(1,Math.ceil(dt/(1/60)));
+                    for(let i=0;i<steps&&drivingCar;i++)updatePlayerMovement(dt/steps);
+                }else updatePlayerMovement(playerDelta);
 
                 updateEntities(delta);
                 updateMinecarts(delta);
@@ -7614,6 +7672,7 @@
             updateCombatEffects(delta);
             updateWorldExpansion(delta);
             updateWilderness(delta);
+            updateEcology(Math.min(frameSeconds,1));
             updateMicroVoxelOverlay(delta);
 
             // 移动白云
@@ -7633,6 +7692,7 @@
 
         initWilderness();
         initWorldExpansion();
+        initEcology();
         initThermalWorld();
         initRedstoneMachines();
         initMultiplayer();

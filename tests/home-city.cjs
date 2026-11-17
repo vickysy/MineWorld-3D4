@@ -132,7 +132,9 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
         });
         await live.mouse.click(720,450,{button:'right'});await live.waitForFunction(()=>drivingCar?.id==='live-bridge');
         const start=await live.evaluate(()=>drivingCar.mesh.position.x);
-        await live.keyboard.down('w');await live.waitForTimeout(1000);await live.keyboard.up('w');
+        await live.keyboard.down('w');
+        try{await live.waitForFunction(s=>drivingCar.mesh.position.x>s+0.4,start,{timeout:15000});}
+        finally{await live.keyboard.up('w');}
         assert(await live.evaluate(s=>drivingCar.mesh.position.x>s+0.4,start));
         await live.keyboard.press('Space');assert.equal(await live.evaluate(()=>drivingCar.speed),0);
         await live.screenshot({path:'/private/tmp/mc-driving-cabin.png'});

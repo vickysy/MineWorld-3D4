@@ -90,12 +90,24 @@ function broadcastLauncherPacket(packet) {
 function updateNuclearMissiles(delta) {
     if(launcherMapRefresh){if(!launcherMapRefresh.map.isConnected)launcherMapRefresh=null;else if(Date.now()-launcherMapRefresh.time>1000){launcherMapRefresh.time=Date.now();launcherMapRefresh.draw();}}
     for(let i=nuclearMissiles.length-1;i>=0;i--) {
-        const shot=nuclearMissiles[i];shot.elapsed+=delta;
+        const shot=nuclearMissiles[i],previousTime=Math.min(1,shot.elapsed/shot.duration);shot.elapsed+=delta;
         const t=Math.min(1,shot.elapsed/shot.duration),a=new THREE.Vector3(...shot.from),b=new THREE.Vector3(...shot.target),arc=Math.min(70,20+a.distanceTo(b)*0.2);
         const p=a.clone().lerp(b,t);p.y+=Math.sin(t*Math.PI)*arc;shot.mesh.position.copy(p);
         const direction=b.clone().sub(a);direction.y+=Math.cos(t*Math.PI)*Math.PI*arc;
         shot.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),direction.normalize());
-        if(t===1){disposeModModel(shot.mesh);nuclearMissiles.splice(i,1);if(thermalAuthority())beginNuclearBlast(...shot.target);}
+        // Sweep the curved path, including on slow frames and after restoring a missile.
+        const sample=u=>{const q=a.clone().lerp(b,u);q.y+=Math.sin(u*Math.PI)*arc;return q;};
+        const steps=Math.max(1,Math.ceil((t-previousTime)*(a.distanceTo(b)+Math.PI*arc)/2));
+        let prev=sample(previousTime),impact=null;
+        for(let j=1;j<=steps&&!impact;j++){
+            const end=sample(previousTime+(t-previousTime)*j/steps),segment=end.clone().sub(prev);
+            impact=traceVoxelRay(prev,segment,segment.length(),(id,x,y,z)=>isSolid(x,y,z));
+            prev=end;
+        }
+        if(impact||t===1){
+            disposeModModel(shot.mesh);nuclearMissiles.splice(i,1);
+            if(thermalAuthority())beginNuclearBlast(...(impact?[impact.x,impact.y,impact.z]:shot.target));
+        }
     }
     for(const button of document.querySelectorAll('[data-launch-port]')) {
         const data=furnitureData.get(button.dataset.launcher),port=Number(button.dataset.launchPort);

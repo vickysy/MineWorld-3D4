@@ -72,6 +72,7 @@ function buildCottage(x,y,z,variant=0){
 function generateCottageChunk(cx,cz){
     const key=`house_${cx},${cz}`;if(worldMap.has(key))return;
     worldMap.set(key,true);
+    if(generateVillageChunk(cx,cz))return;
     if(selectedTerrain==='moon'||hash(cx*2,cz*2)>=.08)return;
     const site=cottageSite(cx*CHUNK_SIZE+7,cz*CHUNK_SIZE+7,true);if(!site)return;
     buildCottage(site.x,site.y,site.z,Math.floor(hash(cx+21,cz-16)*3));

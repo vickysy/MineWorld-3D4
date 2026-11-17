@@ -8,7 +8,7 @@ const NATURE_PLANTS=new Set([158,159,160,161,...WATER_PLANTS]);
 const hiddenByBase=new Map([[1,132],[2,133],[3,134]]);
 const NATURE_COLORS={};
 const biomeCache=new Map(),cliffCache=new Map(),natureGeometries=new Map();
-let biomeCacheSeed=null,wildernessVersion=2,gameDifficulty='normal',itchTimer=0,natureTick=0,natureTime=0;
+let biomeCacheSeed=null,wildernessVersion=3,gameDifficulty='normal',itchTimer=0,natureTick=0,natureTime=0;
 let natureFish=[],caveVisits=new Set();
 
 function isWaterType(id){return id===24||WATER_PLANTS.has(id);}
@@ -19,7 +19,7 @@ function setDifficulty(value){
 }
 
 function setWildernessVersion(version){
-    wildernessVersion=version===1?1:2;
+    wildernessVersion=[1,2,3].includes(version)?version:3;
     biomeCacheSeed=null;biomeCache.clear();cliffCache.clear();heightCache.clear();
 }
 
@@ -95,15 +95,18 @@ function biomeColumn(x,z){
         // Erosion leaves a walkable approach outside the mouth, not a vertical shaft.
         if(u>=-8&&u<edge-1&&Math.abs(v)<4)height=Math.min(height,floor-1);
     }
+    const village=wildernessVersion>=3?villageAt(x,z):null;
+    if(village)height=THREE.MathUtils.lerp(height,village.y,village.blend);
     height=Math.floor(height);
     const rocky=cliff&&cliff.u>0&&cliff.u<40&&Math.abs(cliff.v)<32&&height>cliff.floor+4;
-    const biome=height<=SEA_LEVEL?'ocean':climate<.27||height>(wildernessVersion===1?45:64)?'snow':(wildernessVersion===1?cliff&&cliff.u>0&&cliff.u<32&&Math.abs(cliff.v)<24:rocky)?'cliffs':climate>.62&&wet>.44?'bamboo':climate<.56&&wet>.35?'autumn':'meadow';
-    const row={height,biome,warm:climate>.43,cliff};
+    const biome=height<=SEA_LEVEL?'ocean':village?.blend>.8?'village':wildernessVersion>=3&&height<=SEA_LEVEL+3?'beach':climate<.27||height>(wildernessVersion===1?45:64)?'snow':(wildernessVersion===1?cliff&&cliff.u>0&&cliff.u<32&&Math.abs(cliff.v)<24:rocky)?'cliffs':climate>.62&&wet>.44?'bamboo':climate<.56&&wet>.35?'autumn':'meadow';
+    const row={height,biome,warm:climate>.43,cliff,village};
     if(biomeCache.size>70000)biomeCache.clear();biomeCache.set(key,row);return row;
 }
 
 function wildernessCave(x,y,z,h){
     if(y<5||y>h)return false;
+    if(wildernessVersion>=3&&biomeColumn(x,z).village)return false;
     const c=biomeColumn(x,z).cliff;if(!c)return false;
     const {u,v,floor}=c,bend=u<5?0:Math.sin((u-5)*.13)*2.3;
     const dy=y-floor,mouth=u<4,width=(mouth?3.8:2.8)+(landscapeNoise(u/8,c.x,619)-.5)*.4;
@@ -141,15 +144,26 @@ function wildernessBlock(x,y,z,h){
         }
         if(y===h+1&&h>SEA_LEVEL+1){
             if(col.biome==='snow')return SNOW_LAYER_ID;
+            if(col.biome==='village'||col.biome==='beach')return 0;
+            if(wildernessVersion>=3&&['meadow','autumn'].includes(col.biome)&&r<.009)return r<.005?BERRY_RIPE:r<.007?APPLE_SAPLING:CHERRY_SAPLING;
             if(col.biome==='bamboo'&&r<.018)return 159;
             if(col.biome!=='snow'&&col.biome!=='cliffs'&&r<.035)return r<.024?160:161;
         }
         return 0;
     }
-    if(y===h)return h<=SEA_LEVEL+1?23:col.biome==='cliffs'?3:1;
+    if(y===h)return h<=SEA_LEVEL+1||col.biome==='beach'?23:col.biome==='cliffs'?3:1;
     if(col.cliff&&y>=col.cliff.floor&&y<h-1)return 3;
     if(y>h-3)return h<=SEA_LEVEL+1?23:2;
     return getOreBlock(x,y,z,h)||3;
+}
+
+function canopyCell(x,z,dx,dy,dz){
+    if(dy< -2||dy>1||Math.abs(dx)>2||Math.abs(dz)>2)return false;
+    if(!dx&&!dz)return true;
+    const leanX=Math.round(hash(x+17,z)*2)-1,leanZ=Math.round(hash(x,z-31)*2)-1;
+    const r=dy===1?1.25:dy===-2?1.75:2.05;
+    const edge=Math.hypot(dx-leanX*(dy+2)*.20,dz-leanZ*(dy+2)*.20);
+    return edge<r+(hash3(x+dx,dy,z+dz,411)-.38)*.9;
 }
 
 function growWildernessTrees(cx,cz){
@@ -161,22 +175,28 @@ function growWildernessTrees(cx,cz){
         const put=(a,b,c,id)=>{if(!worldMap.has(`${a},${b},${c}`))setGenBlock(a,b,c,id);};
         if(biome==='bamboo'){
             const tall=4+Math.floor(hash(x,z)*4);
-            if(r<.014&&landscapeNoise(x/10,z/10,229)>.48&&naturalTreeSiteClear(x,h,z,tall))for(let y=1;y<=tall;y++)put(x,h+y,z,158);
+            if(r<(wildernessVersion>=3?.07:.014)&&landscapeNoise(x/10,z/10,229)>.48&&
+                (wildernessVersion>=3?bambooSiteClear(x,h,z,tall):naturalTreeSiteClear(x,h,z,tall))){
+                for(let y=1;y<=tall;y++)put(x,h+y,z,158);
+                registerPlant(x,h+tall,z);
+            }
             continue;
         }
+        if(biome==='beach'||biome==='village')continue;
         if(!naturalTreeAnchor(x,z)||r>(biome==='autumn'?.75:biome==='snow'?.30:.18)||biome==='cliffs')continue;
-        const tall=4+Math.floor(hash(x,z)*3),leaf=biome==='autumn'?155+Math.floor(hash(x+9,z)*3):5;
+        const tall=4+Math.floor(hash(x,z)*3),leaf=biome==='autumn'?155+Math.floor(hash(x+9,z)*3):wildernessVersion>=3&&biome==='meadow'?(hash(x+32,z)<.3?CHERRY_RIPE:APPLE_RIPE):5;
         if(!naturalTreeSiteClear(x,h,z,tall))continue;
         for(let y=1;y<=tall;y++)put(x,h+y,z,4);
         for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++)for(let dy=tall-2;dy<=tall+1;dy++){
-            if(Math.abs(dx)+Math.abs(dz)+Math.abs(dy-tall)>3)continue;
+            if(!canopyCell(x,z,dx,dy-tall,dz))continue;
             put(x+dx,h+dy,z+dz,leaf);
-            if(biome==='snow'&&(dy===tall+1||Math.abs(dx)+Math.abs(dz)+Math.abs(dy+1-tall)>3))put(x+dx,h+dy+1,z+dz,SNOW_LAYER_ID);
+            if(biome==='snow'&&!canopyCell(x,z,dx,dy+1-tall,dz))put(x+dx,h+dy+1,z+dz,SNOW_LAYER_ID);
         }
     }
 }
 
 function naturalTreeSiteClear(x,y,z,tall){
+    if(wildernessVersion>=3&&selectedTerrain==='random'&&villageAt(x,z)?.blend>.2)return false;
     // Air recorded by a building is intentional clearance, including its entrance.
     for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++)for(let dy=1;dy<=tall+2;dy++){
         const a=x+dx,b=y+dy,c=z+dz;
@@ -220,6 +240,7 @@ function natureTexture(id,color,brick=false){
 }
 
 function natureGeometry(id){
+    const custom=ecologyGeometry(id);if(custom)return custom;
     if(!NATURE_PLANTS.has(id)&&id!==SNOW_LAYER_ID)return null;
     if(natureGeometries.has(id))return natureGeometries.get(id);
     if(id===SNOW_LAYER_ID){
@@ -266,11 +287,12 @@ function initWilderness(){
     materials[127]??=new THREE.MeshLambertMaterial({map:materials[3].map,color:0x9f5051});
     const colors=[0xffffff,0xc98032,0xb34448,0xe1bf4c,0x71a345,0xa7974d,0x78a94c,0x427f4a,0x508f63,0x39826b,0x687fa2,0xd2584e,0x528bc0,0xd8839e,0xe4ba52,0x9a66b6];
     for(const [text,name] of Object.entries(NATURE_ITEMS)){
-        const id=Number(text),color=id===SNOW_LAYER_ID?0xffffff:id>=170?BRICK_COLORS[id-170][1]:colors[id-154];
+        const id=Number(text),color=ECOLOGY_COLORS[id]??(id===SNOW_LAYER_ID?0xffffff:id>=170?BRICK_COLORS[id-170][1]:colors[id-154]);
         NATURE_COLORS[id]=color;
-        materials[id]=new THREE.MeshLambertMaterial({map:natureTexture(id,color,id>=170&&id<=185),...(LEAF_TYPES.has(id)?{alphaTest:.5}:{})});
+        materials[id]=new THREE.MeshLambertMaterial({map:ECOLOGY_ITEMS[id]?ecologyTexture(id):natureTexture(id,color,id>=170&&id<=185),...(LEAF_TYPES.has(id)?{alphaTest:.5}:{})});
         const slot=document.createElement('button');slot.className='slot nature-slot';slot.id=`inv-${id-12}`;slot.textContent=name;slot.onclick=()=>selectSlot(id-12);
         const swatch=document.createElement('img');swatch.alt='';swatch.src=materials[id].map.image.toDataURL();slot.prepend(swatch);document.getElementById('tab-build').append(slot);
+        if([188,189,194,198,199,200,203,WHEAT_YOUNG,WHEAT_GREEN,WHEAT_RIPE].includes(id))slot.hidden=true;
     }
     const bases=[4,5,6,23,36,37,38,44,51,59,60,61,62,63,64,127,154,155,156,157,...BRICK_COLORS.map((_,i)=>170+i)];
     for(const base of bases){const id=256+base;hiddenByBase.set(base,id);HIDDEN_BLOCKS[id]={name:'Hidden '+getBlockName(base),base};}

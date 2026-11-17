@@ -1,4 +1,4 @@
-const ROOM_PROTOCOL='daniel-mc-room-10', ROOM_PREFIX='daniel-mc-room2-';
+const ROOM_PROTOCOL='daniel-mc-room-12', ROOM_PREFIX='daniel-mc-room2-';
 const ROOM_TIMEOUT_MS=30000, ROOM_MAX_SAVE=16*1024*1024, ROOM_PACKET_CELLS=128;
 let multiplayerRoom=null, multiplayerMode='host', currentRoomCode='', remotePlayers={};
 
@@ -226,8 +226,22 @@ function validateRoomPosition(p) {
 function displayRoomPlayer(id,p) {
     if(id===multiplayerRoom?.peer.id||!validateRoomPosition(p))return;
     const model=remotePlayers[id]||(remotePlayers[id]=createRemotePlayer());
-    model.visible=p.dimension===currentDimension;model.position.set(p.x,p.y-0.75*p.scale,p.z);model.rotation.y=p.ry;model.scale.setScalar(p.scale);
+    const target=new THREE.Vector3(p.x,p.y-0.75*p.scale,p.z),last=model.userData.pose;
+    if(!last||last.dimension!==p.dimension||model.position.distanceToSquared(target)>64*p.scale*p.scale){
+        model.position.copy(target);model.rotation.y=p.ry;
+    }
+    model.visible=p.dimension===currentDimension;model.scale.setScalar(p.scale);
+    model.userData.pose={from:model.position.clone(),target,yaw:model.rotation.y,turn:Math.atan2(Math.sin(p.ry-model.rotation.y),Math.cos(p.ry-model.rotation.y)),start:performance.now(),dimension:p.dimension};
     updateRemoteAppearance(model,p);
+}
+
+function poseQueueFree(c){return !(c.bufferSize>2||c.dataChannel?.bufferedAmount>64000);}
+function interpolateRoomPlayers(now){
+    for(const model of Object.values(remotePlayers)){
+        const p=model.userData.pose;if(!p||p.done)continue;
+        const t=Math.min(1,Math.max(0,(now-p.start)/100));
+        model.position.lerpVectors(p.from,p.target,t);model.rotation.y=p.yaw+p.turn*t;p.done=t===1;
+    }
 }
 
 function roomCellValid(cell) {
@@ -264,6 +278,17 @@ function receiveRoomGuest(r,entry,p) {
         showToast('A player joined.');return;
     }
     if(!entry.ready||!r.worldReady)return;
+    if(p.type==='ecology-request'){
+        const player=r.positions.get(entry.conn.peer),now=performance.now();
+        if(p.dimension!==currentDimension||!validMachineCell(p.at)||!player||player.dimension!==currentDimension||
+            Math.hypot(player.x-p.at[0],player.y-p.at[1],player.z-p.at[2])>7||now-(entry.ecologyTime??-1000)<250)return;
+        entry.ecologyTime=now;
+        if(p.action==='harvest'){
+            const reward=harvestPlant(...p.at);
+            if(reward)sendRoomPacket(entry.conn,{type:'ecology-reward',...reward});
+        }else if(p.action==='trapdoor'&&canEditPasswordCircuit(...p.at,entry.owner))toggleTrapdoor(...p.at);
+        return;
+    }
     if(p.type==='lock-request'){receiveGuestLockAction(r,entry,p).catch(()=>sendRoomPacket(entry.conn,{type:'lock-reply',request:p.request,ok:false,message:'Lock request failed.'}));return;}
     if(p.type==='cannon-request') {
         const player=r.positions.get(entry.conn.peer),now=performance.now();
@@ -290,7 +315,7 @@ function receiveRoomGuest(r,entry,p) {
     if(p.type==='pos'&&validateRoomPosition(p)) {
         const pos={type:'pos',id:entry.conn.peer,x:p.x,y:p.y,z:p.z,ry:p.ry,scale:p.scale,dimension:p.dimension,...remoteAppearance(p)};
         r.positions.set(entry.conn.peer,pos);displayRoomPlayer(entry.conn.peer,pos);
-        for(const e of r.connections.values())if(e.ready&&e!==entry)sendRoomPacket(e.conn,pos);
+        for(const e of r.connections.values())if(e.ready&&e!==entry&&poseQueueFree(e.conn))sendRoomPacket(e.conn,pos);
     } else if(p.type==='edit'&&p.dimension===currentDimension) {
         const now=performance.now();if(now-entry.rateStart>1000){entry.rate=0;entry.rateStart=now;}
         entry.rate+=(p.cells?.length||0);if(entry.rate>4096){entry.conn.close();return;}
@@ -345,6 +370,8 @@ function receiveRoomHost(r,entry,p) {
         applyRoomCells(r,p.cells);r.seq=p.seq;
     } else if(['machines','machine-blast','password-locks'].includes(p.type)&&r.worldReady) {
         receiveMachinePacket(p);
+    } else if(p.type==='ecology-reward'&&r.worldReady) {
+        if((EDIBLE_GARDEN.has(p.id)||p.id===WHEAT)&&Number.isInteger(p.count)&&p.count>=1&&p.count<=3)grantHarvest(p);
     } else if(p.type==='cannon-result'&&r.worldReady) {
         showToast(p.ok?'Cannon fired.':'Cannon did not fire. Check ammunition and permissions.');
     } else if(p.type==='launcher-rejected'&&r.worldReady) {
@@ -370,11 +397,17 @@ function queueRoomBlockChange(x,y,z) {
 }
 
 function updateMultiplayer(now=performance.now()) {
-    const r=multiplayerRoom;if(!r?.worldReady||r.applying||now<r.nextTick)return;r.nextTick=now+100;
+    const r=multiplayerRoom;if(!r?.worldReady||r.applying)return;
+    interpolateRoomPlayers(now);
+    if(now<r.nextTick)return;r.nextTick=now+100;
     if(r.entered) {
         const pos={type:'pos',id:r.peer.id,x:camera.position.x,y:camera.position.y,z:camera.position.z,ry:camera.rotation.y,scale:playerScale,dimension:currentDimension,...localRoomAppearance()};
         if(r.role==='host')r.positions.set(r.peer.id,pos);
-        for(const entry of r.connections.values())if(entry.ready||r.role==='guest')sendRoomPacket(entry.conn,pos);
+        const signature=[pos.x,pos.y,pos.z,pos.ry,pos.scale,pos.dimension,pos.held,pos.mech?.id,pos.mech?.form].join('|');
+        for(const entry of r.connections.values())if((entry.ready||r.role==='guest')&&poseQueueFree(entry.conn)&&
+            (signature!==entry.poseSignature||now-entry.lastPoseTime>=1000)){
+            sendRoomPacket(entry.conn,pos);entry.poseSignature=signature;entry.lastPoseTime=now;
+        }
     }
     const cells=[];
     for(const [key,coords] of r.dirty) {

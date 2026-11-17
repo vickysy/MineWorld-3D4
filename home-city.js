@@ -269,17 +269,39 @@ function spawnCityCar(id,x,y,z,yaw=0,color,model='tai3') {
     const car={id,mesh,speed:0,color,model};cityCars.set(id,car);return car;
 }
 
-function carSpaceClear(car,position,yaw=car.mesh.rotation.y) {
+function carRoadHeight(car,position,yaw=car.mesh.rotation.y) {
     const c=Math.cos(yaw),s=Math.sin(yaw);
     const spec=CAR_MODELS[car.model||'tai3'];
+    let high=-Infinity,low=Infinity;
+    const floor=Math.floor(position.y-.49);
     for(const x of [-0.88,0,0.88])for(const z of [-spec.length/2-0.2,0,spec.length/2+0.1]) {
-        const bx=Math.round(position.x+x*c+z*s),bz=Math.round(position.z-x*s+z*c),by=Math.round(position.y+0.3);
-        if(!isSolid(bx,Math.round(position.y-0.1),bz) || [24,LAVA_ID].includes(getBlock(bx,by,bz)))return false;
-        for(const h of [0.3,0.9,spec.height])if(isSolid(bx,Math.round(position.y+h),bz))return false;
+        const bx=Math.round(position.x+x*c+z*s),bz=Math.round(position.z-x*s+z*c);
+        let top=null;
+        for(let y=floor+1;y>=floor-1;y--){
+            const id=getBlock(bx,y,bz);
+            if(isWaterType(id)||id===LAVA_ID)return null;
+            if(isSolid(bx,y,bz)&&!isTrapdoor(id)){
+                top=id===SNOW_LAYER_ID?y-.5+SNOW_LAYER_HEIGHT:y+.5;break;
+            }
+        }
+        if(top===null)return null;
+        high=Math.max(high,top);low=Math.min(low,top);
     }
-    for(const other of cityCars.values())if(other!==car && position.distanceTo(other.mesh.position)<3)return false;
-    for(const mob of [...villagers,...zombies,...creepers,...animals,...endermen])if(!mob.dying && Math.abs(mob.mesh.position.y-position.y)<2 && Math.hypot(mob.mesh.position.x-position.x,mob.mesh.position.z-position.z)<1.5)return false;
-    return true;
+    if(high-low>1.01||Math.abs(high-position.y)>1.01)return null;
+    for(const x of [-.88,0,.88])for(const z of [-spec.length/2-.2,0,spec.length/2+.1]){
+        const bx=Math.round(position.x+x*c+z*s),bz=Math.round(position.z-x*s+z*c);
+        for(let by=Math.floor(high+.501);by<=Math.floor(high+spec.height+.5);by++){
+            const id=getBlock(bx,by,bz);
+            if(isSolid(bx,by,bz)&&(id!==SNOW_LAYER_ID||high<by-.5+SNOW_LAYER_HEIGHT-.001))return null;
+        }
+    }
+    const closing=(p,r)=>position.distanceTo(p)<r&&position.distanceToSquared(p)<=car.mesh.position.distanceToSquared(p);
+    for(const other of cityCars.values())if(other!==car&&closing(other.mesh.position,3))return null;
+    for(const mob of [...villagers,...zombies,...creepers,...animals,...endermen])if(!mob.dying&&Math.abs(mob.mesh.position.y-high)<2&&closing(mob.mesh.position,1.5))return null;
+    return high;
+}
+function carSpaceClear(car,position,yaw=car.mesh.rotation.y){
+    return carRoadHeight(car,position,yaw)!==null;
 }
 
 function playerHitsCityCar(pos) {
@@ -333,7 +355,8 @@ function updateDrivingCar(delta) {
     const steps=Math.max(1,Math.ceil(Math.abs(car.speed*delta)/0.15));
     for(let i=0;i<steps;i++) {
         const next=car.mesh.position.clone().add(new THREE.Vector3(Math.sin(car.mesh.rotation.y),0,Math.cos(car.mesh.rotation.y)).multiplyScalar(car.speed*delta/steps));
-        if(!carSpaceClear(car,next)){car.speed=0;break;}car.mesh.position.copy(next);
+        const surface=carRoadHeight(car,next);
+        if(surface===null){car.speed=0;break;}next.y=surface;car.mesh.position.copy(next);
     }
     for(const wheel of car.mesh.userData.wheels)wheel.rotation.x+=car.speed*delta*3;
     camera.position.copy(car.mesh.position).add(new THREE.Vector3(0,1.42,0));velocity.set(0,0,0);
@@ -365,7 +388,9 @@ function updateHomeCity(delta) {
         const key=`${cx+dx},${cz+dz}`;if(!worldMap.has('city_'+key)||cityCarSpawns.has(key)||cityCars.size>=24)continue;
         const x=(cx+dx)*CHUNK_SIZE+1,z=(cz+dz)*CHUNK_SIZE+9;
         if(!isAnimalSpawnSafe(x,17,z))continue;
-        cityCarSpawns.add(key);const model=Object.keys(CAR_MODELS)[Math.floor(hash(cx+dx,cz+dz)*4)];spawnCityCar(key,x,16.5,z,0,undefined,model);
+        const model=Object.keys(CAR_MODELS)[Math.floor(hash(cx+dx,cz+dz)*4)],position=new THREE.Vector3(x,16.5,z);
+        if(!carSpaceClear({model,mesh:{position,rotation:{y:0}}},position))continue;
+        cityCarSpawns.add(key);spawnCityCar(key,x,16.5,z,0,undefined,model);
     }
 }
 
@@ -406,9 +431,10 @@ function placeCityCarItem(id) {
     const [x,y,z]=hit.previous,model=CAR_ITEMS[id],spec=CAR_MODELS[model];
     const position=new THREE.Vector3(x,y-0.5,z),yaw=Math.round(camera.rotation.y/(Math.PI/2))*(Math.PI/2);
     const probe={model,mesh:{position,rotation:{y:yaw}}};
-    if(Math.hypot(camera.position.x-x,camera.position.z-z)<2 || !carSpaceClear(probe,position,yaw)){showToast('Park on a clear, level road.');return false;}
+    const surface=carRoadHeight(probe,position,yaw);
+    if(Math.hypot(camera.position.x-x,camera.position.z-z)<2 || surface===null){showToast('Park on a clear road.');return false;}
     if(!consumeInventoryItem(id)){showToast('No cars left.');return false;}
-    spawnCityCar(`placed-${Date.now()}-${cityCars.size}`,x,y-0.5,z,yaw,spec.color,model);updateInventoryCounts();return true;
+    spawnCityCar(`placed-${Date.now()}-${cityCars.size}`,x,surface,z,yaw,spec.color,model);updateInventoryCounts();return true;
 }
 
 function generateCityLake(cx,cz) {
