@@ -379,13 +379,13 @@
     <script src="three-r128.min.js"></script>
     <script src="three-pointer-lock-r128.js"></script>
     <script src="three-reflector-r128.js"></script>
-    <script src="world-expansion.js?v=20261117-world"></script>
+    <script src="world-expansion.js?v=end-islands-1"></script>
     <script src="home-city.js?v=20261110-repairs"></script>
     <script src="kitchen-home.js?v=20261020-connected"></script>
-    <script src="city-life.js?v=20261021-wilderness"></script>
+    <script src="city-life.js?v=end-islands-1"></script>
     <script src="surveillance.js?v=20261018-tools"></script>
     <script src="peerjs-1.5.5.min.js"></script>
-    <script src="multiplayer.js?v=20261117-world"></script>
+    <script src="multiplayer.js?v=end-islands-1"></script>
     <script src="thermal-world.js?v=20261021-wilderness"></script>
     <script src="launchers.js?v=20261110-repairs"></script>
     <script src="construction.js?v=20261018-locks"></script>
@@ -395,9 +395,9 @@
     <script src="rail-vehicles.js?v=20261020-connected"></script>
     <script src="connected-home.js?v=20261020-connected"></script>
     <script src="zombie-voices.js?v=20261021-recorded"></script>
-    <script src="wilderness.js?v=20261117-world"></script>
+    <script src="wilderness.js?v=end-islands-1"></script>
     <script src="ecology.js?v=20261117-world"></script>
-    <script src="terrain-horizon.js?v=20261117-world"></script>
+    <script src="terrain-horizon.js?v=end-islands-1"></script>
     <script src="village-houses.js?v=20261104-ecology"></script>
 
     <script>
@@ -1658,7 +1658,7 @@
                     setTerrainChoice(selectedTerrain);
                     setGameModeChoice(data.gameMode || 'survival');
                     setDifficulty(data.gameDifficulty || 'normal');
-                    currentDimension = data.currentDimension || 'overworld';
+                    currentDimension = ['end','nether'].includes(data.currentDimension)?data.currentDimension:'overworld';
                     playerScale = Math.max(MIN_PLAYER_SCALE, Math.min(MAX_PLAYER_SCALE, Number(data.playerScale) || 1));
                     camera.position.set(data.camera.x, data.camera.y, data.camera.z);
                     if (data.camera.rx !== undefined) {
@@ -1685,7 +1685,7 @@
                     restoreMech(data.activeMech);
                     creativeFlying = data.creativeFlying === true && canCreativeFly();
                     for(const mob of (Array.isArray(data.spawnedMobs)?data.spawnedMobs:[]).slice(0,80)) {
-                        if(mob.id===67&&currentDimension==='nether')continue;
+                        if(mob.id===67&&currentDimension!=='overworld')continue;
                         if([67,68,69].includes(mob.id) && [mob.x,mob.y,mob.z].every(Number.isFinite)) {
                             const entity=spawnMobFromEgg(mob.id,mob.x,mob.y,mob.z);
                             entity.hp=Math.max(1,Math.min(entity.hp,Number(mob.hp)||entity.hp));
@@ -2355,6 +2355,7 @@
         }
 
         function findHomeSpawnPoint() {
+            if(currentDimension==='end')return {x:0,y:getSurfaceHeight(0,3)+4,z:3};
             let best = null;
             let bestDist = Infinity;
             for (let [key, type] of worldMap.entries()) {
@@ -2914,7 +2915,9 @@
             if (heightCache.has(key)) return heightCache.get(key);
             
             let h = 15;
-            if (currentDimension === 'nether') {
+            if(currentDimension==='end'){
+                h=endIslandHeight(x,z);
+            }else if (currentDimension === 'nether') {
                 h = 8 + Math.sin(x*0.065)*6 + Math.cos(z*0.055)*5 + Math.sin((x-z)*0.035)*4;
             } else if (selectedTerrain === 'random') {
                 h = biomeColumn(x,z).height;
@@ -2968,6 +2971,7 @@
             const built=constructionTypeAt(x,y,z);if(built!==null)return floodBlockType(x,y,z,built);
 
             const h = getSurfaceHeight(x, z);
+            if(currentDimension==='end')return h!==END_VOID_Y&&y<=h&&y>=endIslandBottom(h)?END_STONE_ID:0;
             if(currentDimension==='overworld'&&selectedTerrain==='random')return floodBlockType(x,y,z,wildernessBlock(x,y,z,h));
             if (currentDimension === 'nether') {
                 if (y > h) return y<=6 ? LAVA_ID : 0;
@@ -3893,7 +3897,7 @@
             if([195,200,203].includes(blockType))return APPLE_SAPLING;
             if(blockType===PISTON_HEAD_ID)return 0;
             if(blockType===FIRE_ID)return 0;
-            if(blockType===NETHER_PORTAL_ID || blockType===FRIDGE_TOP_ID) return 0;
+            if(blockType===NETHER_PORTAL_ID || blockType===END_PORTAL_ID || blockType===FRIDGE_TOP_ID) return 0;
             if (blockType === 42) return 0;
             if (blockType === 9 || blockType === 10 || blockType === 11) return 8;
             if (blockType === 15) return 14;
@@ -4125,6 +4129,7 @@
                         scanBottom = Math.min(scanBottom, scannedRange.minY);
                     }
 
+                    if(currentDimension==='end'&&h!==END_VOID_Y)scanBottom=Math.min(scanBottom,endIslandBottom(h));
                     if(selectedTerrain==='random'&&currentDimension==='overworld'){
                         // Only cliff columns (and their immediate walls) can border a natural cave.
                         for(const [dx,dz] of [[0,0],[1,0],[-1,0],[0,1],[0,-1]]){
@@ -4243,7 +4248,7 @@
         }
 
         function generateHouseData(cx, cz) {
-            if(currentDimension==='nether') return;
+            if(currentDimension!=='overworld') return;
             if(selectedTerrain==='city' && currentDimension==='overworld') {generateCityChunk(cx,cz);return;}
             if(wildernessVersion===1)return legacyGenerateHouseData(cx,cz);
             return generateCottageChunk(cx,cz);
@@ -4317,7 +4322,7 @@
         }
 
         function generateTrees(cx, cz) {
-            if(currentDimension==='nether') return;
+            if(currentDimension!=='overworld') return;
             if(selectedTerrain==='random'){growWildernessTrees(cx,cz);return;}
             if(selectedTerrain==='city' && currentDimension==='overworld') return;
             let key = `trees_${cx},${cz}`;
@@ -4809,7 +4814,9 @@
                 holdingDescend = false;
             }
 
-            if (camera.position.y < -100000) { // 取消 -100 层的掉落限制，满足无底洞挖掘需求
+            if(currentDimension==='end'&&camera.position.y<END_VOID_Y-8){
+                camera.position.set(0,getSurfaceHeight(0,3)+4,3);velocity.set(0,0,0);
+            }else if (camera.position.y < -100000) { // 取消 -100 层的掉落限制，满足无底洞挖掘需求
                 camera.position.y = 50;
                 velocity.y = 0;
             }
@@ -4999,7 +5006,7 @@
             if(NATURE_PLANTS.has(b))return false;
             if(MACHINE_ITEMS[b])return false;
             if(b===FIRE_ID)return false;
-            if(HIDDEN_BLOCKS[b] || b===SHOWER_ID || b===NETHER_PORTAL_ID || b===92) return false;
+            if(HIDDEN_BLOCKS[b] || b===SHOWER_ID || b===NETHER_PORTAL_ID || b===END_PORTAL_ID || b===92) return false;
             // Ladders, open doors, water, rails, redstone, levers, and grass are passable. Leaves are solid.
             if (b === 0 || b === 7 || b === 10 || b === 11 || b === 19 || b === 20 || b === 24 || b === 25 || b === 26 || b === 27 || b === 28 || b === 30 || b === 31 || b === 42 || b === LAVA_ID || b === GLASS_SENSOR_DOOR_OPEN_ID || b === PRESSURE_PLATE_ID) return false;
             return true;
@@ -5198,7 +5205,7 @@
         }
 
         function isMovableByPiston(type) {
-            if(HOME_ITEMS[type] || type===FRIDGE_TOP_ID || type===FURNITURE_PART_ID || type===NETHER_PORTAL_ID) return false;
+            if(HOME_ITEMS[type] || type===FRIDGE_TOP_ID || type===FURNITURE_PART_ID || type===NETHER_PORTAL_ID || type===END_PORTAL_ID) return false;
             if(MACHINE_ITEMS[type]||[PISTON_HEAD_ID,OBSIDIAN_ID,7,8,9,10,11,14,15,16,17,18,19,20,26,27,28,48,49,50,52,FIRE_ID].includes(type))return false;
             return type !== 0 && type !== BARRIER_ID && type !== LAVA_ID && type !== 24 && type !== 25 &&
                 type !== 30 && type !== 31 && type !== 32 && type !== PISTON_ID;
@@ -5523,7 +5530,8 @@
         }
 
         function useSpawnEgg(id) {
-            if(id===67 && currentDimension==='nether') {showToast('Villagers live in the Overworld.');return false;}
+            if(id===67 && currentDimension!=='overworld') {showToast('Villagers live in the Overworld.');return false;}
+            if(id===ENDER_EGG_ID&&currentDimension!=='end'){showToast('Endermen live in the End.');return false;}
             if(![67,68,69,ENDER_EGG_ID].includes(id) || !hasInventoryItem(id)) {showToast('No spawn eggs left.');return false;}
             if(zombies.length+creepers.length+villagers.length+animals.length+endermen.length>=80) {showToast('Mob limit reached.');return false;}
             const dir=new THREE.Vector3();camera.getWorldDirection(dir);
@@ -5829,7 +5837,7 @@
         }
 
         function spawnVillagerAt(x, y, z) {
-            if(currentDimension==='nether') return;
+            if(currentDimension!=='overworld') return;
             const group = createVillagerModel();
             group.position.set(x, y, z);
             scene.add(group);
@@ -5864,7 +5872,7 @@
         }
 
         function spawnAnimal(type, x, y, z) {
-            if(currentDimension==='nether') return false;
+            if(currentDimension!=='overworld') return false;
             const safeSpot = isAnimalSpawnSafe(x, y, z) ? { x, y, z } : findSafeAnimalSpot(x, z);
             if (!safeSpot) return false;
             const mesh = createAnimalModel(type);
@@ -5891,7 +5899,7 @@
         }
 
         function spawnVillager() {
-            if(currentDimension==='nether') return;
+            if(currentDimension!=='overworld') return;
             if(selectedTerrain==='city' && currentDimension==='overworld') {populateCityStreets();return;}
             const angle = Math.random() * Math.PI * 2;
             const dist = 20 + Math.random() * 15;
@@ -7020,7 +7028,7 @@
                                 setBlock(placePos.x, placePos.y, placePos.z, matId);
                             }
                             if (matId === 24 || matId === LAVA_ID || matId === WATER_BUCKET_ID) solidifyFluidContact(placePos.x, placePos.y, placePos.z);
-                            if (matId === OBSIDIAN_ID) activatePortalNear(placePos.x,placePos.y,placePos.z);
+                            if (matId === OBSIDIAN_ID||matId===BLACKSTONE_ID) activatePortalNear(placePos.x,placePos.y,placePos.z);
                             if (matId === DRY_SPONGE_ID) absorbWaterAround(placePos.x, placePos.y, placePos.z);
                             if (matId === 26 || matId === 27) updateRailsAround(placePos.x, placePos.y, placePos.z);
                             if (matId === PISTON_ID) {
@@ -7425,7 +7433,7 @@
             document.getElementById('coord-x').innerText = `X: ${Math.round(camera.position.x)}`;
             document.getElementById('coord-y').innerText = `Y: ${Math.round(camera.position.y)}`;
             document.getElementById('coord-z').innerText = `Z: ${Math.round(camera.position.z)}`;
-            document.getElementById('terrain-display').innerText = `Terrain: ${currentDimension==='nether'?'Nether':getTerrainName(selectedTerrain)}`;
+            document.getElementById('terrain-display').innerText = `Terrain: ${currentDimension==='end'?'The End':currentDimension==='nether'?'Nether':getTerrainName(selectedTerrain)}`;
             document.getElementById('mode-display').innerText = `Mode: ${isCreativeMode() ? (creativeFlying ? 'Creative / Flying' : 'Creative') : 'Survival'}`;
             updateRoomCodeFloat();
             }
@@ -7510,11 +7518,11 @@
             let feetZ = Math.round(camera.position.z);
             let inLava = getEnvironmentTypeAt(camera.position.x,camera.position.y,camera.position.z) === LAVA_ID ||
                 getEnvironmentTypeAt(camera.position.x,camera.position.y-getPlayerHeight()+0.15*playerScale,camera.position.z) === LAVA_ID;
-            const touchingPortal=isNetherPortalCenter(feetX,feetY,feetZ)||isNetherPortalCenter(headX,headY,headZ);
+            const touchingPortal=portalTarget(getBlock(feetX,feetY,feetZ))||portalTarget(getBlock(headX,headY,headZ));
             if(!touchingPortal) portalExitRequired=false;
             if (portalCooldown === 0 && !portalExitRequired && touchingPortal) {
                 portalCooldown = 3;
-                teleportToDimension(currentDimension === 'nether' ? 'overworld' : 'nether');
+                teleportToDimension(touchingPortal);
             }
 
             if (inLava) {
@@ -7547,7 +7555,10 @@
                 oxygen = 20;
                 document.getElementById('oxygen-ui').style.display = 'none';
                 
-                if (currentDimension === 'nether') {
+                if(currentDimension==='end'){
+                    scene.background.setHex(0x221930);if(scene.fog){scene.fog.color.copy(scene.background);scene.fog.near=160;scene.fog.far=240;}
+                    dirLight.intensity=.65;clouds.visible=false;if(earthMesh)earthMesh.visible=false;
+                }else if (currentDimension === 'nether') {
                     scene.background.setHex(0x2a0600);
                     if (scene.fog) {
                         scene.fog.color.setHex(0x2a0600);
@@ -7591,7 +7602,9 @@
             
             if (!inLava && !inWater) updateCraterVisibility();
 
-            if (currentDimension === 'nether') {
+            if(currentDimension==='end'){
+                dirLight.intensity=.65;
+            }else if (currentDimension === 'nether') {
                 dirLight.intensity=0.35;
             } else if (selectedTerrain !== 'moon') {
                 if (isDay) {

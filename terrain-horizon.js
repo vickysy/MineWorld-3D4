@@ -43,106 +43,111 @@ function horizonGrove(cx,cz){
     }
     return trees;
 }
+// Greedy rectangles use the very same integer columns as the playable terrain.
+const FAR_COLORS=[0x527a36,0x398697,0xc4b47a,0x767771,0xe4e9e7,0x73372b,0xc7c598];
+function farColumn(x,z){
+    const ground=getSurfaceHeight(x,z);
+    if(currentDimension==='end')return [ground,6];
+    if(currentDimension==='nether')return [Math.max(6,ground),5];
+    const water=selectedTerrain==='moon'?-Infinity:Math.max(SEA_LEVEL,worldFloodHeight??-Infinity);
+    if(ground<water)return [water,1];
+    const biome=selectedTerrain==='random'?biomeColumn(x,z).biome:'';
+    return [ground,biome==='snow'?4:biome==='cliffs'||selectedTerrain==='moon'?3:selectedTerrain==='desert'||biome==='beach'||ground<=water+1?2:0];
+}
+function horizonSurface(x,z){
+    const heights=new Int32Array(18*18),colors=new Uint8Array(256),used=new Uint8Array(256),runs=[];
+    for(let dz=-1;dz<=16;dz++)for(let dx=-1;dx<=16;dx++){
+        const [y,tint]=farColumn(x*16+dx,z*16+dz);heights[(dz+1)*18+dx+1]=y;
+        if(dx>=0&&dx<16&&dz>=0&&dz<16)colors[dz*16+dx]=tint;
+    }
+    for(let dz=0;dz<16;dz++)for(let dx=0;dx<16;dx++){
+        const i=dz*16+dx,k=(dz+1)*18+dx+1,y=heights[k],color=colors[i];
+        if(used[i]||currentDimension==='end'&&y===END_VOID_Y)continue;
+        const same=(a,b)=>!used[b*16+a]&&colors[b*16+a]===color&&heights[(b+1)*18+a+1]===y;
+        let w=1,d=1;
+        while(dx+w<16&&same(dx+w,dz))w++;
+        outer:while(dz+d<16){for(let a=dx;a<dx+w;a++)if(!same(a,dz+d))break outer;d++;}
+        let low=y-1;
+        for(let b=0;b<d;b++){
+            used.fill(1,(dz+b)*16+dx,(dz+b)*16+dx+w);
+            low=Math.min(low,heights[k+b*18-1],heights[k+b*18+w]);
+        }
+        for(let a=0;a<w;a++)low=Math.min(low,heights[k-18+a],heights[k+d*18+a]);
+        if(currentDimension==='end')low=endIslandBottom(y)-1;
+        runs.push([dx,dz,w,d,y,low,color]);
+    }
+    return runs;
+}
 function initTerrainHorizon(){
-    const tiles=HORIZON_SIDE**2, vertices=tiles*9;
-    const geometry=new THREE.BufferGeometry();
-    for(const attr of ['position','color'])geometry.setAttribute(attr,new THREE.BufferAttribute(new Float32Array(vertices*3),3).setUsage(THREE.DynamicDrawUsage));
-    geometry.setIndex(new THREE.BufferAttribute(new Uint16Array(tiles*24),1).setUsage(THREE.DynamicDrawUsage));
-    const normals=new Float32Array(vertices*3);for(let i=1;i<normals.length;i+=3)normals[i]=1;
-    geometry.setAttribute('normal',new THREE.BufferAttribute(normals,3));
-    const grain=new Uint8Array(16*16*4),uv=new Float32Array(vertices*2);
-    for(let i=0;i<256;i++){const v=224+((i*37^(i>>3)*83)%32);grain.set([v,v,v,255],4*i);}
-    const tex=new THREE.DataTexture(grain,16,16,THREE.RGBAFormat);tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
-    tex.magFilter=THREE.NearestFilter;tex.minFilter=THREE.LinearMipMapLinearFilter;tex.generateMipmaps=true;tex.needsUpdate=true;
-    for(let i=0;i<vertices;i++){uv[i*2]=(i%3)*2;uv[i*2+1]=(Math.floor(i/3)%3)*2;}
-    geometry.setAttribute('uv',new THREE.BufferAttribute(uv,2));
-    const mesh=new THREE.Mesh(geometry,new THREE.MeshLambertMaterial({vertexColors:true,map:tex}));
-    mesh.frustumCulled=false;scene.add(mesh);
-    horizon={mesh,trees:horizonTrees(tiles),empty:new THREE.Matrix4().makeScale(0,0,0),geometry,slots:new Array(tiles),queue:[],edges:new Set(),seams:new Map(),
-        seamMaterial:new THREE.MeshLambertMaterial({color:0x66814b,side:THREE.DoubleSide}),identity:'',cx:NaN,cz:NaN};
+    const mesh=new THREE.Group();scene.add(mesh);
+    horizon={mesh,trees:horizonTrees(HORIZON_SIDE**2),material:new THREE.MeshLambertMaterial(),
+        geometry:new THREE.BoxGeometry(1,1,1),matrix:new THREE.Matrix4(),empty:new THREE.Matrix4().makeScale(0,0,0),
+        slots:new Array(HORIZON_SIDE**2),pages:new Map(),dirty:new Set(),queue:[],identity:'',cx:NaN,cz:NaN};
 }
 function horizonSlot(x,z){
-    const mod=n=>(n%HORIZON_SIDE+HORIZON_SIDE)%HORIZON_SIDE;
-    return mod(z)*HORIZON_SIDE+mod(x);
+    const mod=n=>(n%HORIZON_SIDE+HORIZON_SIDE)%HORIZON_SIDE;return mod(z)*HORIZON_SIDE+mod(x);
 }
+function horizonPageKey(x,z){return Math.floor(x/4)+','+Math.floor(z/4);}
 function maskTerrainHorizon(cx,cz,detailed){
     if(!horizon)return;
-    const slot=horizonSlot(cx,cz),tile=horizon.slots[slot];
+    const h=horizon,slot=horizonSlot(cx,cz),tile=h.slots[slot];
     if(!tile||tile.x!==cx||tile.z!==cz||tile.masked===detailed)return;
-    tile.masked=detailed;const a=horizon.geometry.index.array;
-    const base=slot*9;let i=slot*24;
-    for(const j of [0,1,3,4])for(const v of [j,j+3,j+1,j+1,j+3,j+4])a[i++]=detailed?0:base+v;
-    horizon.geometry.index.needsUpdate=true;
+    tile.masked=detailed;h.dirty.add(horizonPageKey(cx,cz));
+    // Never draw the distant surface over a freshly built tunnel, even for one frame.
+    if(detailed&&tile.batch){for(let j=tile.begin;j<tile.end;j++)tile.batch.setMatrixAt(j,h.empty);tile.batch.instanceMatrix.needsUpdate=true;tile.batch=null;}
     for(let j=0;j<4;j++){
-        const t=detailed?null:tile.grove?.[j];
-        horizon.trees.setMatrixAt(slot*4+j,t?t.m:horizon.empty);
-        if(t)horizon.trees.setColorAt(slot*4+j,new THREE.Color(t.leaf));
+        const t=detailed?null:tile.grove[j];h.trees.setMatrixAt(slot*4+j,t?t.m:h.empty);
+        if(t)h.trees.setColorAt(slot*4+j,new THREE.Color(t.leaf));
     }
-    horizon.trees.instanceMatrix.needsUpdate=true;if(horizon.trees.instanceColor)horizon.trees.instanceColor.needsUpdate=true;
-    for(const [dx,dz] of [[0,0],[1,0],[-1,0],[0,1],[0,-1]])horizon.edges.add(horizonSlot(cx+dx,cz+dz));
+    h.trees.instanceMatrix.needsUpdate=true;if(h.trees.instanceColor)h.trees.instanceColor.needsUpdate=true;
 }
-function updateHorizonSeam(i){
-    const h=horizon,t=h.slots[i],old=h.seams.get(i),p=[];
-    if(old){scene.remove(old);old.geometry.dispose();h.seams.delete(i);}
-    if(!t||t.masked)return;
-    const pos=h.geometry.attributes.position;
-    for(const [dx,dz,start,stride] of [[-1,0,0,3],[1,0,2,3],[0,-1,0,1],[0,1,6,1]]){
-        if(!chunkMeshes.has((t.x+dx)+','+(t.z+dz)))continue;
-        const ox=t.x*16+(dx>0?16:0),oz=t.z*16+(dz>0?16:0);
-        for(let n=0;n<16;n++){
-            const a=ox+(dz?n:0),b=oz+(dx?n:0),endX=a+(dz?1:0),endZ=b+(dx?1:0);
-            let y=getSurfaceHeight(a+(dx<0?-1:0),b+(dz<0?-1:0));
-            if(currentDimension==='overworld'&&selectedTerrain!=='moon')y=Math.max(y,SEA_LEVEL,worldFloodHeight??-Infinity);
-            const j=i*9+start+Math.floor(n/8)*stride;
-            const low=pos.getY(j),step=(pos.getY(j+stride)-low)/8,y0=low+step*(n%8),y1=y0+step;
-            const A=[a-.5,y+.5,b-.5],B=[endX-.5,y+.5,endZ-.5],C=[a-.5,y0,b-.5],D=[endX-.5,y1,endZ-.5];
-            p.push(...A,...B,...C,...C,...B,...D);
-        }
+function rebuildHorizonPage(key){
+    const h=horizon,[px,pz]=key.split(',').map(Number),tiles=[];let count=0,min=Infinity,max=-Infinity,m=h.pages.get(key);
+    for(let dz=0;dz<4;dz++)for(let dx=0;dx<4;dx++){
+        const x=px*4+dx,z=pz*4+dz,t=h.slots[horizonSlot(x,z)];
+        if(t&&t.x===x&&t.z===z&&!t.masked){tiles.push(t);count+=t.runs.length;}
     }
-    if(!p.length)return;
-    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.computeVertexNormals();
-    const m=new THREE.Mesh(g,h.seamMaterial);scene.add(m);h.seams.set(i,m);
+    if(m&&(!count||m.instanceMatrix.count<count)){h.mesh.remove(m);m.dispose();m.geometry.dispose();h.pages.delete(key);m=null;}
+    if(!count)return;
+    if(!m){
+        m=new THREE.InstancedMesh(h.geometry.clone(),h.material,2**Math.ceil(Math.log2(Math.max(32,count))));
+        m.position.set(px*64,0,pz*64);m.frustumCulled=true;m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        h.pages.set(key,m);h.mesh.add(m);
+    }
+    let index=0;
+    for(const t of tiles){
+        t.batch=m;t.begin=index;
+        for(const [x,z,w,d,y,low,color] of t.runs){
+            h.matrix.makeScale(w,y-low,d);h.matrix.setPosition((t.x-px*4)*16+x+(w-1)*.5,(y+low+1)*.5,(t.z-pz*4)*16+z+(d-1)*.5);
+            m.setMatrixAt(index,h.matrix);m.setColorAt(index++,h.palette[color]);min=Math.min(min,low);max=Math.max(max,y+1);
+        }
+        t.end=index;
+    }
+    m.count=index;m.geometry.boundingSphere=new THREE.Sphere(new THREE.Vector3(31.5,(min+max)/2,31.5),Math.hypot(33,33,(max-min)/2));
+    m.instanceMatrix.needsUpdate=m.instanceColor.needsUpdate=true;
 }
 function updateTerrainHorizon(cx,cz){
     if(!horizon)initTerrainHorizon();
     const h=horizon,identity=[currentDimension,selectedTerrain,seed,wildernessVersion,worldFloodHeight].join('/');
     if(h.identity!==identity){
-        h.identity=identity;h.cx=NaN;h.slots.fill(null);h.geometry.index.array.fill(0);h.geometry.index.needsUpdate=true;
-        for(const m of h.seams.values()){scene.remove(m);m.geometry.dispose();}h.seams.clear();h.edges.clear();
-        h.trees.instanceMatrix.array.fill(0);h.trees.instanceMatrix.needsUpdate=true;
+        h.identity=identity;h.cx=NaN;h.slots.fill(null);h.dirty.clear();
+        for(const m of h.pages.values()){h.mesh.remove(m);m.dispose();m.geometry.dispose();}h.pages.clear();
+        h.trees.instanceMatrix.array.fill(0);h.trees.instanceMatrix.needsUpdate=true;h.palette=FAR_COLORS.map(c=>new THREE.Color(c));
     }
     if(cx!==h.cx||cz!==h.cz){
         h.cx=cx;h.cz=cz;h.queue.length=0;
         for(let dz=-HORIZON_RADIUS;dz<=HORIZON_RADIUS;dz++)for(let dx=-HORIZON_RADIUS;dx<=HORIZON_RADIUS;dx++){
-            const x=cx+dx,z=cz+dz,i=horizonSlot(x,z),tile=h.slots[i];
-            if(tile?.x===x&&tile.z===z){maskTerrainHorizon(x,z,chunkMeshes.has(x+','+z));continue;}
-            if(tile)maskTerrainHorizon(tile.x,tile.z,true);
+            const x=cx+dx,z=cz+dz,i=horizonSlot(x,z),t=h.slots[i];
+            if(t?.x===x&&t.z===z){maskTerrainHorizon(x,z,chunkMeshes.has(x+','+z));continue;}
+            if(t)maskTerrainHorizon(t.x,t.z,true);
             h.queue.push({x,z,i,d:dx*dx+dz*dz});
         }
         h.queue.sort((a,b)=>b.d-a.d);
     }
-    const until=performance.now()+1.4,pos=h.geometry.attributes.position,col=h.geometry.attributes.color;
-    let writes=0;
-    while(h.queue.length&&(!writes||performance.now()<until)){
-        const {x,z,i}=h.queue.pop();h.slots[i]={x,z,masked:null,grove:horizonGrove(x,z)};
-        for(let dz=0;dz<=2;dz++)for(let dx=0;dx<=2;dx++){
-            const px=x*16+dx*8,pz=z*16+dz*8,ground=getSurfaceHeight(px,pz);
-            const wet=currentDimension==='overworld'&&selectedTerrain!=='moon'&&ground<Math.max(SEA_LEVEL,worldFloodHeight??-Infinity);
-            const biome=selectedTerrain==='random'&&currentDimension==='overworld'?biomeColumn(px,pz).biome:'';
-            const tint=currentDimension==='nether'?[.38,.15,.13]:wet?[.21,.54,.64]:biome==='snow'?[.92,.96,.98]:biome==='cliffs'||selectedTerrain==='moon'?[.45,.46,.45]:selectedTerrain==='desert'||biome==='beach'?[.82,.76,.52]:[.34,.54,.21];
-            const v=i*9+dz*3+dx,s=.94+.06*hash(px,pz);
-            pos.setXYZ(v,px-.5,(wet?Math.max(SEA_LEVEL,worldFloodHeight??-Infinity):ground)+.45,pz-.5);
-            col.setXYZ(v,tint[0]*s,tint[1]*s,tint[2]*s);
-        }
-        const norm=h.geometry.attributes.normal,first=i*9;
-        for(let k=0;k<9;k++){
-            const a=k%3,b=Math.floor(k/3),v=first+k;
-            const slopeX=(pos.getY(a===2?v:v+1)-pos.getY(a===0?v:v-1))/(a===1?16:8);
-            const slopeZ=(pos.getY(b===2?v:v+3)-pos.getY(b===0?v:v-3))/(b===1?16:8);
-            const n=Math.hypot(slopeX,1,slopeZ);norm.setXYZ(v,-slopeX/n,1/n,-slopeZ/n);
-        }
-        maskTerrainHorizon(x,z,chunkMeshes.has(x+','+z));writes++;
+    const until=performance.now()+1.5;
+    while(h.queue.length){
+        const {x,z,i}=h.queue.pop();h.slots[i]={x,z,i,runs:horizonSurface(x,z),grove:horizonGrove(x,z),masked:null};
+        maskTerrainHorizon(x,z,chunkMeshes.has(x+','+z));if(performance.now()>=until)break;
     }
-    if(writes){pos.needsUpdate=col.needsUpdate=h.geometry.attributes.normal.needsUpdate=true;}
-    for(const i of h.edges){h.edges.delete(i);updateHorizonSeam(i);if(performance.now()>until)break;}
+    for(const key of h.dirty){h.dirty.delete(key);rebuildHorizonPage(key);if(performance.now()>=until)break;}
 }

@@ -1,4 +1,4 @@
-const ROOM_PROTOCOL='daniel-mc-room-12', ROOM_PREFIX='daniel-mc-room2-';
+const ROOM_PROTOCOL='daniel-mc-room-13', ROOM_PREFIX='daniel-mc-room2-';
 const ROOM_TIMEOUT_MS=30000, ROOM_MAX_SAVE=16*1024*1024, ROOM_PACKET_CELLS=128;
 let multiplayerRoom=null, multiplayerMode='host', currentRoomCode='', remotePlayers={};
 
@@ -220,7 +220,7 @@ function sendRoomSnapshot(r,entry) {
 
 function validateRoomPosition(p) {
     return ['x','y','z','ry'].every(k=>Number.isFinite(p[k])&&Math.abs(p[k])<=1000000)&&
-        Number.isFinite(p.scale)&&p.scale>=MIN_PLAYER_SCALE&&p.scale<=MAX_PLAYER_SCALE&&['overworld','nether'].includes(p.dimension);
+        Number.isFinite(p.scale)&&p.scale>=MIN_PLAYER_SCALE&&p.scale<=MAX_PLAYER_SCALE&&['overworld','nether','end'].includes(p.dimension);
 }
 
 function displayRoomPlayer(id,p) {
@@ -245,7 +245,7 @@ function interpolateRoomPlayers(now){
 }
 
 function roomCellValid(cell) {
-    return Array.isArray(cell)&&cell.length===4&&cell.every(Number.isSafeInteger)&&cell.slice(0,3).every(n=>Math.abs(n)<=100000)&&cell[3]>=0&&(cell[3]<=153||!!NATURE_ITEMS[cell[3]]||!!HIDDEN_BLOCKS[cell[3]]);
+    return Array.isArray(cell)&&cell.length===4&&cell.every(Number.isSafeInteger)&&cell.slice(0,3).every(n=>Math.abs(n)<=100000)&&cell[3]>=0&&(cell[3]<=153||cell[3]===END_PORTAL_ID||!!NATURE_ITEMS[cell[3]]||!!HIDDEN_BLOCKS[cell[3]]);
 }
 
 function applyRoomCells(r,cells,actor=null) {

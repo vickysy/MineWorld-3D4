@@ -1,6 +1,20 @@
 const ENDER_EGG_ID = 72, FRIDGE_ID = 73, CONSOLE_ID = 74, HANDHELD_ID = 75;
 const TV_ID = 76, COMPUTER_ID = 77, KEYBOARD_ID = 78, CHAIR_ID = 79;
 const FRIDGE_TOP_ID = 80, NETHER_PORTAL_ID = 81;
+const END_STONE_ID=209,END_PORTAL_ID=210,END_VOID_Y=-24;
+function endIslandHeight(x,z){
+    const rx=Math.floor((x+48)/96),rz=Math.floor((z+48)/96),central=!rx&&!rz;
+    const ax=rx*96+(central?0:Math.floor(hash(rx+11,rz)*18)-9),az=rz*96+(central?0:Math.floor(hash(rx,rz+47)*18)-9);
+    const radius=central?43:21+hash(rx-7,rz+18)*14;
+    const rim=1-Math.hypot(x-ax,(z-az)*1.07)/radius+(landscapeNoise(x/14,z/14,63)-.5)*.18;
+    return rim<=0?END_VOID_Y:Math.floor(16+Math.min(1,rim)*13+landscapeNoise(x/12,z/12,91)*4);
+}
+function endIslandBottom(top){return 11-Math.floor((top-16)*.65);}
+function portalTarget(id){
+    if(id===END_PORTAL_ID&&currentDimension!=='nether')return currentDimension==='end'?'overworld':'end';
+    if(id===NETHER_PORTAL_ID&&currentDimension!=='end')return currentDimension==='nether'?'overworld':'nether';
+    return null;
+}
 const HIDDEN_BLOCKS = {
     132:{name:'Hidden Grass',base:1},
     133:{name:'Hidden Dirt',base:2},
@@ -116,22 +130,22 @@ function expansionBlockChanged(x,y,z,oldType,type) {
     }
     if(oldType===FRIDGE_TOP_ID && type!==oldType && HOME_ITEMS[getBlock(x,y-1,z)]) setBlockNoRebuild(x,y-1,z,0,rebuildQueue);
     for(const [id,portal] of activePortals) {
-        if(!portal.frame.some(p=>p[0]===x && p[1]===y && p[2]===z)) continue;
-        if(type===portal.material) continue;
+        const at=p=>p[0]===x&&p[1]===y&&p[2]===z,block=portal.block??NETHER_PORTAL_ID;
+        if(!(type!==portal.material&&portal.frame.some(at))&&!(oldType===block&&type!==block&&portal.cells.some(at)))continue;
         activePortals.delete(id);
-        for(const p of portal.cells) if(getBlock(...p)===NETHER_PORTAL_ID) setBlockNoRebuild(...p,0,rebuildQueue);
+        for(const p of portal.cells) if(getBlock(...p)===(portal.block??NETHER_PORTAL_ID)) setBlockNoRebuild(...p,0,rebuildQueue);
     }
     furnitureTick=1;
 }
 
-function openPortal(frame,cells,material) {
-    if(cells.some(p=>![0,42,NETHER_PORTAL_ID,LAVA_ID].includes(getBlock(...p)))) return false;
+function openPortal(frame,cells,material,block=NETHER_PORTAL_ID) {
+    if(!portalTarget(block)||cells.some(p=>![0,42,block,LAVA_ID].includes(getBlock(...p)))) return false;
     const key=cells[0].join(',');
     if(activePortals.has(key)) return true;
     const dirty=new Set();
-    activePortals.set(key,{frame,cells,material});
-    for(const p of cells) setBlockNoRebuild(...p,NETHER_PORTAL_ID,dirty);
-    addDirtyChunksToQueue(dirty);showToast('Nether portal opened.');return true;
+    activePortals.set(key,{frame,cells,material,block});
+    for(const p of cells) setBlockNoRebuild(...p,block,dirty);
+    addDirtyChunksToQueue(dirty);showToast(block===END_PORTAL_ID?'End portal opened.':'Nether portal opened.');return true;
 }
 
 function activatePortalNear(x,y,z) {
@@ -141,6 +155,9 @@ function activatePortalNear(x,y,z) {
         const cx=x+dx,cz=z+dz,frame=[];
         for(let a=-1;a<=1;a++) for(let b=-1;b<=1;b++) if(a || b) frame.push([cx+a,y,cz+b]);
         if(frame.every(p=>getBlock(...p)===32)) opened=openPortal(frame,[[cx,y,cz],[cx,y+1,cz]],32)||opened;
+        const stone=getBlock(...frame[0]);
+        if([OBSIDIAN_ID,BLACKSTONE_ID].includes(stone)&&frame.every(p=>getBlock(...p)===stone))
+            opened=openPortal(frame,[[cx,y,cz]],stone,END_PORTAL_ID)||opened;
     }
     // A conventional four-wide, five-high frame works in either vertical orientation.
     for(const axis of ['x','z']) for(let u=-3;u<=0;u++) for(let v=-4;v<=0;v++) {
@@ -178,12 +195,12 @@ function restoreDimension(data={}) {
 }
 
 function travelThroughPortal(next) {
-    if(next===currentDimension) return;
+    if(next===currentDimension||!['end','nether','overworld'].includes(next)) return;
     if(commandJob) {showToast('Wait for the command to finish.');return;}
     if(multiplayerRoom)leaveMultiplayerRoom('Left room before changing dimension.');
     closeFurniturePanel(false);if(!leaveCityCar() || !standFromChair()) return;clearCombatState();resetPlayerFlight();
     dimensionWorlds.set(currentDimension,snapshotDimension());
-    currentDimension=next;const saved=dimensionWorlds.get(next);
+    currentDimension=next;heightCache.clear();const saved=dimensionWorlds.get(next);
     restoreDimension(saved);
     for(const list of [zombies,creepers,villagers,animals,endermen,minecarts]) {for(const mob of list) scene.remove(mob.mesh);list.length=0;}
     ridingMinecart=null;
@@ -193,27 +210,32 @@ function travelThroughPortal(next) {
     chunkMeshes.clear();chunkQueue.length=0;rebuildQueue.clear();lastChunkX=lastChunkZ=-999;
     if(saved?.returnPoint) {
         camera.position.fromArray(saved.returnPoint);
-        for(const m of saved.companions||[]) {if(next==='nether'&&m.id===67)continue;const mob=spawnMobFromEgg(m.id,...m.pos);mob.hp=m.hp;}
+        for(const m of saved.companions||[]) {if(next!=='overworld'&&m.id===67)continue;const mob=spawnMobFromEgg(m.id,...m.pos);mob.hp=m.hp;}
         for(const m of saved.endermen||[]) spawnEnderman(...m.pos,true,m.hp);
         if(next==='overworld') for(const m of saved.residents||[]) {spawnVillagerAt(...m.pos);Object.assign(villagers[villagers.length-1],{cityResident:true,hp:m.hp});}
     }
     else {
-        const x=Math.round(camera.position.x),z=Math.round(camera.position.z);
+        const x=next==='end'?0:Math.round(camera.position.x),z=next==='end'?0:Math.round(camera.position.z);
         const y=Math.max(7,getSurfaceHeight(x,z)+1),dirty=new Set();
         for(let dx=-3;dx<=4;dx++) for(let dz=-3;dz<=3;dz++) {
-            setBlockNoRebuild(x+dx,y-1,z+dz,3,dirty);
+            setBlockNoRebuild(x+dx,y-1,z+dz,next==='end'?END_STONE_ID:3,dirty);
             for(let dy=0;dy<6;dy++) setBlockNoRebuild(x+dx,y+dy,z+dz,0,dirty);
         }
-        for(let a=0;a<4;a++) for(let b=0;b<5;b++) if(a===0||a===3||b===0||b===4) setBlockNoRebuild(x+a,y+b,z,OBSIDIAN_ID,dirty);
-        activatePortalNear(x,y,z);camera.position.set(x+1,y-0.5+getPlayerHeight(),z+2);
+        if(next==='end'){
+            for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++)if(a||b)setBlockNoRebuild(x+a,y,z+b,OBSIDIAN_ID,dirty);
+            activatePortalNear(x+1,y,z);camera.position.set(x,y-.5+getPlayerHeight(),z+3);
+        }else{
+            for(let a=0;a<4;a++) for(let b=0;b<5;b++) if(a===0||a===3||b===0||b===4) setBlockNoRebuild(x+a,y+b,z,OBSIDIAN_ID,dirty);
+            activatePortalNear(x,y,z);camera.position.set(x+1,y-0.5+getPlayerHeight(),z+2);
+        }
     }
     velocity.set(0,0,0);portalCooldown=3;portalExitRequired=true;
     for(const [key,type] of worldMap) if(type===16) {
         const light=new THREE.PointLight(0xffdd88,1.5,12);light.position.set(...key.split(',').map(Number));scene.add(light);torchLights.set(key,light);
     }
     updateChunks(camera.position);syncFurnitureMeshes();
-    if(next==='nether') populateNetherEndermen();
-    showToast(next==='nether'?'Entered the Nether.':'Returned to Overworld.');
+    if(next==='end') populateEndIsland();
+    showToast(next==='end'?'Entered the End.':next==='nether'?'Entered the Nether.':'Returned to Overworld.');
 }
 
 function saveWorldExpansion() {
@@ -265,6 +287,7 @@ function createEndermanModel() {
 }
 
 function spawnEnderman(x,y,z,friendly=false,hp=8) {
+    if(currentDimension!=='end')return null;
     const mesh=createEndermanModel();mesh.position.set(x,y,z);scene.add(mesh);
     const mob={mesh,kind:'enderman',friendly,eggId:friendly?ENDER_EGG_ID:undefined,hp:Math.max(1,Math.min(8,hp||8)),
         vx:0,vy:0,vz:0,hurtTimer:0,dying:false,walkTime:0,anger:0,teleportTimer:4,attackCooldown:0};
@@ -291,11 +314,11 @@ function teleportEnderman(mob) {
 
 let endermanSpawnTimer=0;
 function updateEndermen(delta) {
-    if(!controls.isLocked || !isGameStarted || isSleeping) return;
+    if(currentDimension!=='end'||!controls.isLocked || !isGameStarted || isSleeping) return;
     endermanSpawnTimer+=delta;
     if(endermanSpawnTimer>12) {
         endermanSpawnTimer=0;
-        if((currentDimension==='nether'||!isCreativeMode()&&isNightTime()) && endermen.filter(m=>!m.friendly).length<4) {
+        if(endermen.filter(m=>!m.friendly).length<4) {
             const angle=Math.random()*Math.PI*2,x=Math.round(camera.position.x+Math.cos(angle)*18),z=Math.round(camera.position.z+Math.sin(angle)*18);
             const y=getSurfaceHeight(x,z)+1;if(safeEndermanSpot(x,y,z)) spawnEnderman(x,y,z);
         }
@@ -599,11 +622,11 @@ function handleExpansionClick(e) {
         if(!consumeInventoryItem(BUCKET_ID)) return true;
         setBlock(hit.x,hit.y,hit.z,0);playerInventory[WATER_BUCKET_ID]=(playerInventory[WATER_BUCKET_ID]||0)+1;updateInventoryCounts();return true;
     }
-    if(hit.type===NETHER_PORTAL_ID || hit.type===32 || hit.type===OBSIDIAN_ID) {
-        if(hit.type!==NETHER_PORTAL_ID) activatePortalNear(hit.x,hit.y,hit.z);
+    if(portalTarget(hit.type)||[32,OBSIDIAN_ID,BLACKSTONE_ID].includes(hit.type)) {
+        if(!portalTarget(hit.type)) activatePortalNear(hit.x,hit.y,hit.z);
         const portal=Array.from(activePortals.values()).find(p=>[...p.cells,...p.frame].some(c=>c[0]===hit.x&&c[1]===hit.y&&c[2]===hit.z));
-        if(portal && portalCooldown===0 && currentBlock!==32 && currentBlock!==OBSIDIAN_ID) {
-            travelThroughPortal(currentDimension==='nether'?'overworld':'nether');return true;
+        if(portal && portalCooldown===0 && ![32,OBSIDIAN_ID,BLACKSTONE_ID].includes(currentBlock)) {
+            travelThroughPortal(portalTarget(portal.block??NETHER_PORTAL_ID));return true;
         }
     }
     const record=furnitureRecord(hit.x,hit.y,hit.z);
@@ -639,6 +662,11 @@ function initWorldExpansion() {
     materials[FURNITURE_PART_ID]=materials[93];
     for(const id of Object.keys(CAR_ITEMS))materials[id]=new THREE.MeshLambertMaterial({color:CAR_MODELS[CAR_ITEMS[id]].color});
     materials[NETHER_PORTAL_ID]=new THREE.MeshBasicMaterial({color:0xb86df0,transparent:true,opacity:0.58,depthWrite:false});
+    const stars=document.createElement('canvas');stars.width=stars.height=32;
+    const ctx=stars.getContext('2d');ctx.fillStyle='#101521';ctx.fillRect(0,0,32,32);
+    for(let i=0;i<39;i++){ctx.fillStyle=['#4caba2','#34566c','#bba6dc'][i%3];ctx.fillRect((i*13)%32,(i*i*3+7*i+5)%32,1,1);}
+    const starMap=new THREE.CanvasTexture(stars);starMap.magFilter=THREE.NearestFilter;
+    materials[END_PORTAL_ID]=new THREE.MeshBasicMaterial({map:starMap});
     matWater.map.wrapS=matWater.map.wrapT=THREE.RepeatWrapping;
     const homeRecipes=[{ing:{36:4,6:1,28:1},out:73,count:1},{ing:{51:2,36:2,28:2,38:1},out:74,count:1},
         {ing:{36:2,6:1,28:1,38:1},out:75,count:1},{ing:{6:3,36:2,28:1},out:76,count:1},

@@ -3,6 +3,7 @@ const LEAF_TYPES=new Set([5,155,156,157]);
 const NATURE_ITEMS={154:'Snow Block',155:'Amber Leaves',156:'Crimson Leaves',157:'Golden Leaves',158:'Bamboo',159:'Bamboo Shoot',160:'Meadow Grass',161:'Fern',162:'Ribbon Seagrass',163:'Tall Seagrass',164:'Sea Fan',165:'Red Coral',166:'Blue Coral',167:'Pink Coral',168:'Yellow Coral',169:'Purple Coral',186:'Snow Layer'};
 const BRICK_COLORS=[['White',0xe3e6e4],['Light Gray',0xaeb3b5],['Gray',0x646b70],['Black',0x303438],['Red',0xb44238],['Orange',0xd47d42],['Yellow',0xe0c461],['Lime',0x97ba54],['Green',0x467d53],['Cyan',0x398e9c],['Light Blue',0x79b9d3],['Blue',0x426fa2],['Purple',0x855e9d],['Magenta',0xb75f96],['Pink',0xdf9da9],['Brown',0x89634e]];
 BRICK_COLORS.forEach(([name],i)=>NATURE_ITEMS[170+i]=name+' Brick');
+NATURE_ITEMS[END_STONE_ID]='End Stone';
 const WATER_PLANTS=new Set([162,163,164,165,166,167,168,169]);
 const NATURE_PLANTS=new Set([158,159,160,161,...WATER_PLANTS]);
 const hiddenByBase=new Map([[1,132],[2,133],[3,134]]);
@@ -287,7 +288,7 @@ function initWilderness(){
     materials[127]??=new THREE.MeshLambertMaterial({map:materials[3].map,color:0x9f5051});
     const colors=[0xffffff,0xc98032,0xb34448,0xe1bf4c,0x71a345,0xa7974d,0x78a94c,0x427f4a,0x508f63,0x39826b,0x687fa2,0xd2584e,0x528bc0,0xd8839e,0xe4ba52,0x9a66b6];
     for(const [text,name] of Object.entries(NATURE_ITEMS)){
-        const id=Number(text),color=ECOLOGY_COLORS[id]??(id===SNOW_LAYER_ID?0xffffff:id>=170?BRICK_COLORS[id-170][1]:colors[id-154]);
+        const id=Number(text),color=ECOLOGY_COLORS[id]??(id===END_STONE_ID?0xd8d7a0:id===SNOW_LAYER_ID?0xffffff:id>=170?BRICK_COLORS[id-170][1]:colors[id-154]);
         NATURE_COLORS[id]=color;
         materials[id]=new THREE.MeshLambertMaterial({map:ECOLOGY_ITEMS[id]?ecologyTexture(id):natureTexture(id,color,id>=170&&id<=185),...(LEAF_TYPES.has(id)?{alphaTest:.5}:{})});
         const slot=document.createElement('button');slot.className='slot nature-slot';slot.id=`inv-${id-12}`;slot.textContent=name;slot.onclick=()=>selectSlot(id-12);

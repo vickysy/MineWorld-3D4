@@ -150,8 +150,8 @@ function openMarketTrade(merchant) {
     });
 }
 
-function populateNetherEndermen() {
-    if(currentDimension!=='nether')return;
+function populateEndIsland() {
+    if(currentDimension!=='end')return;
     for(let i=0;i<48&&endermen.filter(m=>!m.friendly).length<3;i++) {
         const angle=i*2.399963,x=Math.round(camera.position.x+Math.cos(angle)*(10+i%12)),z=Math.round(camera.position.z+Math.sin(angle)*(10+i%12));
         const y=getSurfaceHeight(x,z)+1;
