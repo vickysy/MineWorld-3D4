@@ -1,0 +1,39 @@
+const assert=require('node:assert/strict'),path=require('node:path'),{pathToFileURL}=require('node:url');
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+(async()=>{
+ const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH});
+ try{
+  const page=await browser.newPage({viewport:{width:1000,height:760}}),errors=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  await page.addInitScript(()=>window.requestAnimationFrame=()=>0);
+  await page.goto(process.env.GAME_URL||pathToFileURL(path.resolve(__dirname,'../game3d.html')).href);
+  await page.waitForFunction(()=>expansionReady);
+  await page.getByRole('button',{name:'Creative',exact:true}).click();
+  await page.getByRole('button',{name:'Moon',exact:true}).click();
+  await page.getByRole('button',{name:'Start Game',exact:true}).click();
+  await page.waitForFunction(()=>isGameStarted&&controls.isLocked);
+  await page.keyboard.press('e');
+  await page.getByRole('button',{name:'Tools',exact:true}).click();
+  const rod=page.getByRole('button',{name:'钓鱼竿 / Fishing Rod',exact:true});
+  await rod.click();
+  assert.equal(await page.evaluate(()=>currentBlock),213);
+  assert.equal(await page.locator('#tab-weapon > :first-child').getAttribute('id'),'inv-201');
+  assert.equal(await page.locator('#tab-build #inv-201').count(),0);
+  assert(await rod.locator('img').evaluate(img=>img.complete&&img.naturalWidth===24));
+  assert(await rod.evaluate(el=>el.scrollHeight<=el.clientHeight&&el.scrollWidth<=el.clientWidth));
+  await page.screenshot({path:'/private/tmp/mc-fishing-tools-desktop.png'});
+  const tabs=await page.locator('#inventory-tabs').boundingBox(),item=await rod.boundingBox();
+  await page.screenshot({path:'/private/tmp/mc-fishing-location.png',clip:{x:tabs.x-8,y:tabs.y-8,width:tabs.width+16,height:item.y+item.height-tabs.y+16}});
+  await page.setViewportSize({width:390,height:844});
+  await page.waitForFunction(()=>renderer.domElement.width===390,null,{polling:50});await page.evaluate(()=>renderer.render(scene,camera));
+  const bounds=await rod.boundingBox();assert(bounds.x>=0&&bounds.x+bounds.width<=390&&bounds.y>=0&&bounds.y+bounds.height<=844);
+  await page.screenshot({path:'/private/tmp/mc-fishing-tools-mobile.png'});
+  await page.evaluate(()=>{switchTab('build');executeWorldCommand(parseWorldCommand('查找钓鱼竿'));});
+  assert(await rod.isVisible());assert.equal(await page.evaluate(()=>currentBlock),213);
+  await page.evaluate(()=>{gameMode='survival';playerInventory[FISHING_ROD]=0;updateInventoryCounts();});
+  assert.equal(await rod.locator('.inv-qty').textContent(),'0');
+  assert.equal(await page.evaluate(()=>hasInventoryItem(FISHING_ROD)),false);
+  assert.deepEqual(errors,[]);
+  console.log('PASS: E, Tools first item, actual selection, rod icon, desktop/mobile fit, Chinese search and survival count.');
+ }finally{await browser.close();}
+})().catch(e=>{console.error(e);process.exitCode=1;});

@@ -110,6 +110,17 @@ function captureLandscape(){
 function initOutdoors(){
     recipes.push({ing:{4:3,[STRING_ITEM]:2},out:FISHING_ROD,count:1},{ing:{[RICE]:1},out:RICE_SEEDS,count:2});
     Object.assign(COMMAND_ITEMS,{'鱼竿':FISHING_ROD,'钓鱼竿':FISHING_ROD,'蜘蛛网':COBWEB,'线':STRING_ITEM,'水稻':RICE_SEEDS,'秧苗':RICE_SEEDS,'花':FLOWER_RED});
+    const rod=document.getElementById('inv-'+(FISHING_ROD-12)),icon=rod.querySelector('img');
+    const canvas=document.createElement('canvas');canvas.width=canvas.height=24;
+    const ctx=canvas.getContext('2d');ctx.fillStyle='#b98a50';
+    for(let i=0;i<8;i++)ctx.fillRect(3+i,20-i*2,3,3);
+    ctx.fillStyle='#e4cc9e';ctx.fillRect(3,20,4,3);ctx.fillStyle='#c4dce3';
+    ctx.fillRect(13,5,1,15);ctx.fillRect(13,19,4,1);ctx.fillRect(16,17,1,3);
+    ctx.fillStyle='#8eabae';ctx.fillRect(6,17,4,3);icon.src=canvas.toDataURL();
+    const label=document.createElement('span');label.textContent='钓鱼竿 / Fishing Rod';
+    rod.replaceChildren(icon,label);rod.setAttribute('aria-label',label.textContent);rod.title='钓鱼竿 / Fishing Rod - Wood x3 + String x2';
+    document.getElementById('tab-weapon').prepend(rod,document.getElementById('inv-'+(STRING_ITEM-12)));
+    updateInventoryCounts();
     for(const id of [COBWEB,FLOWER_RED,FLOWER_BLUE]){materials[id].transparent=false;materials[id].alphaTest=.5;materials[id].side=THREE.DoubleSide;}
     for(const id of [RICE_SHOOTS,RICE_GREEN,RICE_RIPE])document.getElementById('inv-'+(id-12)).hidden=true;
     const bar=document.createElement('div');bar.id='photo-tools';bar.hidden=true;
