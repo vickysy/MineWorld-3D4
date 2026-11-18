@@ -17,6 +17,7 @@ function constructionTypeAt(x,y,z) {
         if(r.kind==='building')return buildingBlockAt(r,x-r.x,y-r.y,z-r.z);
         if(r.kind==='towers')return cornerTowerBlockAt(r,x-r.x,y-r.y,z-r.z);
         if(r.kind==='fortress')return fortressBlockAt(r,x-r.x,y-r.y,z-r.z);
+        if(r.kind==='prison')return prisonBlockAt(r,x-r.x,y-r.y,z-r.z);
         if(r.kind==='wall')return 59;
         if(y===r.y)return 63;
         const edge=Math.min(x-r.x,z-r.z,r.x+r.width-1-x,r.z+r.depth-1-z)<r.thickness;
@@ -156,6 +157,12 @@ function parseBuildingCommand(text) {
 }
 
 function parseConstructionCommand(text) {
+    if(/牢房|监狱|prison|jail/.test(text)){
+        if(/清理|清空|删除|撤销|挖空/.test(text))throw new Error('建造牢房请填写尺寸，例如“建造牢房12×10×5”。');
+        const sizes=commandDimensions(text)||[12,10,5],width=sizes[0],depth=sizes[1],height=sizes[2]??5;
+        if(![width,depth,height].every(Number.isSafeInteger)||width<7||depth<8||height<4||width>40||depth>40||height>12)throw new Error('牢房长7到40格、宽8到40格、高4到12格。');
+        return {kind:'construction',shape:'prison',width,depth,height,thickness:1,label:`牢房：${width}×${depth}×${height}格。使用栏杆围墙与顶棚，有可开关的门、床和照明。会替换范围内方块；确认后执行，可撤销。`};
+    }
     const fortress=parseFortressCommand(text);if(fortress)return fortress;
     const building=parseBuildingCommand(text);if(building)return building;
     if((!/field|场地|庭院|院子|城墙|围墙|wall|墙|空间/.test(text)&&!/^\d+(?:×\d+){1,2}$/.test(text))||/清理|清空|挖空|填水/.test(text))return null;
@@ -183,6 +190,17 @@ function parseConstructionCommand(text) {
     if(kind!=='wall'&&(width<=thickness*2||depth<=thickness*2))throw new Error('长和宽必须大于两倍墙厚，内部才有空间。');
     const label=kind==='wall'?`建墙：长${width}、高${height}、厚${thickness}格。`:`${kind==='castle'?'城墙':'无顶场地'}：长 × 宽 × 高：${width} × ${depth} × ${height} 格，墙厚${thickness}格；有地板，内部挖空，不封顶。`;
     return {kind:'construction',shape:kind,width,depth,height,thickness,label:label+'会替换选定范围内的建筑。确认后执行，可撤销。'};
+}
+
+function prisonBlockAt(r,x,y,z){
+    if(y===0)return 63;
+    const mid=Math.floor(r.width/2),partition=Math.floor(r.depth/2),side=x===0||x===r.width-1;
+    if((z===0||z===partition)&&x===mid&&y<=2)return y===1?8:9;
+    if(y===r.height)return 98;
+    if(side||z===0||z===r.depth-1||z===partition)return (side&&(z===0||z===r.depth-1))?3:98;
+    if(y===1&&x===2&&[r.depth-3,r.depth-2].includes(z))return z===r.depth-3?14:15;
+    if(y===r.height-1&&x===2&&z===2)return 62;
+    return 0;
 }
 
 function saveConstruction() {
@@ -239,7 +257,7 @@ function tickConstruction() {
         if(r.kind==='building'){camera.position.x=r.x+Math.floor(r.width/2);camera.position.z=r.z+r.depth-3;}
         camera.position.y=r.y+0.5+getPlayerHeight();velocity.set(0,0,0);
     }
-    commandJob=null;showCommandStatus(r.kind==='wall'?'墙体已完成。':r.kind==='building'?`${r.floors}层楼房已完成。`:
+    commandJob=null;showCommandStatus(r.kind==='prison'?'牢房已完成。':r.kind==='wall'?'墙体已完成。':r.kind==='building'?`${r.floors}层楼房已完成。`:
         r.kind==='fortress'?'城墙和四角城楼已一起完成。':r.kind==='towers'?'四角城楼已完成，中间为露天庭院。':'已完成。场地没有屋顶。');
 }
 

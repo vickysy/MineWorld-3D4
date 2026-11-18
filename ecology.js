@@ -26,16 +26,22 @@ function ecologyTexture(id){
         ctx.fillStyle='#c9bc99';ctx.fillRect(4,5,5,54);ctx.fillRect(55,5,5,54);
         ctx.fillStyle='#3c3834';ctx.fillRect(28,6,8,6);
     }
+    outdoorTexture(id,map);
     map.needsUpdate=true;return map;
 }
 
 function ecologyGeometry(id){
-    if(!ECOLOGY_ITEMS[id]&&!NATURE_PLANTS.has(id)&&id!==42)return null;
+    if(!ECOLOGY_ITEMS[id]&&!NATURE_PLANTS.has(id)&&id!==42&&id!==98)return null;
     if(natureGeometries.has(id))return natureGeometries.get(id);
     if(LEAF_TYPES.has(id))return null;
     const pieces=[];
     const box=(w,h,d,x,y,z)=>{const g=new THREE.BoxGeometry(w,h,d).toNonIndexed();g.translate(x,y,z);pieces.push(g);};
-    if(isTrapdoor(id))box(1,id===TRAPDOOR?.15:1,id===TRAPDOOR?1:.15,0,id===TRAPDOOR?-.425:0,id===TRAPDOOR?0:-.425);
+    if(outdoorGeometry(id,box,pieces)){}
+    else if(id===98){
+        box(.99,.07,.07,0,.43,0);box(.99,.05,.05,0,-.05,0);
+        for(const x of [-.45,0,.45])box(.06,.98,.06,x,-.01,0);
+    }
+    else if(isTrapdoor(id))box(1,id===TRAPDOOR?.15:1,id===TRAPDOOR?1:.15,0,id===TRAPDOOR?-.425:0,id===TRAPDOOR?0:-.425);
     else if(id===BAMBOO_SEED||id===WHEAT_SEEDS){for(const x of [-.13,0,.13])box(.085,.06,.12,x,-.47,0);}
     else if(id>=WHEAT_YOUNG&&id<=WHEAT){
         const ripe=id>=WHEAT_RIPE,h=ripe?.78:id===WHEAT_GREEN?.49:.2;
@@ -103,6 +109,7 @@ function growOrchardTree(x,y,z,cherry){
 function growPlant(x,y,z,p){
     const id=getBlock(x,y,z),delay=id===187?15:id===159?25:id===158?30:LEAF_TYPES.has(id)?100:45;
     if(id!==p.id)return false;
+    if([RICE_SHOOTS,RICE_GREEN].includes(id)&&!riceWaterNearby(x,y,z))return true;
     if(!LEAF_TYPES.has(id)&&!plantSoil(getBlock(x,y-1,z))&&!(id===158&&getBlock(x,y-1,z)===158))return false;
     if(p.age<delay)return true;
     p.age=0;
@@ -122,7 +129,7 @@ function growPlant(x,y,z,p){
         return true;
     }
     if(id===199||id===200)return !growOrchardTree(x,y,z,id===199);
-    const next={187:159,159:158,188:189,189:190,192:199,193:200,194:202,203:195,205:206,206:207}[id];
+    const next={187:159,159:158,188:189,189:190,192:199,193:200,194:202,203:195,205:206,206:207,216:217,217:218}[id];
     if(next)setBlockNoRebuild(x,y,z,next,rebuildQueue);
     return false;
 }
@@ -178,7 +185,7 @@ function toggleTrapdoor(x,y,z){
     setBlock(x,y,z,next);playSound('door');return true;
 }
 function harvestPlant(x,y,z){
-    const id=getBlock(x,y,z),choice={190:[189,191,3],195:[203,196,1],202:[194,201,2],207:[WHEAT_YOUNG,WHEAT,2]}[id];
+    const id=getBlock(x,y,z),choice={190:[189,191,3],195:[203,196,1],202:[194,201,2],207:[WHEAT_YOUNG,WHEAT,2],218:[RICE_SHOOTS,RICE,2]}[id];
     if(!choice)return null;
     if(setBlock(x,y,z,choice[0])===false)return null;
     return {id:choice[1],count:choice[2]};
@@ -207,7 +214,7 @@ function handleEcologyClick(e){
         }else if(!requestEcologyAction('trapdoor',[hit.x,hit.y,hit.z]))toggleTrapdoor(hit.x,hit.y,hit.z);
         return true;
     }
-    if([190,195,202,WHEAT_RIPE].includes(hit.type)&&!e.shiftKey){
+    if([190,195,202,WHEAT_RIPE,RICE_RIPE].includes(hit.type)&&!e.shiftKey){
         if(!requestEcologyAction('harvest',[hit.x,hit.y,hit.z]))grantHarvest(harvestPlant(hit.x,hit.y,hit.z));return true;
     }
     if(!PLANTABLE.has(currentBlock))return false;
@@ -215,7 +222,8 @@ function handleEcologyClick(e){
     const at=plantSpace(hit.type)||[188,189,190].includes(hit.type)?[hit.x,hit.y,hit.z]:hit.previous;
     if(!at||!plantSpace(getBlock(...at))||!plantSoil(getBlock(at[0],at[1]-1,at[2]))||currentDimension!=='overworld'){showToast('Plant on grass, dirt or sand.');return true;}
     if(currentBlock===WHEAT_SEEDS&&![1,2].includes(getBlock(at[0],at[1]-1,at[2]))){showToast('Plant wheat in dirt or grass.');return true;}
-    if(consumeInventoryItem(currentBlock)){setBlock(...at,currentBlock===191?188:currentBlock===WHEAT_SEEDS?WHEAT_YOUNG:currentBlock);updateInventoryCounts();playSound('place');}
+    if(currentBlock===RICE_SEEDS&&(![1,2].includes(getBlock(at[0],at[1]-1,at[2]))||!riceWaterNearby(...at))){showToast('Plant rice in soil beside water.');return true;}
+    if(consumeInventoryItem(currentBlock)){setBlock(...at,currentBlock===191?188:currentBlock===WHEAT_SEEDS?WHEAT_YOUNG:currentBlock===RICE_SEEDS?RICE_SHOOTS:currentBlock);updateInventoryCounts();playSound('place');}
     return true;
 }
 
@@ -223,7 +231,7 @@ function hasWorkbench(){
     if(isCreativeMode())return true;
     return workbenchFocus&&getBlock(...workbenchFocus)===12&&camera.position.distanceTo(new THREE.Vector3(...workbenchFocus))<=6;
 }
-function recipeNeedsWorkbench(recipe){return ![12,7,16,59,65,187,WHEAT_SEEDS].includes(recipe.out);}
+function recipeNeedsWorkbench(recipe){return ![12,7,16,59,65,187,WHEAT_SEEDS,RICE_SEEDS].includes(recipe.out);}
 function setWorkbench(at=null){
     workbenchFocus=at;
     const full=hasWorkbench();
@@ -257,11 +265,14 @@ function villageRegion(x,z){
 }
 function villageAt(x,z){
     const c=villageRegion(x,z);if(!c)return null;
-    const d=Math.hypot(x-c.x,z-c.z);return d<62?{...c,blend:1-THREE.MathUtils.smoothstep(d,34,62)}:null;
+    const d=Math.hypot(x-c.x,z-c.z),inner=wildernessVersion>=4?54:34,outer=wildernessVersion>=4?80:62;
+    return d<outer?{...c,blend:1-THREE.MathUtils.smoothstep(d,inner,outer)}:null;
 }
 function generateVillageChunk(cx,cz){
     if(selectedTerrain!=='random'||wildernessVersion<3)return false;
-    const c=villageRegion(cx*16+8,cz*16+8);if(!c||Math.hypot(cx*16+8-c.x,cz*16+8-c.z)>48)return false;
+    const c=villageRegion(cx*16+8,cz*16+8);if(!c)return false;
+    if(wildernessVersion>=4)return generateLargeVillageChunk(cx,cz,c);
+    if(Math.hypot(cx*16+8-c.x,cz*16+8-c.z)>48)return false;
     for(const dx of [-16,16])for(const dz of [-16,16]){
         const x=c.x+dx,z=c.z+dz;if(Math.floor(x/16)!==cx||Math.floor(z/16)!==cz)continue;
         const site=cottageSite(x,z,true);if(site){buildCottage(x,site.y,z,dx<0?0:1);spawnVillagerAt(x,site.y+1,z);}

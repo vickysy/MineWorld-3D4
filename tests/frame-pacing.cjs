@@ -12,6 +12,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
    camera.position.set(0,getSurfaceHeight(0,0)+3,0);camera.lookAt(25,camera.position.y,25);
    creativeFlying=true;blocker.style.display='none';moveForward=true;
   },process.env.BENCH_TERRAIN||'plains');
+  if(['rain','snow'].includes(process.env.BENCH_WEATHER))await page.evaluate(kind=>weatherKind=()=>kind,process.env.BENCH_WEATHER);
   console.log(await page.evaluate(()=>new Promise(resolve=>{
    const times=[];let start=0,previous=0;
    function sample(now){

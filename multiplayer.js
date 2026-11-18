@@ -1,4 +1,4 @@
-const ROOM_PROTOCOL='daniel-mc-room-13', ROOM_PREFIX='daniel-mc-room2-';
+const ROOM_PROTOCOL='daniel-mc-room-14', ROOM_PREFIX='daniel-mc-room2-';
 const ROOM_TIMEOUT_MS=30000, ROOM_MAX_SAVE=16*1024*1024, ROOM_PACKET_CELLS=128;
 let multiplayerRoom=null, multiplayerMode='host', currentRoomCode='', remotePlayers={};
 
@@ -326,6 +326,7 @@ function receiveRoomGuest(r,entry,p) {
 }
 
 function receiveRoomHost(r,entry,p) {
+    if(p.type==='weather'&&r.worldReady&&Number.isFinite(p.time)&&p.time>=0){weatherClock=p.time;return;}
     if(p.type==='lock-auth-ok'){r.lockAuthenticated=true;return;}
     if(p.type==='lock-reply'){receiveLockReply(p);return;}
     if(p.type==='error'){roomFailure(r,String(p.message).slice(0,200));return;}
@@ -371,7 +372,7 @@ function receiveRoomHost(r,entry,p) {
     } else if(['machines','machine-blast','password-locks'].includes(p.type)&&r.worldReady) {
         receiveMachinePacket(p);
     } else if(p.type==='ecology-reward'&&r.worldReady) {
-        if((EDIBLE_GARDEN.has(p.id)||p.id===WHEAT)&&Number.isInteger(p.count)&&p.count>=1&&p.count<=3)grantHarvest(p);
+        if((EDIBLE_GARDEN.has(p.id)||p.id===WHEAT||p.id===RICE)&&Number.isInteger(p.count)&&p.count>=1&&p.count<=3)grantHarvest(p);
     } else if(p.type==='cannon-result'&&r.worldReady) {
         showToast(p.ok?'Cannon fired.':'Cannon did not fire. Check ammunition and permissions.');
     } else if(p.type==='launcher-rejected'&&r.worldReady) {
@@ -400,6 +401,9 @@ function updateMultiplayer(now=performance.now()) {
     const r=multiplayerRoom;if(!r?.worldReady||r.applying)return;
     interpolateRoomPlayers(now);
     if(now<r.nextTick)return;r.nextTick=now+100;
+    if(r.role==='host'&&now>=(r.nextWeather||0)){
+        r.nextWeather=now+5000;for(const entry of r.connections.values())if(entry.ready)sendRoomPacket(entry.conn,{type:'weather',time:weatherClock});
+    }
     if(r.entered) {
         const pos={type:'pos',id:r.peer.id,x:camera.position.x,y:camera.position.y,z:camera.position.z,ry:camera.rotation.y,scale:playerScale,dimension:currentDimension,...localRoomAppearance()};
         if(r.role==='host')r.positions.set(r.peer.id,pos);

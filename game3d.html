@@ -379,24 +379,26 @@
     <script src="three-r128.min.js"></script>
     <script src="three-pointer-lock-r128.js"></script>
     <script src="three-reflector-r128.js"></script>
-    <script src="world-expansion.js?v=end-islands-1"></script>
+    <script src="world-expansion.js?v=20261118-outdoors"></script>
     <script src="home-city.js?v=20261110-repairs"></script>
     <script src="kitchen-home.js?v=20261020-connected"></script>
     <script src="city-life.js?v=end-islands-1"></script>
     <script src="surveillance.js?v=20261018-tools"></script>
     <script src="peerjs-1.5.5.min.js"></script>
-    <script src="multiplayer.js?v=end-islands-1"></script>
+    <script src="multiplayer.js?v=20261118-outdoors"></script>
     <script src="thermal-world.js?v=20261021-wilderness"></script>
     <script src="launchers.js?v=20261110-repairs"></script>
-    <script src="construction.js?v=20261018-locks"></script>
+    <script src="construction.js?v=20261118-outdoors"></script>
     <script src="redstone-machines.js?v=20261110-repairs"></script>
     <script src="password-locks.js?v=20261018-locks"></script>
     <script src="cannons.js?v=20261019-closed-gates"></script>
     <script src="rail-vehicles.js?v=20261020-connected"></script>
     <script src="connected-home.js?v=20261020-connected"></script>
     <script src="zombie-voices.js?v=20261021-recorded"></script>
-    <script src="wilderness.js?v=end-islands-1"></script>
-    <script src="ecology.js?v=20261117-world"></script>
+    <script src="wilderness.js?v=20261118-outdoors"></script>
+    <script src="ecology.js?v=20261118-outdoors"></script>
+    <script src="outdoors.js?v=20261118-outdoors"></script>
+    <script src="village-life.js?v=20261118-outdoors"></script>
     <script src="terrain-horizon.js?v=end-islands-1"></script>
     <script src="village-houses.js?v=20261104-ecology"></script>
 
@@ -565,6 +567,9 @@
                 heldItemGroup.remove(heldItemGroup.children[0]); 
             }
             if (blockId === 0) return;
+            if(blockId===FISHING_ROD){
+                const rod=new THREE.Mesh(natureGeometry(blockId),materials[blockId]);rod.position.y=.18;rod.rotation.z=-.2;heldItemGroup.add(rod);return;
+            }
             if(THERMAL_ITEMS[blockId]) {const item=buildThermalModel(blockId);item.scale.setScalar(0.42);heldItemGroup.add(item);return;}
             if (HOME_ITEMS[blockId] || CAR_ITEMS[blockId] || blockId===ENDER_EGG_ID) {
                 const item=CAR_ITEMS[blockId]?createCityCar(undefined,CAR_ITEMS[blockId]):HOME_ITEMS[blockId]?createFurnitureModel(blockId,{}):createEndermanModel();
@@ -2078,7 +2083,7 @@
         [2,3,4,5,21,22,23,24,25,28,30,33,34,35,47,48,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65].forEach(id => { playerInventory[id] = 20; });
         const TOOL_ITEMS = [33, 34, 35, 41, 54, 55, 56, 57, 58];
         function isToolItem(id) {
-            return TOOL_ITEMS.includes(id);
+            return TOOL_ITEMS.includes(id)||id===FISHING_ROD;
         }
 
         function isCreativeMode() {
@@ -2086,7 +2091,7 @@
         }
 
         function hasInventoryItem(id) {
-            if(id===LIGHTER_ID)return isCreativeMode()||(playerInventory[id]||0)>0;
+            if(id===LIGHTER_ID||id===FISHING_ROD)return isCreativeMode()||(playerInventory[id]||0)>0;
             return isCreativeMode() || isToolItem(id) || (playerInventory[id] || 0) > 0;
         }
 
@@ -3891,6 +3896,8 @@
         function processWaterFlowQueue(delta) { tickWaterFlow(delta); }
 
         function getDroppedItemForBlock(blockType) {
+            if(blockType===COBWEB)return STRING_ITEM;
+            if([RICE_SHOOTS,RICE_GREEN,RICE_RIPE].includes(blockType))return RICE_SEEDS;
             if(blockType===TRAPDOOR_OPEN)return TRAPDOOR;
             if([188,189,190].includes(blockType))return BERRIES;
             if([194,199,202].includes(blockType))return CHERRY_SAPLING;
@@ -4141,7 +4148,7 @@
 	                    // 从最高点一直往下检查到扫描底线
                     for (let y = yStart; y >= scanBottom; y--) {
                         let type = getBlock(x, y, z);
-                        if(HOME_ITEMS[type] || MACHINE_ITEMS[type] || type===FRIDGE_TOP_ID || type===FURNITURE_PART_ID || type===FIRE_ID || type===PISTON_HEAD_ID) continue;
+                        if(HOME_ITEMS[type]&&!(type===98&&constructionTypeAt(x,y,z)===98) || MACHINE_ITEMS[type] || type===FRIDGE_TOP_ID || type===FURNITURE_PART_ID || type===FIRE_ID || type===PISTON_HEAD_ID) continue;
                         if (type !== 0) {
                             if (microRenderBlocks.has(microParentKey(x,y,z)) && (isSolid(x,y,z) || HIDDEN_BLOCKS[type])) continue;
                             let exposed = true;
@@ -4184,7 +4191,7 @@
                 if(typeInt===24){instancedMeshes[type]=waterSurfaceMesh(blockData.filter(b=>b.type===24));continue;}
                 let geo = boxGeo;
                 let material=materials[typeInt];
-                if(NATURE_PLANTS.has(typeInt)||typeInt===SNOW_LAYER_ID||isTrapdoor(typeInt)||typeInt===42)geo=natureGeometry(typeInt).clone();
+                if(NATURE_PLANTS.has(typeInt)||typeInt===SNOW_LAYER_ID||isTrapdoor(typeInt)||typeInt===42||typeInt===98)geo=natureGeometry(typeInt).clone();
                 if (typeInt === 16 || typeInt === 25 || typeInt === 30) geo = torchGeo;
                 else if (typeInt === 26 || typeInt === 27 || typeInt === 28 || typeInt === PRESSURE_PLATE_ID) geo = flatGeo; // 铁轨、红石、压力板
                 if(typeInt===26||typeInt===27) {
@@ -4209,6 +4216,11 @@
                 if(b.type===24)continue;
                 matrix.identity();
                 matrix.setPosition(b.x, b.y, b.z);
+                if(b.type===98){
+                    const r=constructionIndex.get(cx+','+cz)?.find(r=>r.kind==='prison'&&insideConstruction(r,b.x,b.y,b.z));
+                    if(r&&b.y===r.y+r.height)matrix.makeRotationX(Math.PI/2).setPosition(b.x,b.y,b.z);
+                    else if(r&&(b.x===r.x||b.x===r.x+r.width-1))matrix.makeRotationY(Math.PI/2).setPosition(b.x,b.y,b.z);
+                }
                 if(NATURE_PLANTS.has(b.type)&&b.type!==158){
                     const s=.8+hash3(b.x,b.y,b.z,532)*.2;
                     matrix.makeRotationY(Math.floor(hash3(b.x,b.y,b.z,531)*4)*Math.PI/2);
@@ -4237,6 +4249,17 @@
             }
             for (const [k,m] of Object.entries(instancedMeshes)) {
                 m.instanceMatrix.needsUpdate = true;
+                if(m.isInstancedMesh){
+                    m.geometry.computeBoundingSphere();
+                    m.userData.localBounds=m.geometry.boundingSphere.clone();
+                    // r128 applies each instance transform during raycasting, unlike culling.
+                    m.raycast=function(raycaster,hits){
+                        const bounds=this.geometry.boundingSphere;
+                        this.geometry.boundingSphere=this.userData.localBounds;
+                        try{THREE.InstancedMesh.prototype.raycast.call(this,raycaster,hits);}
+                        finally{this.geometry.boundingSphere=bounds;}
+                    };
+                }
                 m.geometry.boundingSphere=new THREE.Sphere(new THREE.Vector3(startX+7.5,(mins[k]+maxs[k])/2,startZ+7.5),Math.hypot(9,9,(maxs[k]-mins[k])/2+2));
                 m.frustumCulled=true;
             }
@@ -4444,6 +4467,7 @@
         
         controls.addEventListener('unlock', () => {
             clearMovementInput();
+            if(photoMode)return;
             if(document.getElementById('home-panel')?.hidden===false || document.getElementById('command-panel')?.hidden===false) return;
             let ui1 = document.getElementById('autobuild-ui');
             let ui2 = document.getElementById('trade-ui');
@@ -4592,6 +4616,8 @@
 
         document.addEventListener('keydown', (e) => {
             if (isTextEntryTarget(e.target)) return;
+            if(e.code==='KeyT'&&!e.repeat&&isGameStarted){e.preventDefault();setPhotoMode(!photoMode);return;}
+            if(photoMode){if(e.code==='Escape')setPhotoMode(false);return;}
             if(e.code==='Slash' && isGameStarted) {e.preventDefault();openCommandPanel();return;}
             if(e.code==='KeyE' && document.getElementById('home-panel')?.hidden===false) {closeFurniturePanel();return;}
             if(e.code==='KeyE' && drivingCar) {e.preventDefault();leaveCityCar();return;}
@@ -4674,7 +4700,6 @@
                 case 'Digit0': selectSlot(10); break;
                 case 'Minus': selectSlot(11); break;
                 case 'Equal': selectSlot(12); break;
-                case 'KeyT': selectSlot(13); break;
                 case 'KeyH': selectSlot(14); break;
             }
         });
@@ -4895,7 +4920,7 @@
             
             // 更换种子并随机化出生点，避免每次出生在同一个地方
             seed = Math.random() * 1000;
-            setWildernessVersion(3);
+            setWildernessVersion(4);
             dayTime = Math.PI / 2;
             oxygen = 20;
             currentDimension = 'overworld';
@@ -6126,6 +6151,7 @@
 
                 v.timer -= delta;
                 if(v.merchantId) {v.timer=10;v.vx=0;v.vz=0;}
+                guideVillageResident(v);
                 if (v.timer <= 0) {
                     v.timer = 2 + Math.random() * 3;
                     let angle = Math.random() * Math.PI * 2;
@@ -6480,6 +6506,7 @@
             if (!controls.isLocked) return;
             if(document.getElementById('home-panel')?.hidden===false||document.getElementById('command-panel')?.hidden===false)return;
             e.preventDefault();
+            if(fishingClick(e))return;
             if(e.button===2&&!e.shiftKey&&!drivingCar&&!isToolItem(currentBlock)&&tryEnterCityCar())return;
             if(e.button===2&&e.shiftKey&&!isTinyMode()){
                 const target=expansionRay();
@@ -7686,6 +7713,7 @@
             updateWorldExpansion(delta);
             updateWilderness(delta);
             updateEcology(Math.min(frameSeconds,1));
+            updateOutdoors(Math.min(frameSeconds,.1));
             updateMicroVoxelOverlay(delta);
 
             // 移动白云
@@ -7706,6 +7734,7 @@
         initWilderness();
         initWorldExpansion();
         initEcology();
+        initOutdoors();
         initThermalWorld();
         initRedstoneMachines();
         initMultiplayer();

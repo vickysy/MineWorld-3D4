@@ -67,8 +67,8 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
    multiplayerRoom={worldReady:true,entered:true,role:'host',peer:{id:'test'},positions:new Map(),connections:new Map([['guest',entry]]),nextTick:0,dirty:new Map()};
    for(let t=0;t<1000;t+=100)updateMultiplayer(t);
    check(packets.filter(p=>p.type==='pos').length===1,'Idle player sends one pose, not ten');
-   entry.conn.bufferSize=5;camera.position.x++;updateMultiplayer(1000);check(packets.length===1,'Stale pose skipped on busy link');
-   entry.conn.bufferSize=0;updateMultiplayer(1100);check(packets.length===2&&packets[1].x===camera.position.x,'Latest pose sent when link recovers');
+   entry.conn.bufferSize=5;camera.position.x++;updateMultiplayer(1000);check(packets.filter(p=>p.type==='pos').length===1,'Stale pose skipped on busy link');
+   entry.conn.bufferSize=0;updateMultiplayer(1100);const poses=packets.filter(p=>p.type==='pos');check(poses.length===2&&poses[1].x===camera.position.x,'Latest pose sent when link recovers');
    return {wheat:'planted, ripened and harvested',distinctCrowns:crowns.size,farTileBlocks:208,farPixel:[...pix],idlePacketsPerSecond:1};
   }));
   await page.evaluate(()=>{

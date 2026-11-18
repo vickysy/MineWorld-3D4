@@ -9,7 +9,7 @@ const NATURE_PLANTS=new Set([158,159,160,161,...WATER_PLANTS]);
 const hiddenByBase=new Map([[1,132],[2,133],[3,134]]);
 const NATURE_COLORS={};
 const biomeCache=new Map(),cliffCache=new Map(),natureGeometries=new Map();
-let biomeCacheSeed=null,wildernessVersion=3,gameDifficulty='normal',itchTimer=0,natureTick=0,natureTime=0;
+let biomeCacheSeed=null,wildernessVersion=4,gameDifficulty='normal',itchTimer=0,natureTick=0,natureTime=0;
 let natureFish=[],caveVisits=new Set();
 
 function isWaterType(id){return id===24||WATER_PLANTS.has(id);}
@@ -20,7 +20,7 @@ function setDifficulty(value){
 }
 
 function setWildernessVersion(version){
-    wildernessVersion=[1,2,3].includes(version)?version:3;
+    wildernessVersion=[1,2,3,4].includes(version)?version:4;
     biomeCacheSeed=null;biomeCache.clear();cliffCache.clear();heightCache.clear();
 }
 
@@ -132,7 +132,7 @@ function findCliffsideSpawn(){
 }
 
 function wildernessBlock(x,y,z,h){
-    if(wildernessCave(x,y,z,h))return 0;
+    if(wildernessCave(x,y,z,h))return caveWeb(x,y,z)?COBWEB:0;
     const col=biomeColumn(x,z),r=hash3(x,h,z,812);
     if(y>h){
         if(y<=SEA_LEVEL){

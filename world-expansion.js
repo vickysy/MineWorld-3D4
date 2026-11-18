@@ -172,7 +172,7 @@ function activatePortalNear(x,y,z) {
 }
 
 function snapshotDimension() {
-    return {construction:saveConstruction(),thermal:saveThermalWorld(),worldMap:Array.from(worldMap),modifiedColumns:Array.from(modifiedColumns),columnMinY:Array.from(columnMinY),
+    return {outdoors:saveOutdoors(),construction:saveConstruction(),thermal:saveThermalWorld(),worldMap:Array.from(worldMap),modifiedColumns:Array.from(modifiedColumns),columnMinY:Array.from(columnMinY),
         microMined:Array.from(microMinedBlocks),microPlaced:Array.from(microPlacedBlocks),fineEdits:Array.from(fineVoxelEdits),
         chunkMaxY:Array.from(chunkMaxY),chunkScanYRanges:Array.from(chunkScanYRanges),waterAmounts:Array.from(waterAmounts),portals:Array.from(activePortals),pistons:Array.from(pistonDirections),
         companions:[...zombies,...creepers,...villagers].filter(m=>m.eggId&&!m.dying).map(m=>({id:m.eggId,pos:m.mesh.position.toArray(),hp:m.hp})),
@@ -203,6 +203,7 @@ function travelThroughPortal(next) {
     currentDimension=next;heightCache.clear();const saved=dimensionWorlds.get(next);
     restoreDimension(saved);
     for(const list of [zombies,creepers,villagers,animals,endermen,minecarts]) {for(const mob of list) scene.remove(mob.mesh);list.length=0;}
+    const timeOutside=weatherClock;restoreOutdoors(saved?.outdoors);weatherClock=timeOutside;
     ridingMinecart=null;
     for(const light of torchLights.values()) scene.remove(light);torchLights.clear();
     heightCache.clear();clearMicroVoxelOverlay();
@@ -239,11 +240,12 @@ function travelThroughPortal(next) {
 }
 
 function saveWorldExpansion() {
-    return {ecology:saveEcology(),construction:saveConstruction(),thermal:saveThermalWorld(),nextSecurityCameraNumber,city:saveHomeCity(),flood:worldFloodHeight,water:Array.from(waterAmounts),portals:Array.from(activePortals),dimensions:Array.from(dimensionWorlds),furniture:Array.from(furnitureData),
+    return {outdoors:saveOutdoors(),ecology:saveEcology(),construction:saveConstruction(),thermal:saveThermalWorld(),nextSecurityCameraNumber,city:saveHomeCity(),flood:worldFloodHeight,water:Array.from(waterAmounts),portals:Array.from(activePortals),dimensions:Array.from(dimensionWorlds),furniture:Array.from(furnitureData),
         endermen:endermen.filter(m=>!m.dying).map(m=>({x:m.mesh.position.x,y:m.mesh.position.y,z:m.mesh.position.z,eggId:m.eggId,hp:m.hp}))};
 }
 
 function clearExpansionWorld() {
+    restoreOutdoors();if(photoMode)setPhotoMode(false);
     restoreEcology();
     clearWilderness();
     restoreConstruction();
@@ -259,6 +261,7 @@ function clearExpansionWorld() {
 }
 
 function restoreWorldExpansion(data={}) {
+    restoreOutdoors(data.outdoors);
     restoreEcology(data.ecology);
     restoreConstruction(data.construction);
     restoreThermalWorld(data.thermal);

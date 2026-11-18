@@ -55,6 +55,10 @@ async function assertScenePixels(page) {
 
         assert.equal(await guest.evaluate(()=>gameDifficulty),'peaceful');
         assert.equal(await guest.evaluate(()=>wildernessVersion),await host.evaluate(()=>wildernessVersion));
+        await guest.evaluate(()=>weatherClock=0);
+        await host.evaluate(()=>{weatherClock=180;multiplayerRoom.nextWeather=0;multiplayerRoom.nextTick=0;});
+        await guest.waitForFunction(()=>weatherClock>=180&&weatherClock<190);
+        console.log('PASS: Weather clock synchronizes from the host.');
         const avatarPosition=await host.evaluate(()=>{const p=camera.position.toArray();camera.position.y+=12;creativeFlying=true;selectSlot(3);return p;});
         await guest.waitForFunction(()=>Object.values(remotePlayers).some(m=>m.userData.heldId===4));
         assert(await host.evaluate(()=>enterMech(71)));
