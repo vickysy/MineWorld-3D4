@@ -139,7 +139,8 @@ function expansionBlockChanged(x,y,z,oldType,type) {
 }
 
 function openPortal(frame,cells,material,block=NETHER_PORTAL_ID) {
-    if(!portalTarget(block)||cells.some(p=>![0,42,block,LAVA_ID].includes(getBlock(...p)))) return false;
+    const clearable=[0,42,160,161,SNOW_LAYER_ID,FLOWER_RED,FLOWER_BLUE,block,LAVA_ID];
+    if(!portalTarget(block)||cells.some(p=>!clearable.includes(getBlock(...p)))) return false;
     const key=cells[0].join(',');
     if(activePortals.has(key)) return true;
     const dirty=new Set();
@@ -203,7 +204,7 @@ function travelThroughPortal(next) {
     currentDimension=next;heightCache.clear();const saved=dimensionWorlds.get(next);
     restoreDimension(saved);
     for(const list of [zombies,creepers,villagers,animals,endermen,minecarts]) {for(const mob of list) scene.remove(mob.mesh);list.length=0;}
-    const timeOutside=weatherClock;restoreOutdoors(saved?.outdoors);weatherClock=timeOutside;
+    const timeOutside=weatherClock,weatherOutside=weatherOverride;restoreOutdoors(saved?.outdoors);weatherClock=timeOutside;restoreWeatherOverride(weatherOutside);
     ridingMinecart=null;
     for(const light of torchLights.values()) scene.remove(light);torchLights.clear();
     heightCache.clear();clearMicroVoxelOverlay();
@@ -853,6 +854,8 @@ function parseWorldCommand(text) {
     const normalized=normalizeWorldCommand(text);
     if(/不要|别帮|别建|别做|不需要|不想|禁止/.test(normalized))throw new Error('这句话包含否定意思，请明确写出你要执行的操作。');
     if(/然后|接着|再帮|并且/.test(normalized)&&!isFortressCommand(normalized))throw new Error('请一次输入一个操作，每次检查后再执行。');
+    const weather={下雪:'snow',下雨:'rain',晴天:'clear',停止下雨:'clear',停止下雪:'clear',自然天气:'auto'}[normalized.replace(/^(请帮我|帮我|请)/,'')];
+    if(weather)return {kind:'weather',weather,label:weather==='auto'?'恢复自然天气。':'切换为'+({snow:'下雪',rain:'下雨',clear:'晴天'}[weather])+'，持续5分钟，不修改地形。联机时由房主设置。'};
     if(/^(?:请|帮我|请帮我|我想)?(?:撤销|取消上1个命令)(?:上1个命令|上1次操作|吧|1下)?$/.test(normalized)) return {kind:'undo',label:commandUndo?.kind==='construction'?'恢复大型建造前的整个世界，建造之后的其他修改也会撤回。':'撤销上一个命令'};
     if(/(取消|撤掉|清除).*(全世界|整个世界|全游戏|城市).*水/.test(normalized)) return {kind:'flood',height:null,label:'取消全世界统一水位'};
     if(/(?:去|到|找到|寻找|传送到)(学校|市场|地摊|足球场)(?:吧|一下|1下)?$/.test(normalized)) {
@@ -903,6 +906,7 @@ function showCommandStatus(message) {document.getElementById('command-result').t
 
 function executeWorldCommand(plan) {
     if(commandJob) {showCommandStatus('正在执行，请等当前命令完成。');return false;}
+    if(plan.kind==='weather')return setWorldWeather(plan.weather);
     if(plan.kind==='machine')return buildMachineCommand(plan);
     if(plan.kind==='construction')return startConstruction(plan);
     if(plan.kind==='find') {
@@ -1003,7 +1007,7 @@ function initWorldCommands() {
     document.getElementById('command-form').onsubmit=e=>{e.preventDefault();preview();};
     document.getElementById('execute-command').onclick=()=>{if(commandPreview) executeWorldCommand(commandPreview);};
     document.getElementById('world-command').oninput=()=>{commandPreview=null;document.getElementById('execute-command').disabled=true;};
-    for(const label of ['建造双重炮','建造活塞门','房子20×21 每层高3 10层','城楼加城墙 长50 宽50 厚5 高10；四角城楼 高12 宽4 长4','城楼四角 间隔20 高12','场地100×100×100','用水把全世界填满','查找冰箱','撤销']) {
+    for(const label of ['下雪','下雨','自然天气','建造双重炮','建造活塞门','房子20×21 每层高3 10层','城楼加城墙 长50 宽50 厚5 高10；四角城楼 高12 宽4 长4','城楼四角 间隔20 高12','场地100×100×100','用水把全世界填满','查找冰箱','撤销']) {
         const b=document.createElement('button');b.textContent=label;b.onclick=()=>{document.getElementById('world-command').value=label;preview();};document.getElementById('command-presets').appendChild(b);
     }
 }

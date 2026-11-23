@@ -379,13 +379,13 @@
     <script src="three-r128.min.js"></script>
     <script src="three-pointer-lock-r128.js"></script>
     <script src="three-reflector-r128.js"></script>
-    <script src="world-expansion.js?v=20261118-outdoors"></script>
+    <script src="world-expansion.js?v=20261123-portals-weather"></script>
     <script src="home-city.js?v=20261110-repairs"></script>
     <script src="kitchen-home.js?v=20261020-connected"></script>
     <script src="city-life.js?v=end-islands-1"></script>
     <script src="surveillance.js?v=20261018-tools"></script>
     <script src="peerjs-1.5.5.min.js"></script>
-    <script src="multiplayer.js?v=20261118-outdoors"></script>
+    <script src="multiplayer.js?v=20261123-weather"></script>
     <script src="thermal-world.js?v=20261021-wilderness"></script>
     <script src="launchers.js?v=20261110-repairs"></script>
     <script src="construction.js?v=20261118-outdoors"></script>
@@ -397,7 +397,8 @@
     <script src="zombie-voices.js?v=20261021-recorded"></script>
     <script src="wilderness.js?v=20261118-outdoors"></script>
     <script src="ecology.js?v=20261118-outdoors"></script>
-    <script src="outdoors.js?v=20261118-fishing-tools"></script>
+    <script src="outdoors.js?v=20261123-snow"></script>
+    <script src="mining-cracks.js?v=20261123-cracks"></script>
     <script src="village-life.js?v=20261118-outdoors"></script>
     <script src="terrain-horizon.js?v=end-islands-1"></script>
     <script src="village-houses.js?v=20261104-ecology"></script>
@@ -6220,81 +6221,7 @@
         }
 
         function createMiningCrackMesh(pos, progress, hitNormal) {
-            const group = new THREE.Group();
-            group.position.set(pos.x, pos.y, pos.z);
-            group.userData.disposeList = [];
-
-            const crackMaterials = [
-                new THREE.MeshBasicMaterial({ color: 0x2f2f2f, transparent: true, opacity: 0.5, depthTest: true, depthWrite: false }),
-                new THREE.MeshBasicMaterial({ color: 0x4b4238, transparent: true, opacity: 0.42, depthTest: true, depthWrite: false }),
-                new THREE.MeshBasicMaterial({ color: 0x1d1d1d, transparent: true, opacity: 0.38, depthTest: true, depthWrite: false })
-            ];
-            group.userData.disposeList.push(...crackMaterials);
-
-            let faces = [
-                { axis: 'z', sign: 1 },
-                { axis: 'z', sign: -1 },
-                { axis: 'x', sign: 1 },
-                { axis: 'x', sign: -1 },
-                { axis: 'y', sign: 1 },
-                { axis: 'y', sign: -1 }
-            ];
-            if (hitNormal) {
-                faces = faces.map(face => {
-                    let score = 0;
-                    if (face.axis === 'x') score = Math.abs(hitNormal.x - face.sign);
-                    if (face.axis === 'y') score = Math.abs(hitNormal.y - face.sign);
-                    if (face.axis === 'z') score = Math.abs(hitNormal.z - face.sign);
-                    return { ...face, score };
-                }).sort((a, b) => a.score - b.score);
-            }
-
-            const easedProgress = progress * progress * (3 - 2 * progress);
-            const maxRadius = 0.02 + easedProgress * 0.56;
-            const chipDepth = 0.012;
-
-            function chipAllowed(ix, iy, faceIndex) {
-                const value = Math.abs(Math.sin(ix * 12.9898 + iy * 78.233 + faceIndex * 37.719)) * 43758.5453;
-                return (value - Math.floor(value)) > 0.48;
-            }
-
-            function chipPosition(face, u, v) {
-                const s = 0.512 * face.sign;
-                if (face.axis === 'z') return new THREE.Vector3(u, v, s);
-                if (face.axis === 'x') return new THREE.Vector3(s, u, v);
-                return new THREE.Vector3(u, s, v);
-            }
-
-            faces.forEach((face, faceIndex) => {
-                for (let ix = -5; ix <= 5; ix++) {
-                    for (let iy = -5; iy <= 5; iy++) {
-                        const u = ix * 0.078;
-                        const v = iy * 0.078;
-                        const dist = Math.sqrt(u * u + v * v);
-                        const centerChip = ix === 0 && iy === 0;
-                        const speckle = Math.abs(Math.sin(ix * 26.81 + iy * 11.73 + faceIndex * 9.41)) % 1;
-                        const angle = Math.atan2(v, u);
-                        const spoke = Math.abs(Math.sin(angle * 4 + faceIndex * 0.7));
-                        const revealAt = Math.max(0, dist / 0.56 - 0.06 + speckle * 0.16 - spoke * 0.1);
-                        const faceDelay = faceIndex === 0 ? 0 : 0.28 + faceIndex * 0.06;
-                        if (!centerChip && (!chipAllowed(ix, iy, faceIndex) || progress < revealAt + faceDelay || dist > maxRadius)) continue;
-
-                        const reveal = Math.max(0, Math.min(1, (progress - revealAt - faceDelay) / 0.24));
-                        const chipSize = (0.018 + reveal * 0.028) * (1 + ((Math.abs(ix * 7 + iy * 3) % 3) * 0.08));
-                        const geometry = new THREE.BoxGeometry(chipSize, chipSize, chipDepth);
-                        group.userData.disposeList.push(geometry);
-
-                        const materialIndex = Math.abs(ix * 3 + iy * 5 + faceIndex) % crackMaterials.length;
-                        const chip = new THREE.Mesh(geometry, crackMaterials[materialIndex]);
-                        chip.position.copy(chipPosition(face, u, v));
-                        if (face.axis === 'x') chip.rotation.y = Math.PI / 2;
-                        if (face.axis === 'y') chip.rotation.x = Math.PI / 2;
-                        group.add(chip);
-                    }
-                }
-            });
-
-            return group;
+            return createBlockCrackOverlay(pos,progress);
         }
 
         function clearMiningCracks() {
@@ -6312,11 +6239,11 @@
 
         function updateMiningCracks() {
             if (!miningState || miningState.blockType === 5 || miningState.blockType === 42) return;
-            const stage = Math.min(8, Math.floor(miningState.progress * 8));
+            const stage = Math.min(9, Math.floor(miningState.progress * 10));
             if (stage === miningState.stage) return;
             miningState.stage = stage;
             clearMiningCracks();
-            miningState.crackMesh = createMiningCrackMesh(miningState.hit, Math.max(0.08, miningState.progress), miningState.hitNormal);
+            miningState.crackMesh = createMiningCrackMesh(miningState.hit, miningState.progress, miningState.hitNormal);
             scene.add(miningState.crackMesh);
             if (stage > 0) playSound('crackle');
         }
@@ -6667,7 +6594,7 @@
                                     document.getElementById('trade-ui').style.display = 'none';
                                     doAutoBuild('skyscraper'); 
                                 };
-                            } else if (enchantBlocks >= 2) { // 只要放了一个完整的附魔台（占两格）
+                            } else if (enchantBlocks >= 1) { // 一个附魔台即可，兼容旧的两格高附魔台。
                                 tradeTitle.innerText = "Villager: Enchanting Array!";
                                 tradeDesc.innerText = "You built an enchanting array. I will build a modular house around it!";
                                 tradeBtn.innerText = "Build Modular House";
@@ -6904,7 +6831,7 @@
                         return;
                     }
 
-                    if (targetType === 32) {
+                    if (targetType === 32 && matId !== 32 && !e.shiftKey) {
                         controls.unlock();
                         document.getElementById('mod-ui').style.display = 'block';
                         showToast("Enchanting table opened the mod summoner.");
@@ -6950,8 +6877,9 @@
                         return;
                     }
 
-                    let placePos = targetType === 42 || targetType === SNOW_LAYER_ID ? hit.clone() : hit.clone().add(norm);
-                    if(![0,24,25,42,160,161,SNOW_LAYER_ID,LAVA_ID].includes(getBlock(placePos.x,placePos.y,placePos.z)))return;
+                    const replaceablePlants=[42,160,161,SNOW_LAYER_ID,FLOWER_RED,FLOWER_BLUE];
+                    let placePos = replaceablePlants.includes(targetType) ? hit.clone() : hit.clone().add(norm);
+                    if(![0,24,25,...replaceablePlants,LAVA_ID].includes(getBlock(placePos.x,placePos.y,placePos.z)))return;
                     if(matId===SNOW_LAYER_ID && (!isSolid(placePos.x,placePos.y-1,placePos.z) || getBlock(placePos.x,placePos.y-1,placePos.z)===SNOW_LAYER_ID))return;
                     let px = camera.position.x;
                     let py = camera.position.y;
@@ -7037,11 +6965,9 @@
                                 showToast("Glass sensor door placed. Walk close to open it.");
                             }
                         } else if (matId === 32) { 
-                            // 附魔台，两格高
-                            if (getBlock(placePos.x, placePos.y, placePos.z) === 0 && 
-                                getBlock(placePos.x, placePos.y + 1, placePos.z) === 0) {
+                            // One table occupies one cell so a ground-level ring can be entered.
+                            if ([0,...replaceablePlants].includes(getBlock(placePos.x, placePos.y, placePos.z))) {
                                 setBlock(placePos.x, placePos.y, placePos.z, 32);
-                                setBlock(placePos.x, placePos.y + 1, placePos.z, 32);
                                 tryCreateNetherPortalNear(placePos.x, placePos.y, placePos.z);
                             }
                         } else {

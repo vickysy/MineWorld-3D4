@@ -57,6 +57,10 @@ let fishingCast=null,photoMode=false,photoBusy=false;
 function clearFishing(){
     if(fishingCast){disposeModModel(fishingCast.bob);scene.remove(fishingCast.line);fishingCast.line.geometry.dispose();fishingCast.line.material.dispose();fishingCast=null;}
 }
+function fishingBiteDelay(x,y,z){
+    const exposedRain=weatherKind()==='rain'&&weatherColumn(x,z).top<=y+.5;
+    return exposedRain?2+Math.random()*3:4+Math.random()*5;
+}
 function fishingClick(e){
     if(currentBlock!==FISHING_ROD)return false;
     if(e.button!==2)return true;
@@ -73,7 +77,7 @@ function fishingClick(e){
     bob.position.set(hit.x,level+.05,hit.z);scene.add(bob);
     const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(new Float32Array(6),3));
     const line=new THREE.Line(g,new THREE.LineBasicMaterial({color:0xbfb6a0}));line.frustumCulled=false;scene.add(line);
-    fishingCast={bob,line,x:hit.x,y:hit.y,z:hit.z,level,age:0,bite:4+Math.random()*5,dimension:currentDimension,notified:false};
+    fishingCast={bob,line,x:hit.x,y:hit.y,z:hit.z,level,age:0,bite:fishingBiteDelay(hit.x,hit.y,hit.z),dimension:currentDimension,notified:false};
     cancelMining();return true;
 }
 function updateFishing(dt){
@@ -82,7 +86,7 @@ function updateFishing(dt){
     if(controls.isLocked&&!photoMode)f.age+=dt;
     const biting=f.age>=f.bite&&f.age<f.bite+3;
     if(biting&&!f.notified){showToast('Bite!');playSound('water');f.notified=true;}
-    if(f.age>f.bite+3){f.bite=f.age+4+Math.random()*5;f.notified=false;}
+    if(f.age>f.bite+3){f.bite=f.age+fishingBiteDelay(f.x,f.y,f.z);f.notified=false;}
     f.bob.position.y=f.level+.05+(biting?-.09+Math.sin(f.age*24)*.035:Math.sin(f.age*3)*.025);
     const tip=new THREE.Vector3(.35,-.1,-.7).applyQuaternion(camera.quaternion).add(camera.position);
     const p=f.line.geometry.attributes.position;p.setXYZ(0,tip.x,tip.y,tip.z);p.setXYZ(1,f.bob.position.x,f.bob.position.y,f.bob.position.z);p.needsUpdate=true;
@@ -136,13 +140,29 @@ for(const name of ['fog_pars_vertex','fog_pars_fragment'])THREE.ShaderChunk[name
 THREE.ShaderChunk.fog_vertex='#ifdef USE_FOG\n fogPosition = mvPosition.xyz;\n#endif';
 THREE.ShaderChunk.fog_fragment=THREE.ShaderChunk.fog_fragment.replace('#ifdef USE_FOG','#ifdef USE_FOG\n float fogDepth = length(fogPosition);');
 
-let weatherClock=0,weatherVisual=null,villageResidentTick=0;
+let weatherClock=0,weatherVisual=null,villageResidentTick=0,weatherOverride=null;
 const rainColumns=new Map(),villageResidentKeys=new Set();
+function restoreWeatherOverride(value){
+    weatherOverride=value&&['snow','rain','clear'].includes(value.kind)&&Number.isFinite(value.until)&&value.until>weatherClock?
+        {kind:value.kind,until:Math.min(value.until,weatherClock+300)}:null;
+}
+function setWorldWeather(kind){
+    if(!['snow','rain','clear','auto'].includes(kind))return false;
+    if(multiplayerRoom?.role==='guest'){showCommandStatus('请让房主设置天气，两个人会看到相同的天气。');return false;}
+    if(currentDimension!=='overworld'||selectedTerrain==='moon'){showCommandStatus('天气只能在主世界设置，月球、下界和末地没有雨雪。');return false;}
+    weatherOverride=kind==='auto'?null:{kind,until:weatherClock+300};rainColumns.clear();
+    if(weatherVisual)weatherVisual.particles.length=0;
+    if(multiplayerRoom)multiplayerRoom.nextWeather=0;
+    closeCommandPanel();updateWeather(0);return true;
+}
 function weatherKind(){
     if(currentDimension!=='overworld'||selectedTerrain==='moon')return 'clear';
-    const cycle=Math.floor(weatherClock/240),wet=weatherClock%240>140&&hash(seed+cycle,703)>.2;
+    if(weatherOverride&&weatherClock<weatherOverride.until)return weatherOverride.kind;
+    const cycle=Math.floor(weatherClock/240),wet=cycle===0?weatherClock>=45:weatherClock%240>140&&hash(seed+cycle,703)>.2;
     if(!wet)return 'clear';
-    return selectedTerrain==='random'&&biomeColumn(camera.position.x,camera.position.z).biome==='snow'?'snow':'rain';
+    const cold=selectedTerrain==='random'&&biomeColumn(camera.position.x,camera.position.z).biome==='snow'||
+        selectedTerrain==='mountains'&&getSurfaceHeight(Math.round(camera.position.x),Math.round(camera.position.z))>=42;
+    return cold?'snow':'rain';
 }
 function weatherColumn(x,z,snow=false){
     const low=Math.floor(camera.position.y-22),key=[x,z,snow,low].join(','),cached=rainColumns.get(key);
@@ -173,11 +193,12 @@ function updateWeather(dt){
     w.drops.visible=w.splashes.visible=kind!=='clear';
     if(kind==='clear')return;
     const count=snow?190:300;
+    const initial=w.particles.length===0,radius=snow?12:21;
     for(let i=0;i<count;i++){
         let p=w.particles[i];
         if(!p||p.y<camera.position.y-20||Math.hypot(p.x-camera.position.x,p.z-camera.position.z)>24){
-            const x=camera.position.x+(Math.random()-.5)*42,z=camera.position.z+(Math.random()-.5)*42,roof=weatherColumn(Math.round(x),Math.round(z),snow);
-            const y=camera.position.y+6+Math.random()*9;
+            const x=camera.position.x+(Math.random()-.5)*radius*2,z=camera.position.z+(Math.random()-.5)*radius*2,roof=weatherColumn(Math.round(x),Math.round(z),snow);
+            const y=camera.position.y+(initial?-5+Math.random()*14:6+Math.random()*9);
             p=w.particles[i]={x,z,y,stop:roof.top,type:roof.type,hidden:roof.top>=y};
         }
         const oldY=p.y;p.y-=dt*(snow?1.4:16);
@@ -203,9 +224,10 @@ function updateWeather(dt){
     w.spray.forEach((p,i)=>{w.matrix.makeTranslation(p.x,p.y,p.z);w.splashes.setMatrixAt(i,w.matrix);});
     w.splashes.count=w.spray.length;w.splashes.instanceMatrix.needsUpdate=true;
 }
-function saveOutdoors(){return {weatherClock,residents:villagers.filter(v=>v.villageRoute&&!v.dying).map(v=>({key:v.villageKey,route:v.villageRoute,index:v.routeIndex,pos:v.mesh.position.toArray(),hp:v.hp})),residentKeys:[...villageResidentKeys]};}
+function saveOutdoors(){return {weatherClock,weatherOverride,residents:villagers.filter(v=>v.villageRoute&&!v.dying).map(v=>({key:v.villageKey,route:v.villageRoute,index:v.routeIndex,pos:v.mesh.position.toArray(),hp:v.hp})),residentKeys:[...villageResidentKeys]};}
 function restoreOutdoors(data={}){
     clearFishing();rainColumns.clear();weatherClock=Number.isFinite(data.weatherClock)?Math.max(0,data.weatherClock):0;
+    restoreWeatherOverride(data.weatherOverride);
     villageResidentKeys.clear();for(const key of data.residentKeys||[])villageResidentKeys.add(key);
     if(currentDimension==='overworld')for(const v of (data.residents||[]).slice(0,48)){
         if(!Array.isArray(v.pos)||!v.pos.every(Number.isFinite)||!v.route?.every(p=>p.length===2&&p.every(Number.isFinite)))continue;

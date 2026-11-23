@@ -1,4 +1,4 @@
-const ROOM_PROTOCOL='daniel-mc-room-14', ROOM_PREFIX='daniel-mc-room2-';
+const ROOM_PROTOCOL='daniel-mc-room-15', ROOM_PREFIX='daniel-mc-room2-';
 const ROOM_TIMEOUT_MS=30000, ROOM_MAX_SAVE=16*1024*1024, ROOM_PACKET_CELLS=128;
 let multiplayerRoom=null, multiplayerMode='host', currentRoomCode='', remotePlayers={};
 
@@ -326,7 +326,7 @@ function receiveRoomGuest(r,entry,p) {
 }
 
 function receiveRoomHost(r,entry,p) {
-    if(p.type==='weather'&&r.worldReady&&Number.isFinite(p.time)&&p.time>=0){weatherClock=p.time;return;}
+    if(p.type==='weather'&&r.worldReady&&Number.isFinite(p.time)&&p.time>=0){weatherClock=p.time;restoreWeatherOverride(p.override);return;}
     if(p.type==='lock-auth-ok'){r.lockAuthenticated=true;return;}
     if(p.type==='lock-reply'){receiveLockReply(p);return;}
     if(p.type==='error'){roomFailure(r,String(p.message).slice(0,200));return;}
@@ -402,7 +402,7 @@ function updateMultiplayer(now=performance.now()) {
     interpolateRoomPlayers(now);
     if(now<r.nextTick)return;r.nextTick=now+100;
     if(r.role==='host'&&now>=(r.nextWeather||0)){
-        r.nextWeather=now+5000;for(const entry of r.connections.values())if(entry.ready)sendRoomPacket(entry.conn,{type:'weather',time:weatherClock});
+        r.nextWeather=now+5000;for(const entry of r.connections.values())if(entry.ready)sendRoomPacket(entry.conn,{type:'weather',time:weatherClock,override:weatherOverride});
     }
     if(r.entered) {
         const pos={type:'pos',id:r.peer.id,x:camera.position.x,y:camera.position.y,z:camera.position.z,ry:camera.rotation.y,scale:playerScale,dimension:currentDimension,...localRoomAppearance()};
