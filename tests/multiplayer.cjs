@@ -65,6 +65,21 @@ async function assertScenePixels(page) {
         await host.evaluate(()=>{weatherOverride=null;multiplayerRoom.nextWeather=0;multiplayerRoom.nextTick=0;});
         await guest.waitForFunction(()=>weatherOverride===null);
         console.log('PASS: Forced weather and return to natural weather synchronize between real peers.');
+        const chestAt=await host.evaluate(()=>{const p=[Math.round(camera.position.x)+2,Math.round(camera.position.y),Math.round(camera.position.z)+2];setBlock(...p,CHEST_ID);furnitureRecord(...p).data.chestSlots=[{id:GOLD_INGOT,count:5}];queueRoomBlockChange(...p);return p;});
+        await guest.waitForFunction(p=>getBlock(...p)===CHEST_ID&&furnitureRecord(...p).data.chestSlots?.[0]?.count===5,chestAt);
+        const beforeGold=await guest.evaluate(()=>playerInventory[GOLD_INGOT]||0);
+        await guest.evaluate(p=>{camera.position.set(p[0],p[1]+1,p[2]+2);creativeFlying=true;},chestAt);
+        await host.waitForFunction(p=>Array.from(multiplayerRoom.positions.values()).some(v=>Math.hypot(v.x-p[0],v.y-p[1],v.z-p[2])<4),chestAt);
+        await guest.evaluate(p=>requestChestTransfer(furnitureRecord(...p),0,'take',GOLD_INGOT,2),chestAt);
+        await guest.waitForFunction(n=>(playerInventory[GOLD_INGOT]||0)===n+2,beforeGold);
+        await host.waitForFunction(p=>chestSlots(furnitureRecord(...p).data)[0].count===3,chestAt);
+        await guest.waitForFunction(p=>chestSlots(furnitureRecord(...p).data)[0].count===3,chestAt);
+        await guest.evaluate(p=>{gameMode='survival';requestChestTransfer(furnitureRecord(...p),1,'store',GOLD_INGOT,2);},chestAt);
+        await host.waitForFunction(p=>chestSlots(furnitureRecord(...p).data)[1]?.count===2,chestAt);
+        await guest.waitForFunction(()=>chestPending.size===0);
+        assert.equal(await guest.evaluate(()=>playerInventory[GOLD_INGOT]||0),beforeGold);
+        await guest.evaluate(()=>gameMode='creative');
+        console.log('PASS: Guest chest take/deposit changes host contents and deducts survival inventory exactly once.');
         const avatarPosition=await host.evaluate(()=>{const p=camera.position.toArray();camera.position.y+=12;creativeFlying=true;selectSlot(3);return p;});
         await guest.waitForFunction(()=>Object.values(remotePlayers).some(m=>m.userData.heldId===4));
         assert(await host.evaluate(()=>enterMech(71)));
@@ -135,6 +150,10 @@ async function assertScenePixels(page) {
         await guest.evaluate(({tv})=>{creativeFlying=true;camera.position.set(tv[0],tv[1]+1.1,tv[2]+4);currentBlock=TV_REMOTE_ID;openRemotePanel();},home);
         await guest.getByRole('button',{name:'Power',exact:true}).click();
         await host.waitForFunction(tv=>furnitureRecord(...tv)?.data.on===false&&furnitureRecord(...tv)?.data.redstone===false,home.tv);
+        // Complete the first authoritative round trip before issuing the next mutation.
+        await host.waitForFunction(tv=>!multiplayerRoom.dirty.has(tv.join(',')),home.tv);
+        const powerRevision=await host.evaluate(()=>multiplayerRoom.seq);
+        await guest.waitForFunction(seq=>multiplayerRoom.seq>=seq,powerRevision);
         await guest.getByRole('button',{name:'Next Channel',exact:true}).click();
         await host.waitForFunction(tv=>furnitureRecord(...tv)?.data.channel===1&&furnitureRecord(...tv)?.data.on,home.tv);
         await guest.locator('#close-home').click();

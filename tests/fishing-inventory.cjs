@@ -16,6 +16,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
   await page.getByRole('button',{name:'Tools',exact:true}).click();
   const rod=page.getByRole('button',{name:'钓鱼竿 / Fishing Rod',exact:true});
   await rod.click();
+  await page.locator('#inventory-hotbar [data-index="0"]').click();
   assert.equal(await page.evaluate(()=>currentBlock),213);
   assert.equal(await page.locator('#tab-weapon > :first-child').getAttribute('id'),'inv-201');
   assert.equal(await page.locator('#tab-build #inv-201').count(),0);

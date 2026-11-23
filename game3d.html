@@ -379,13 +379,14 @@
     <script src="three-r128.min.js"></script>
     <script src="three-pointer-lock-r128.js"></script>
     <script src="three-reflector-r128.js"></script>
-    <script src="world-expansion.js?v=20261123-portals-weather"></script>
+    <link rel="stylesheet" href="inventory.css?v=20261123-treasure">
+    <script src="world-expansion.js?v=20261123-treasure"></script>
     <script src="home-city.js?v=20261110-repairs"></script>
     <script src="kitchen-home.js?v=20261020-connected"></script>
     <script src="city-life.js?v=end-islands-1"></script>
     <script src="surveillance.js?v=20261018-tools"></script>
     <script src="peerjs-1.5.5.min.js"></script>
-    <script src="multiplayer.js?v=20261123-weather"></script>
+    <script src="multiplayer.js?v=20261123-treasure"></script>
     <script src="thermal-world.js?v=20261021-wilderness"></script>
     <script src="launchers.js?v=20261110-repairs"></script>
     <script src="construction.js?v=20261118-outdoors"></script>
@@ -395,10 +396,12 @@
     <script src="rail-vehicles.js?v=20261020-connected"></script>
     <script src="connected-home.js?v=20261020-connected"></script>
     <script src="zombie-voices.js?v=20261021-recorded"></script>
-    <script src="wilderness.js?v=20261118-outdoors"></script>
-    <script src="ecology.js?v=20261118-outdoors"></script>
+    <script src="wilderness.js?v=20261123-treasure"></script>
+    <script src="ecology.js?v=20261123-treasure"></script>
     <script src="outdoors.js?v=20261123-snow"></script>
     <script src="mining-cracks.js?v=20261123-cracks"></script>
+    <script src="treasure-world.js?v=20261123-treasure"></script>
+    <script src="creative-inventory.js?v=20261123-treasure"></script>
     <script src="village-life.js?v=20261118-outdoors"></script>
     <script src="terrain-horizon.js?v=end-islands-1"></script>
     <script src="village-houses.js?v=20261104-ecology"></script>
@@ -1586,6 +1589,7 @@
                     id:m.eggId,x:m.mesh.position.x,y:m.mesh.position.y,z:m.mesh.position.z,hp:m.hp
                 })),
                 playerInventory: playerInventory,
+                hotbar: {items:hotbarItems,active:activeHotbarSlot},
                 worldSpawnPoint: worldSpawnPoint,
                 homeSpawnPoint: homeSpawnPoint,
                 selectedTerrain: selectedTerrain,
@@ -1678,10 +1682,8 @@
                         playerInventory = data.playerInventory;
                     } else {
                         playerInventory = {};
-                        // 开局只给基础建造方块和原材料（泥土、石头、木头、树叶、沙子、水、海带、红石、TNT、核弹、工具）
-                        // 移除了需要合成的物品：玻璃(6), 梯子(7), 木门(8), 工作台(12), 熔炉(13), 床(14), 火把(16), 大铁门(17), 铁轨(26), 动力轨(27), 矿车(29), 拉杆(30), 附魔台(32)
-                        [2,3,4,5,21,22,23,24,25,28,30,33,34,35,47,48,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65].forEach(id => { playerInventory[id] = 20; });
                     }
+                    restoreHotbar(data.hotbar);
                     updateHotbarUI();
                     
                     data.worldMap.forEach(([k, v]) => worldMap.set(k, v));
@@ -2080,8 +2082,6 @@
 
         // --- 物品栏/库存系统 ---
         let playerInventory = {}; 
-        // 初始只给原材料，数量 20 个。不给合成产物。
-        [2,3,4,5,21,22,23,24,25,28,30,33,34,35,47,48,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65].forEach(id => { playerInventory[id] = 20; });
         const TOOL_ITEMS = [33, 34, 35, 41, 54, 55, 56, 57, 58];
         function isToolItem(id) {
             return TOOL_ITEMS.includes(id)||id===FISHING_ROD;
@@ -2092,12 +2092,11 @@
         }
 
         function hasInventoryItem(id) {
-            if(id===LIGHTER_ID||id===FISHING_ROD)return isCreativeMode()||(playerInventory[id]||0)>0;
-            return isCreativeMode() || isToolItem(id) || (playerInventory[id] || 0) > 0;
+            return !!id&&(isCreativeMode() || (playerInventory[id] || 0) > 0);
         }
 
         function consumeInventoryItem(id, amount = 1) {
-            if (isCreativeMode() || isToolItem(id)) return true;
+            if (isCreativeMode()) return true;
             if ((playerInventory[id] || 0) < amount) return false;
             playerInventory[id] -= amount;
             return true;
@@ -2225,14 +2224,15 @@
 
         window.craftSlotClick = function(index) {
             if(index<0||index>=9||index>=4&&!hasWorkbench())return;
+            const ingredient=isCreativeMode()&&catalogSelection?catalogSelection:currentBlock;
             if (craftingGrid[index] !== 0) {
                 let id = craftingGrid[index];
                 if (!isCreativeMode()) playerInventory[id] = (playerInventory[id] || 0) + 1;
                 craftingGrid[index] = 0;
-            } else if (currentBlock && currentBlock !== 0) {
-                if (hasInventoryItem(currentBlock)) {
-                    consumeInventoryItem(currentBlock);
-                    craftingGrid[index] = currentBlock;
+            } else if (ingredient && ingredient !== 0) {
+                if (hasInventoryItem(ingredient)) {
+                    consumeInventoryItem(ingredient);
+                    craftingGrid[index] = ingredient;
                 }
             }
             checkRecipes();
@@ -2272,7 +2272,7 @@
                  40:52, 41:53, 42:54, 43:55, 44:56, 45:57, 46:58,
                  47:59, 48:60, 49:61, 50:62, 51:63, 52:64, 53:65, 54:66,
                  55:67, 56:68, 57:69, 58:70, 59:71,
-                 60:72, 61:73, 62:74, 63:75, 64:76, 65:77, 66:78, 67:79,
+                 60:72, 61:73, 62:74, 63:75, 64:76, 65:77, 66:78, 67:79, [CHEST_ID-12]:CHEST_ID,
                  70:82, 71:83, 72:84, 73:85, 74:86, 75:87, 76:88, 77:89, 78:90, 79:91, 80:92,
                  81:93, 82:94, 83:95, 84:96, 85:97, 86:98, 88:100, 89:101, 90:102, 91:103,
                  ...Object.fromEntries(Object.keys({...KITCHEN_ITEMS,...CITY_LIFE_ITEMS,...HIDDEN_BLOCKS,...SURVEILLANCE_ITEMS,...THERMAL_ITEMS,...MACHINE_ITEMS,...CONNECTED_HOME_ITEMS,...NATURE_ITEMS,127:'Netherrack'}).map(id=>[Number(id)-12,Number(id)]))
@@ -2286,7 +2286,6 @@
                 if(el) {
                     let id = mapping[i];
                     let count = playerInventory[id] || 0;
-                    let isTool = isToolItem(id) && hasInventoryItem(id);
                     
                     // 清理旧的数量角标
                     let oldQty = el.querySelector('.inv-qty');
@@ -2295,7 +2294,7 @@
                     let qty = document.createElement('div');
                     qty.className = 'inv-qty';
                     qty.style = 'position: absolute; bottom: 2px; right: 2px; font-size: 10px; text-shadow: 1px 1px 0 #000;';
-                    if (isCreativeMode() || isTool) {
+                    if (isCreativeMode()) {
                         qty.innerText = '∞';
                         qty.style.color = '#00FF00';
                     } else {
@@ -2309,22 +2308,7 @@
         }
         
         function updateHotbarUI() {
-            const hotbarIds = [1, 2, 3, 4, 5, 13, 7, 8, 32]; // 快捷栏显示的格子ID
-            const mapping = getInventorySlotMapping();
-            for(let id of hotbarIds) {
-                let matId = mapping[id];
-                let qtyEl = document.getElementById('hotbar-qty-' + id);
-                if (qtyEl) {
-                    if (isCreativeMode() || isToolItem(matId)) {
-                        qtyEl.innerText = '∞';
-                        qtyEl.style.color = '#00FF00';
-                    } else {
-                        let count = playerInventory[matId] || 0;
-                        qtyEl.innerText = count;
-                        qtyEl.style.color = count > 0 ? 'white' : 'red';
-                    }
-                }
-            }
+            renderHotbar();
             updateInventoryCounts();
         }
 
@@ -2683,7 +2667,7 @@
             }
         }
 
-        function spawnDroppedItem(x, y, z, itemType) {
+        function spawnDroppedItem(x, y, z, itemType, count=1) {
             if (itemType === 0) return;
             const material = cloneBlockMaterial(itemType);
             const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.38, 0.38), material);
@@ -2693,6 +2677,7 @@
             droppedItems.push({
                 mesh,
                 itemType,
+                count,
                 material,
                 velocity: new THREE.Vector3((Math.random() - 0.5) * 1.1, 2.4 + Math.random() * 0.7, (Math.random() - 0.5) * 1.1),
                 age: 0,
@@ -2701,7 +2686,7 @@
         }
 
         function collectDroppedItem(drop, index) {
-            playerInventory[drop.itemType] = (playerInventory[drop.itemType] || 0) + 1;
+            playerInventory[drop.itemType] = (playerInventory[drop.itemType] || 0) + (drop.count||1);
             updateHotbarUI();
             updateInventoryCounts();
             playSound('pickup');
@@ -2852,6 +2837,8 @@
             const ironChance = richMoon ? 0.23 : 0.18;
 
             if (depth > 10 && r < sapphireChance) return 38; // 蓝宝石矿
+            if (depth > 8 && r > .3 && r < .315) return EMERALD_ORE;
+            if (depth > 5 && r > .32 && r < .35) return SILVER_ORE;
             if (depth > 5 && r < goldChance) return 37;     // 金矿
             if (r < ironChance) return 36;                  // 铁矿
             return 0;
@@ -3028,7 +3015,7 @@
         // Collision and visual occlusion differ: leaves have holes and glass transmits light.
         function occludesBlockFaces(type) {
             return isSolidType(type) && !HIDDEN_BLOCKS[type] && !HOME_ITEMS[type] &&
-                !MACHINE_ITEMS[type] && !LEAF_TYPES.has(type) && type!==SNOW_LAYER_ID && !isTrapdoor(type) &&
+                !MACHINE_ITEMS[type] && !LEAF_TYPES.has(type) && !TREASURE_SHAPED.has(type) && type!==SNOW_LAYER_ID && !isTrapdoor(type) &&
                 ![6,8,9,16,17,18,47,48,49,PISTON_HEAD_ID,FRIDGE_TOP_ID,FURNITURE_PART_ID].includes(type);
         }
 
@@ -3897,6 +3884,7 @@
         function processWaterFlowQueue(delta) { tickWaterFlow(delta); }
 
         function getDroppedItemForBlock(blockType) {
+            if(blockType===EMERALD_ORE)return EMERALD;
             if(blockType===COBWEB)return STRING_ITEM;
             if([RICE_SHOOTS,RICE_GREEN,RICE_RIPE].includes(blockType))return RICE_SEEDS;
             if(blockType===TRAPDOOR_OPEN)return TRAPDOOR;
@@ -4192,6 +4180,7 @@
                 if(typeInt===24){instancedMeshes[type]=waterSurfaceMesh(blockData.filter(b=>b.type===24));continue;}
                 let geo = boxGeo;
                 let material=materials[typeInt];
+                if(treasureGeometry(typeInt))geo=treasureGeometry(typeInt).clone();
                 if(NATURE_PLANTS.has(typeInt)||typeInt===SNOW_LAYER_ID||isTrapdoor(typeInt)||typeInt===42||typeInt===98)geo=natureGeometry(typeInt).clone();
                 if (typeInt === 16 || typeInt === 25 || typeInt === 30) geo = torchGeo;
                 else if (typeInt === 26 || typeInt === 27 || typeInt === 28 || typeInt === PRESSURE_PLATE_ID) geo = flatGeo; // 铁轨、红石、压力板
@@ -4404,6 +4393,7 @@
         function buildChunkIfMissing(cx, cz) {
             const key = `${cx},${cz}`;
             if (chunkMeshes.has(key)) return false;
+            generateRuinsNearChunk(cx,cz);
             generateHouseData(cx, cz);
             generateTrees(cx, cz);
             buildChunkMesh(cx, cz);
@@ -4689,15 +4679,9 @@
                     break;
                 }
                 case 'KeyB': if (controls.isLocked) { holdingDescend = true; e.preventDefault(); } break;
-                case 'Digit1': selectSlot(1); break;
-                case 'Digit2': selectSlot(2); break;
-                case 'Digit3': selectSlot(3); break;
-                case 'Digit4': selectSlot(4); break;
-                case 'Digit5': selectSlot(5); break;
-                case 'Digit6': selectSlot(6); break;
-                case 'Digit7': selectSlot(7); break;
-                case 'Digit8': selectSlot(8); break;
-                case 'Digit9': selectSlot(32); break; // 快捷键 9 绑定到扫描仪
+                case 'Digit1':case 'Digit2':case 'Digit3':case 'Digit4':case 'Digit5':case 'Digit6':case 'Digit7':case 'Digit8':case 'Digit9':
+                    if(isInventoryOpen&&catalogSelection)assignHotbar(Number(e.code.slice(5))-1,catalogSelection,selectedStackAmount());
+                    else selectHotbarIndex(Number(e.code.slice(5))-1);break;
                 case 'Digit0': selectSlot(10); break;
                 case 'Minus': selectSlot(11); break;
                 case 'Equal': selectSlot(12); break;
@@ -4944,17 +4928,16 @@
             health = maxHealth;
             hunger = maxHunger;
             updateHUD();
-            selectSlot(1);
+            playerInventory={};chestPending.clear();craftingGrid.fill(0);catalogSelection=0;restoreHotbar();updateHotbarUI();
             
             updateChunks(camera.position);
         }
 
         let currentBlock = 2; 
         window.switchTab = function(tabId, btnElement) {
-            ['tab-build', 'tab-life', 'tab-weapon', 'tab-redstone', 'tab-mods', 'tab-home'].forEach(id => {
-                document.getElementById(id).style.display = 'none';
-            });
+            document.querySelectorAll('#inventory-ui > .slot-container').forEach(el=>el.style.display='none');
             document.getElementById('tab-' + tabId).style.display = 'flex';
+            inventoryCategory=tabId;if(document.getElementById('catalog-search'))document.getElementById('catalog-search').value='';filterCatalog();
             
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
             if (btnElement) btnElement.classList.add('active');
@@ -4962,33 +4945,6 @@
 
         // 初始化快捷栏
         function initHotbar() {
-            const hotbar = document.getElementById('hotbar');
-            const slotIds = [1, 2, 3, 4, 5, 13, 7, 8, 32]; // 显示 TNT 和扫描仪
-            const items = ['Dirt', 'Stone', 'Wood', 'Leaves', 'Glass', 'TNT', 'Wooden Door', 'Crafting Table', 'Scanner'];
-            for (let i = 1; i <= 9; i++) {
-                const slot = document.createElement('div');
-                slot.className = 'hotbar-slot';
-                slot.id = 'hotbar-slot-' + slotIds[i-1];
-                slot.onclick = ((idx) => () => selectSlot(slotIds[idx]))(i-1);
-                
-                const num = document.createElement('div');
-                num.className = 'hotbar-number';
-                num.innerText = i;
-                slot.appendChild(num);
-                
-                const text = document.createElement('span');
-                text.innerText = items[i-1];
-                slot.appendChild(text);
-                
-                const qty = document.createElement('div');
-                qty.className = 'hotbar-qty';
-                qty.id = 'hotbar-qty-' + slotIds[i-1];
-                qty.style = 'position: absolute; bottom: 2px; right: 2px; font-size: 10px; color: white; text-shadow: 1px 1px 0 #000;';
-                qty.innerText = '0';
-                slot.appendChild(qty);
-                
-                hotbar.appendChild(slot);
-            }
             updateHotbarUI();
         }
         initHotbar();
@@ -4999,16 +4955,9 @@
             }
             document.getElementById(`inv-${id}`)?.classList.add('selected');
             
-            const hotbarIds = [1, 2, 3, 4, 5, 13, 7, 8, 32];
-            for(let i of hotbarIds) {
-                document.getElementById(`hotbar-slot-${i}`)?.classList.remove('selected');
-            }
-            if (hotbarIds.includes(id)) {
-                document.getElementById(`hotbar-slot-${id}`)?.classList.add('selected');
-            }
-            
             const mapping = getInventorySlotMapping();
-            currentBlock = mapping[id];
+            currentBlock = mapping[id]||0;
+            hotbarItems[activeHotbarSlot]=currentBlock?{id:currentBlock,count:64}:null;renderHotbar();
             
             // 手持火把照明
             if (currentBlock === 16) {
@@ -6433,6 +6382,15 @@
             if (!controls.isLocked) return;
             if(document.getElementById('home-panel')?.hidden===false||document.getElementById('command-panel')?.hidden===false)return;
             e.preventDefault();
+            if(isToolItem(currentBlock)&&!hasInventoryItem(currentBlock)){
+                if(e.button===2&&!e.shiftKey){
+                    const hit=expansionRay();
+                    if(hit?.type===12){openWorkbench(hit);return;}
+                    if(hit?.type===CHEST_ID){openFurniturePanel(furnitureRecord(hit.x,hit.y,hit.z));return;}
+                }
+                showToast('Craft this tool first.');return;
+            }
+            if(handleTreasureClick(e))return;
             if(fishingClick(e))return;
             if(e.button===2&&!e.shiftKey&&!drivingCar&&!isToolItem(currentBlock)&&tryEnterCityCar())return;
             if(e.button===2&&e.shiftKey&&!isTinyMode()){
@@ -7663,6 +7621,8 @@
         initOutdoors();
         initThermalWorld();
         initRedstoneMachines();
+        initTreasureWorld();
+        initCreativeInventory();
         initMultiplayer();
         initModIcons();
         animate();

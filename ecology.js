@@ -238,7 +238,8 @@ function setWorkbench(at=null){
     if(!full)for(let i=4;i<9;i++)if(craftingGrid[i]){if(!isCreativeMode())playerInventory[craftingGrid[i]]=(playerInventory[craftingGrid[i]]||0)+1;craftingGrid[i]=0;}
     document.getElementById('craft-grid').style.gridTemplateColumns=`repeat(${full?3:2}, 1fr)`;
     for(let i=0;i<9;i++)document.getElementById('craft-'+i).style.display=full||i<4?'flex':'none';
-    inventoryUI.querySelector('h2').textContent=at?'Crafting Table':'Inventory & Crafting';checkRecipes();updateCraftingUI();updateInventoryCounts();
+    document.getElementById('crafting-area').style.display=isCreativeMode()?'none':'flex';
+    inventoryUI.querySelector('h2').textContent=isCreativeMode()?'Creative Inventory':at?'Crafting Table':'Inventory & Crafting';checkRecipes();updateCraftingUI();updateInventoryCounts();
 }
 function openWorkbench(hit){
     setWorkbench([hit.x,hit.y,hit.z]);controls.unlock();isInventoryOpen=true;blocker.style.display='flex';

@@ -116,6 +116,7 @@ function expansionBlockChanged(x,y,z,oldType,type) {
     }
     if(oldType!==type && HOME_ITEMS[oldType]) {
         const data=furnitureData.get(key);
+        if(oldType===CHEST_ID&&!commandEditing)for(const slot of chestSlots(data||{}))if(slot)spawnDroppedItem(x,y,z,slot.id,slot.count);
         if(!commandEditing) for(const contents of [data?.food,data?.storage]) for(const [id,count] of Object.entries(contents||{})) for(let i=0;i<Math.min(64,count);i++) spawnDroppedItem(x,y,z,Number(id));
         if(!commandEditing && data) {
             if(data.foodItem) spawnDroppedItem(x,y,z,data.foodItem);
@@ -246,6 +247,7 @@ function saveWorldExpansion() {
 }
 
 function clearExpansionWorld() {
+    closeChestTransfer();
     restoreOutdoors();if(photoMode)setPhotoMode(false);
     restoreEcology();
     clearWilderness();
@@ -360,6 +362,7 @@ function updateEndermen(delta) {
 }
 
 function createFurnitureModel(id,data={}) {
+    if(id===CHEST_ID)return createChestModel(data);
     if(id===CAMPFIRE_ID){const model=buildThermalModel(id);model.userData.itemId=id;return model;}
     const group=new THREE.Group(),box=(w,h,d,c,x,y,z,name)=>addModelBox(group,w,h,d,c,x,y,z,name);
     const silver=0xc7cdd0,white=0xeff2f2,dark=0x20252b;
@@ -460,10 +463,11 @@ function syncFurnitureMeshes() {
         if((Math.abs(x-camera.position.x)>64 || Math.abs(z-camera.position.z)>64) && !nearSurveillanceCamera(x,z)) continue;
         visible.add(key);
         if(!furnitureData.has(key)) furnitureData.set(key,{id,yaw:0,on:false,food:{},note:''});
-        const data=furnitureData.get(key);
+        const data=id===CHEST_ID?syncChestShape(furnitureRecord(x,y,z)):furnitureData.get(key);
         if(id===SECURITY_CAMERA_ID)ensureSecurityCameraNumber(data);
         if(!furnitureMeshes.has(key)) {
             const model=createFurnitureModel(id,{...data,live:true});model.position.set(x,y,z);model.rotation.y=data.yaw||0;scene.add(model);furnitureMeshes.set(key,model);
+            if(id===CHEST_ID)model.userData.joinSide=data.joinSide;
         }
         if(id===SECURITY_CAMERA_ID) {
             const model=furnitureMeshes.get(key);model.rotation.y=data.yaw||0;
@@ -488,6 +492,7 @@ function furnitureRecord(x,y,z) {
 
 function closeFurniturePanel(resume=true) {
     stopSurveillance();
+    if(furnitureFocus?.startsWith(currentDimension+'|')){const record=furnitureRecord(...furnitureFocus.split('|')[1].split(',').map(Number));if(record?.id===CHEST_ID)setChestLids(record,false);}
     furnitureFocus=null;
     const panel=document.getElementById('home-panel');if(panel) panel.hidden=true;
     if(resume && isGameStarted) controls.lock();
@@ -503,6 +508,7 @@ function openFurniturePanel(record) {
     blocker.style.display='none';
     const button=(label,action,parent=content)=>{const b=document.createElement('button');b.textContent=label;b.onclick=action;parent.appendChild(b);return b;};
     const data=record.data;
+    if(record.id===CHEST_ID){renderChestPanel(record);setChestLids(record,true);return;}
     addHomePowerControl(record,content);
     if(record.id===SECURITY_CAMERA_ID) {
         openSecurityCameraPanel(record,content,button);
@@ -566,6 +572,7 @@ function expansionRay(includeWater=false) {
 
 function placeFurniture(id,x,y,z) {
     if(!HOME_ITEMS[id] || ![0,42].includes(getBlock(x,y,z))) return false;
+    if(id===CHEST_ID&&!canPlaceChest(x,y,z))return false;
     const height=[FRIDGE_ID,CHAIR_ID,88,112,SHOWER_ID,SHOWER_DOOR_ID].includes(id)?2:1;
     let yaw=Math.round(Math.atan2(camera.position.x-x,camera.position.z-z)/(Math.PI/2))*(Math.PI/2);
     if([83,126,XL_SOFA_ID].includes(id)) for(const [dx,dz] of [[-1,0],[1,0],[0,-1],[0,1]]) {

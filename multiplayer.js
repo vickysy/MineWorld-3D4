@@ -1,4 +1,4 @@
-const ROOM_PROTOCOL='daniel-mc-room-15', ROOM_PREFIX='daniel-mc-room2-';
+const ROOM_PROTOCOL='daniel-mc-room-16', ROOM_PREFIX='daniel-mc-room2-';
 const ROOM_TIMEOUT_MS=30000, ROOM_MAX_SAVE=16*1024*1024, ROOM_PACKET_CELLS=128;
 let multiplayerRoom=null, multiplayerMode='host', currentRoomCode='', remotePlayers={};
 
@@ -71,6 +71,7 @@ async function copyRoomCode() {
 }
 
 function leaveMultiplayerRoom(message='Left room.') {
+    closeChestTransfer();
     const r=multiplayerRoom;multiplayerRoom=null;
     if(r){for(const timer of r.timers)clearTimeout(timer);r.peer?.destroy();}
     for(const p of Object.values(remotePlayers))disposeModModel(p);remotePlayers={};
@@ -245,7 +246,7 @@ function interpolateRoomPlayers(now){
 }
 
 function roomCellValid(cell) {
-    return Array.isArray(cell)&&cell.length===4&&cell.every(Number.isSafeInteger)&&cell.slice(0,3).every(n=>Math.abs(n)<=100000)&&cell[3]>=0&&(cell[3]<=153||cell[3]===END_PORTAL_ID||!!NATURE_ITEMS[cell[3]]||!!HIDDEN_BLOCKS[cell[3]]);
+    return Array.isArray(cell)&&cell.length===4&&cell.every(Number.isSafeInteger)&&cell.slice(0,3).every(n=>Math.abs(n)<=100000)&&cell[3]>=0&&(cell[3]<=153||cell[3]===END_PORTAL_ID||!!HOME_ITEMS[cell[3]]||!!NATURE_ITEMS[cell[3]]||!!HIDDEN_BLOCKS[cell[3]]);
 }
 
 function applyRoomCells(r,cells,actor=null) {
@@ -262,11 +263,12 @@ function applyRoomCells(r,cells,actor=null) {
             if(id===24&&Number.isInteger(change.water)&&change.water>0&&change.water<=8)waterAmounts.set(`${x},${y},${z}`,change.water);
             if(HOME_ITEMS[id]&&change.furniture&&typeof change.furniture==='object') {
                 const data=JSON.parse(JSON.stringify(change.furniture),(key,value)=>['__proto__','constructor','prototype'].includes(key)?undefined:value);
+                if(id===CHEST_ID&&r.role==='host'){data.chestSlots=chestSlots(furnitureData.get(key)||{});data.chestReceipts=furnitureData.get(key)?.chestReceipts||{};}
                 data.id=id;furnitureData.set(key,data);
                 const model=furnitureMeshes.get(key);if(model){disposeModModel(model);furnitureMeshes.delete(key);}
             }
         }
-    } finally {r.applying=false;commandEditing=editing;lockEditActor=previousActor;addDirtyChunksToQueue(dirty);furnitureTick=1;}
+    } finally {r.applying=false;commandEditing=editing;lockEditActor=previousActor;addDirtyChunksToQueue(dirty);furnitureTick=1;refreshChestPanel();}
 }
 
 function receiveRoomGuest(r,entry,p) {
@@ -278,6 +280,7 @@ function receiveRoomGuest(r,entry,p) {
         showToast('A player joined.');return;
     }
     if(!entry.ready||!r.worldReady)return;
+    if(p.type==='chest-request'){receiveChestRequest(r,entry,p);return;}
     if(p.type==='ecology-request'){
         const player=r.positions.get(entry.conn.peer),now=performance.now();
         if(p.dimension!==currentDimension||!validMachineCell(p.at)||!player||player.dimension!==currentDimension||
@@ -326,6 +329,7 @@ function receiveRoomGuest(r,entry,p) {
 }
 
 function receiveRoomHost(r,entry,p) {
+    if(p.type==='chest-reply'&&r.worldReady){receiveChestReply(p);return;}
     if(p.type==='weather'&&r.worldReady&&Number.isFinite(p.time)&&p.time>=0){weatherClock=p.time;restoreWeatherOverride(p.override);return;}
     if(p.type==='lock-auth-ok'){r.lockAuthenticated=true;return;}
     if(p.type==='lock-reply'){receiveLockReply(p);return;}
@@ -348,9 +352,9 @@ function receiveRoomHost(r,entry,p) {
         const save=JSON.parse(t.chunks.join(''),(key,value)=>['__proto__','constructor','prototype'].includes(key)?undefined:value);
         if(!Number.isFinite(save.seed)||!Array.isArray(save.worldMap)||!save.camera||!['x','y','z'].every(k=>Number.isFinite(save.camera[k])))throw new Error('Invalid world');
         r.applying=true;r.seq=t.seq;r.transfer=null;
-        const inventory=playerInventory,hostScale=Math.max(MIN_PLAYER_SCALE,Math.min(MAX_PLAYER_SCALE,Number(save.playerScale)||1));
+        const inventory=playerInventory,guestHotbar={items:hotbarItems,active:activeHotbarSlot},hostScale=Math.max(MIN_PLAYER_SCALE,Math.min(MAX_PLAYER_SCALE,Number(save.playerScale)||1));
         save.camera.y+=PLAYER_HEIGHT*(1-hostScale);
-        save.playerInventory=inventory;save.playerScale=1;save.activeMech=null;save.creativeFlying=false;
+        save.playerInventory=inventory;save.hotbar=guestHotbar;save.playerScale=1;save.activeMech=null;save.creativeFlying=false;
         const file=new File([JSON.stringify(save)],'room.json',{type:'application/json'});
         window.loadSaveFile({target:{files:[file]}},error=>{
             if(multiplayerRoom!==r)return;
@@ -399,6 +403,7 @@ function queueRoomBlockChange(x,y,z) {
 
 function updateMultiplayer(now=performance.now()) {
     const r=multiplayerRoom;if(!r?.worldReady||r.applying)return;
+    retryChestTransfers(r);
     interpolateRoomPlayers(now);
     if(now<r.nextTick)return;r.nextTick=now+100;
     if(r.role==='host'&&now>=(r.nextWeather||0)){
