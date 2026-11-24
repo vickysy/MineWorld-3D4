@@ -358,11 +358,15 @@ function updateWilderness(delta){
     }
 }
 
-function remoteAppearance(p){return {held:Number.isSafeInteger(p.held)&&materials[p.held]?p.held:0,mech:p.mech&&MECH_TYPES[p.mech.id]&&['robot','vehicle'].includes(p.mech.form)?{id:p.mech.id,form:p.mech.form}:null};}
-function localRoomAppearance(){return {held:currentBlock,mech:activeMech?{id:activeMech.id,form:activeMech.form}:null};}
+function remoteAppearance(p){return {riding:p.riding==='horse'?'horse':null,held:Number.isSafeInteger(p.held)&&materials[p.held]?p.held:0,mech:p.mech&&MECH_TYPES[p.mech.id]&&['robot','vehicle'].includes(p.mech.form)?{id:p.mech.id,form:p.mech.form}:null};}
+function localRoomAppearance(){return {riding:ridingHorse?'horse':null,held:currentBlock,mech:activeMech?{id:activeMech.id,form:activeMech.form}:null};}
 
 function updateRemoteAppearance(model,p){
     const {held,mech}=remoteAppearance(p),id=mech?.id||0;
+    const mounted=p.riding==='horse'&&!id;
+    if(mounted&&!model.userData.horse){const horse=buildLivestock('horse');addHorseSaddle(horse);horse.rotation.y=Math.PI;horse.position.y=-1.35;model.add(horse);model.userData.horse=horse;}
+    if(!mounted&&model.userData.horse){model.remove(model.userData.horse);disposeModModel(model.userData.horse);model.userData.horse=null;}
+    model.children[4].rotation.x=model.children[5].rotation.x=mounted?-1:0;
     if(model.userData.mechId!==id){
         if(model.userData.mech){const old=model.userData.mech;model.remove(old);disposeModModel(old);}
         model.userData.mechId=id;model.userData.mech=id?createMechModel(id):null;
@@ -382,13 +386,14 @@ function updateRemoteAppearance(model,p){
         model.userData.heldId=held;model.userData.held=null;
         if(held){
             let item;
-            if(HOME_ITEMS[held])item=createFurnitureModel(held,{});
+            if(WEAPON_IDS.has(held))item=buildWeaponModel(held);
+            else if(HOME_ITEMS[held])item=createFurnitureModel(held,{});
             else if(held>=67&&held<=71)item=createModItemModel(held);
             else {
                 const source=materials[held],m=Array.isArray(source)?source.map(v=>v.clone()):source.clone();
                 item=new THREE.Mesh((natureGeometry(held)||boxGeo).clone(),m);
             }
-            item.scale.setScalar(.32);item.position.set(0,-.55,-.18);model.children[3].add(item);model.userData.held=item;
+            item.scale.setScalar(WEAPON_IDS.has(held)?.65:.32);item.position.set(0,-.55,-.18);model.children[3].add(item);model.userData.held=item;
         }
     }
     model.userData.form=mech?.form||'human';

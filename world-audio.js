@@ -30,7 +30,7 @@ function playWorldRecording(kind,{position=null,gain=.22,rate=1,duration=null,am
     if(!audioCtx||audioCtx.state==='closed')return false;
     if(audioCtx.state==='suspended')audioCtx.resume();warmWorldAudio();
     const distance=position?position.distanceTo(camera.position):0;
-    if(distance>=22||worldAudioVoices.size>=10)return false;
+    if(distance>=32||worldAudioVoices.size>=10)return false;
     if(ambient&&audioCtx.currentTime-worldAudioLastAnimal<1.1)return false;
     const choices=worldAudioBuffers.get(kind);if(!choices?.length){loadWorldAudio(kind);return false;}
     if(ambient)worldAudioLastAnimal=audioCtx.currentTime;
@@ -38,8 +38,9 @@ function playWorldRecording(kind,{position=null,gain=.22,rate=1,duration=null,am
     source.buffer=choice.buffer;source.playbackRate.value=rate*(.97+Math.random()*.06);
     filter.type='lowpass';filter.frequency.value=5200;
     const time=audioCtx.currentTime,length=Math.min(duration||choice.buffer.duration,choice.buffer.duration)/source.playbackRate.value;
-    volume.gain.setValueAtTime(0,time);volume.gain.linearRampToValueAtTime(gain*choice.normal/(1+distance*.22),time+.008);
-    volume.gain.setValueAtTime(gain*choice.normal/(1+distance*.22),time+Math.max(.008,length-.04));volume.gain.linearRampToValueAtTime(0,time+length);
+    const attenuation=distance<=4?1:Math.max(0,1-(distance-4)/28)/(1+(distance-4)*.045),level=gain*choice.normal*attenuation;
+    volume.gain.setValueAtTime(0,time);volume.gain.linearRampToValueAtTime(level,time+.008);
+    volume.gain.setValueAtTime(level,time+Math.max(.008,length-.04));volume.gain.linearRampToValueAtTime(0,time+length);
     source.connect(filter);filter.connect(volume);
     const pan=audioCtx.createStereoPanner();if(position){const right=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,0);pan.pan.value=THREE.MathUtils.clamp(position.clone().sub(camera.position).dot(right)/12,-.8,.8);}
     volume.connect(pan);pan.connect(getSoundOutput());worldAudioVoices.add(source);
@@ -71,11 +72,11 @@ function updateFootstepSound(before,grounded){
 function updateAnimalVoice(entity,delta){
     entity.voiceTimer=(entity.voiceTimer??(1+Math.random()*7))-delta;
     if(entity.voiceTimer>0||entity.dying)return;
-    if(playWorldRecording(entity.type||'villager',{position:entity.mesh.position,gain:.25,ambient:true}))entity.voiceTimer=8+Math.random()*14;
+    if(playWorldRecording(entity.type||'villager',{position:entity.mesh.position,gain:entity.type==='pig'?.58:.4,ambient:true}))entity.voiceTimer=5+Math.random()*9;
     else entity.voiceTimer=1+Math.random()*3;
 }
 function playMobVoice(entity){
     const kind=entity.type|| (entity.kind==='villager'?'villager':null);
-    if(kind)playWorldRecording(kind+'_hurt',{position:entity.mesh.position,gain:.27});
+    if(kind)playWorldRecording(kind==='pig'?'pig':kind+'_hurt',{position:entity.mesh.position,gain:kind==='pig'?.48:.32,rate:kind==='pig'?1.12:1,duration:kind==='pig'?.42:null});
 }
 function clearWorldVoices(){for(const source of worldAudioVoices)source.stop();worldAudioVoices.clear();}

@@ -317,7 +317,7 @@ function playerHitsCityCar(pos) {
 }
 
 function tryEnterCityCar() {
-    if(currentDimension!=='overworld'||activeMech||seatedAt||ridingMinecart||playerScale!==1)return false;
+    if(currentDimension!=='overworld'||activeMech||seatedAt||ridingMinecart||ridingHorse||playerScale!==1)return false;
     const dir=new THREE.Vector3();camera.getWorldDirection(dir);
     for(const car of cityCars.values()) {
         const point=car.mesh.position.clone().add(new THREE.Vector3(0,0.8,0)),v=point.clone().sub(camera.position);

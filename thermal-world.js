@@ -272,7 +272,7 @@ function beginNuclearBlast(x,y,z,remote=false) {
     for(let i=0;i<8;i++) {const a=i*Math.PI/4;spawnExplosionParticles(x+Math.cos(a)*3,y+2,z+Math.sin(a)*3,4);}
     for(let i=firstParticle;i<explosionParticles.length;i++){const p=explosionParticles[i];p.mesh.scale.setScalar(1.5);p.velocity.multiplyScalar(1.5);p.life*=1.2;p.maxLife=p.life;}
     playSound('explosion');showToast('Nuclear blast: excavating crater...');
-    for(const list of [zombies,creepers,villagers,animals,endermen])for(let i=list.length-1;i>=0;i--) {
+    for(const list of [zombies,creepers,villagers,animals,endermen,adventureMobs])for(let i=list.length-1;i>=0;i--) {
         const p=list[i].mesh.position;
         if(Math.hypot(p.x-x,p.z-z)<NUKE_BLAST_RADIUS&&p.y>y-NUKE_BLAST_RADIUS&&p.y<y+Math.ceil(NUKE_BLAST_RADIUS*0.36)){disposeModModel(list[i].mesh);list.splice(i,1);}
     }

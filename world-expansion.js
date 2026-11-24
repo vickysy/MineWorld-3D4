@@ -177,7 +177,7 @@ function snapshotDimension() {
     return {outdoors:saveOutdoors(),construction:saveConstruction(),thermal:saveThermalWorld(),worldMap:Array.from(worldMap),modifiedColumns:Array.from(modifiedColumns),columnMinY:Array.from(columnMinY),
         microMined:Array.from(microMinedBlocks),microPlaced:Array.from(microPlacedBlocks),fineEdits:Array.from(fineVoxelEdits),
         chunkMaxY:Array.from(chunkMaxY),chunkScanYRanges:Array.from(chunkScanYRanges),waterAmounts:Array.from(waterAmounts),portals:Array.from(activePortals),pistons:Array.from(pistonDirections),
-        companions:[...zombies,...creepers,...villagers].filter(m=>m.eggId&&!m.dying).map(m=>({id:m.eggId,pos:m.mesh.position.toArray(),hp:m.hp})),
+        companions:[...zombies,...creepers,...villagers,...animals,...adventureMobs].filter(m=>m.eggId&&!m.dying).map(m=>({id:m.eggId,pos:m.mesh.position.toArray(),hp:m.hp})),
         residents:villagers.filter(m=>m.cityResident&&!m.dying).map(m=>({pos:m.mesh.position.toArray(),hp:m.hp})),
         endermen:endermen.filter(m=>m.eggId&&!m.dying).map(m=>({pos:m.mesh.position.toArray(),hp:m.hp})),returnPoint:camera.position.toArray()};
 }
@@ -202,6 +202,7 @@ function travelThroughPortal(next) {
     if(multiplayerRoom)leaveMultiplayerRoom('Left room before changing dimension.');
     closeFurniturePanel(false);if(!leaveCityCar() || !standFromChair()) return;clearCombatState();resetPlayerFlight();
     dimensionWorlds.set(currentDimension,snapshotDimension());
+    clearAdventureMobs();
     currentDimension=next;heightCache.clear();const saved=dimensionWorlds.get(next);
     restoreDimension(saved);
     for(const list of [zombies,creepers,villagers,animals,endermen,minecarts]) {for(const mob of list) scene.remove(mob.mesh);list.length=0;}
@@ -213,7 +214,7 @@ function travelThroughPortal(next) {
     chunkMeshes.clear();chunkQueue.length=0;rebuildQueue.clear();lastChunkX=lastChunkZ=-999;
     if(saved?.returnPoint) {
         camera.position.fromArray(saved.returnPoint);
-        for(const m of saved.companions||[]) {if(next!=='overworld'&&m.id===67)continue;const mob=spawnMobFromEgg(m.id,...m.pos);mob.hp=m.hp;}
+        for(const m of saved.companions||[]) {if(next!=='overworld'&&m.id===67)continue;const mob=spawnMobFromEgg(m.id,...m.pos,true);if(mob)mob.hp=m.hp;}
         for(const m of saved.endermen||[]) spawnEnderman(...m.pos,true,m.hp);
         if(next==='overworld') for(const m of saved.residents||[]) {spawnVillagerAt(...m.pos);Object.assign(villagers[villagers.length-1],{cityResident:true,hp:m.hp});}
     }
@@ -247,6 +248,7 @@ function saveWorldExpansion() {
 }
 
 function clearExpansionWorld() {
+    clearAdventureMobs();
     closeChestTransfer();
     restoreOutdoors();if(photoMode)setPhotoMode(false);
     restoreEcology();
@@ -550,6 +552,7 @@ function openFurniturePanel(record) {
 }
 
 function sitInChair(record) {
+    if(ridingHorse){showToast('Dismount before sitting.');return;}
     if(activeMech || playerScale!==1 || drivingCar) {showToast('Return to normal player size to sit.');return;}
     const eye=new THREE.Vector3(record.x,record.y+1,record.z);
     const headType=getBlock(Math.round(eye.x),Math.round(eye.y+0.2),Math.round(eye.z));

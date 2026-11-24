@@ -22,7 +22,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
    try{
     playBlockSound('break',1);playBlockSound('break',2);playBlockSound('break',3);playBlockSound('place',2);playBlockSound('break',6);playBlockSound('step',OAK_PLANKS_ID);
     ok(calls.map(c=>c.kind).join(',')==='grass,dirt,stone,place,glass,wood_step','Material/action routing');
-    const v={type:'sheep',mesh:{position:camera.position.clone()},voiceTimer:0};updateAnimalVoice(v,.1);ok(calls.at(-1).kind==='sheep'&&v.voiceTimer>=8,'Idle calls repeat slowly');
+    const v={type:'sheep',mesh:{position:camera.position.clone()},voiceTimer:0};updateAnimalVoice(v,.1);ok(calls.at(-1).kind==='sheep'&&v.voiceTimer>=5&&v.voiceTimer<=14,'Idle calls are spaced apart');
    }finally{playWorldRecording=old;}
    clearWorldVoices();ok(!playWorldRecording('cow',{position:camera.position.clone().addScalar(50)}),'Distant animals quiet');
    for(let i=0;i<20;i++)playWorldRecording('cow');ok(worldAudioVoices.size===10,'Voice concurrency bounded');clearWorldVoices();

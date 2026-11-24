@@ -94,6 +94,8 @@ function initCreativeInventory(){
         else if(NATURE_PLANTS.has(id)||LEAF_TYPES.has(id)||[COBWEB,STRING_ITEM,RICE_SEEDS,FLOWER_RED,FLOWER_BLUE].includes(id))category='nature';
         if([GOLD_BLOCK,SILVER_BLOCK,IRON_BLOCK,EMERALD_BLOCK,SAPPHIRE_BLOCK,GOLD_PYRAMID,SILVER_PYRAMID,SANDSTONE].includes(id))category='build';
         if(id===FISHING_ROD||id===STRING_ITEM)category='weapon';
+        if(WEAPON_IDS.has(id))category='weapon';
+        if(ADVENTURE_EGGS.has(id))category='mods';
         document.getElementById('tab-'+category).append(el);
         el.classList.add('catalog-item');el.dataset.item=id;el.dataset.search=(getBlockName(id)+' '+Object.keys(COMMAND_ITEMS).filter(k=>COMMAND_ITEMS[k]===id).join(' ')).toLowerCase();
         el.onclick=()=>chooseCatalogItem(id);el.draggable=true;el.ondragstart=e=>{chooseCatalogItem(id);e.dataTransfer.setData('text/plain',String(id));};

@@ -96,6 +96,20 @@ async function assertScenePixels(page) {
         await host.waitForFunction(()=>Object.values(remotePlayers).some(m=>m.userData.heldId===4));
         console.log('PASS: Real two-peer robot/vehicle/human transformations and actual held wood/red brick are visible, with shared Peaceful difficulty.');
 
+        const riderHome=await host.evaluate(()=>{
+            const saved=camera.position.toArray(),x=Math.round(camera.position.x),y=Math.ceil(camera.position.y)+4,z=Math.round(camera.position.z);
+            for(let a=-4;a<=4;a++)for(let b=-4;b<=4;b++){setBlockNoRebuild(x+a,y,z+b,3,rebuildQueue);for(let c=1;c<=4;c++)setBlockNoRebuild(x+a,y+c,z+b,0,rebuildQueue);}
+            const horse=spawnAdventureMob(HORSE_EGG,x,y+1,z);if(!horse||!mountHorse(horse))throw Error('Mount multiplayer horse');selectSlot(SAPPHIRE_SWORD-12);return saved;
+        });
+        await guest.waitForFunction(()=>Object.values(remotePlayers).some(m=>m.userData.horse&&m.userData.held?.userData.weaponId===SAPPHIRE_SWORD));
+        const riderZ=await host.evaluate(()=>{const z=ridingHorse.mesh.position.z;camera.rotation.set(0,0,0);moveForward=true;for(let i=0;i<20;i++)updateHorseRiding(1/60);moveForward=false;return z;});
+        await guest.waitForFunction(z=>Object.values(remotePlayers).some(m=>m.userData.horse&&m.userData.pose.target.z<z-1),riderZ);
+        await guest.evaluate(()=>{const p=Object.values(remotePlayers)[0].position;camera.position.copy(p).add(new THREE.Vector3(4,1,5));camera.lookAt(p);creativeFlying=true;});
+        await guest.screenshot({path:'/private/tmp/mc-remote-horse.png'});
+        await host.evaluate(p=>{dismountHorse();camera.position.fromArray(p);creativeFlying=false;},riderHome);
+        await guest.waitForFunction(()=>Object.values(remotePlayers).every(m=>!m.userData.horse));
+        console.log('PASS: Real peers see the ridden horse, movement, held Sapphire Sword and dismount.');
+
         const cell=await host.evaluate(()=>{
             const p=[Math.round(camera.position.x)+4,Math.round(camera.position.y)+2,Math.round(camera.position.z)];
             setBlock(...p,59);return p;

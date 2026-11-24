@@ -73,7 +73,13 @@ function updateFlyingArrows(delta){
         for(let j=0;j<steps;j++){
             a.velocity.y-=9*dt;const distance=a.velocity.length()*dt,dir=a.velocity.clone().normalize();
             a.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),dir);
-            const hit=traceCombatRay(a.mesh.position,dir,distance);a.mesh.position.copy(hit.point);
+            const hit=traceCombatRay(a.mesh.position,dir,distance,!a.enemy);
+            if(a.enemy&&hostileMobsEnabled()){
+                const p=camera.position,r=getPlayerRadius(),box=new THREE.Box3(new THREE.Vector3(p.x-r,p.y-getPlayerHeight(),p.z-r),new THREE.Vector3(p.x+r,p.y+.15*playerScale,p.z+r));
+                const point=new THREE.Ray(a.mesh.position,dir).intersectBox(box,new THREE.Vector3());
+                if(point&&point.distanceTo(a.mesh.position)<=hit.distance){takeDamage(a.damage);a.life=0;break;}
+            }
+            a.mesh.position.copy(hit.point);
             if(hit.entity){damageMob(hit.entity,a.damage);a.life=0;break;}
             if(hit.block){a.stuck=[hit.block.x,hit.block.y,hit.block.z];a.mesh.position.addScaledVector(dir,.035);a.velocity.set(0,0,0);a.life=25;playBlockSound('hit',hit.block.type,hit.point);break;}
         }

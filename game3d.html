@@ -385,14 +385,14 @@
     <script src="three-pointer-lock-r128.js"></script>
     <script src="three-reflector-r128.js"></script>
     <link rel="stylesheet" href="inventory.css?v=20261123-treasure">
-    <script src="world-expansion.js?v=20261124-living"></script>
-    <script src="home-city.js?v=20261110-repairs"></script>
+    <script src="world-expansion.js?v=20261124-adventure"></script>
+    <script src="home-city.js?v=20261124-adventure"></script>
     <script src="kitchen-home.js?v=20261020-connected"></script>
     <script src="city-life.js?v=end-islands-1"></script>
     <script src="surveillance.js?v=20261018-tools"></script>
     <script src="peerjs-1.5.5.min.js"></script>
-    <script src="multiplayer.js?v=20261124-living"></script>
-    <script src="thermal-world.js?v=20261021-wilderness"></script>
+    <script src="multiplayer.js?v=20261124-adventure"></script>
+    <script src="thermal-world.js?v=20261124-adventure"></script>
     <script src="launchers.js?v=20261110-repairs"></script>
     <script src="construction.js?v=20261118-outdoors"></script>
     <script src="redstone-machines.js?v=20261110-repairs"></script>
@@ -401,16 +401,19 @@
     <script src="rail-vehicles.js?v=20261020-connected"></script>
     <script src="connected-home.js?v=20261020-connected"></script>
     <script src="zombie-voices.js?v=20261021-recorded"></script>
-    <script src="wilderness.js?v=20261124-living"></script>
+    <script src="wilderness.js?v=20261124-adventure"></script>
     <script src="ecology.js?v=20261123-treasure"></script>
     <script src="outdoors.js?v=20261123-snow"></script>
     <script src="mining-cracks.js?v=20261123-cracks"></script>
-    <script src="treasure-world.js?v=20261123-treasure"></script>
-    <script src="creative-inventory.js?v=20261123-treasure"></script>
+    <script src="treasure-world.js?v=20261124-adventure"></script>
+    <script src="creative-inventory.js?v=20261124-adventure"></script>
     <script src="world-audio-data.js?v=20261124-living"></script>
-    <script src="world-audio.js?v=20261124-living"></script>
+    <script src="world-audio.js?v=20261124-adventure"></script>
     <script src="voxel-style.js?v=20261124-living"></script>
-    <script src="living-physics.js?v=20261124-living"></script>
+    <script src="living-physics.js?v=20261124-adventure"></script>
+    <script src="adventure-items.js?v=20261124-adventure"></script>
+    <script src="adventure-mobs.js?v=20261124-adventure"></script>
+    <script src="desert-temple.js?v=20261124-adventure"></script>
     <script src="village-life.js?v=20261118-outdoors"></script>
     <script src="terrain-horizon.js?v=end-islands-1"></script>
     <script src="village-houses.js?v=20261104-ecology"></script>
@@ -579,7 +582,8 @@
                 if (heldItemGroup.children[0].userData.modItem) disposeModModel(heldItemGroup.children[0]);
                 heldItemGroup.remove(heldItemGroup.children[0]); 
             }
-            if (blockId === 0) return;
+            if (blockId === 0) {heldItemGroup.add(buildFirstPersonHand());return;}
+            if(WEAPON_IDS.has(blockId)){const item=buildWeaponModel(blockId);item.scale.setScalar(.68);item.rotation.set(.08,-.25,-.2);item.position.set(-.06,.12,0);heldItemGroup.add(item);return;}
             if(blockId===FISHING_ROD){
                 const rod=new THREE.Mesh(natureGeometry(blockId),materials[blockId]);rod.position.y=.18;rod.rotation.z=-.2;heldItemGroup.add(rod);return;
             }
@@ -1567,7 +1571,7 @@
                 creativeFlying: creativeFlying,
                 expansion: saveWorldExpansion(),
                 activeMech: activeMech,
-                spawnedMobs: [...villagers,...creepers,...zombies].filter(m=>m.eggId && !m.dying).map(m=>({
+                spawnedMobs: [...villagers,...creepers,...zombies,...animals,...adventureMobs].filter(m=>m.eggId && !m.dying).map(m=>({
                     id:m.eggId,x:m.mesh.position.x,y:m.mesh.position.y,z:m.mesh.position.z,hp:m.hp
                 })),
                 playerInventory: playerInventory,
@@ -1676,9 +1680,9 @@
                     creativeFlying = data.creativeFlying === true && canCreativeFly();
                     for(const mob of (Array.isArray(data.spawnedMobs)?data.spawnedMobs:[]).slice(0,80)) {
                         if(mob.id===67&&currentDimension!=='overworld')continue;
-                        if([67,68,69].includes(mob.id) && [mob.x,mob.y,mob.z].every(Number.isFinite)) {
-                            const entity=spawnMobFromEgg(mob.id,mob.x,mob.y,mob.z);
-                            entity.hp=Math.max(1,Math.min(entity.hp,Number(mob.hp)||entity.hp));
+                        if([67,68,69,...ADVENTURE_EGGS].includes(mob.id) && [mob.x,mob.y,mob.z].every(Number.isFinite)) {
+                            const entity=spawnMobFromEgg(mob.id,mob.x,mob.y,mob.z,true);
+                            if(entity)entity.hp=Math.max(1,Math.min(entity.hp,Number(mob.hp)||entity.hp));
                         }
                     }
                     updatePlayerScaleView();
@@ -2069,7 +2073,7 @@
         let playerInventory = {}; 
         const TOOL_ITEMS = [33, 34, 35, 41, 54, 55, 56, 57, 58];
         function isToolItem(id) {
-            return TOOL_ITEMS.includes(id)||id===FISHING_ROD;
+            return TOOL_ITEMS.includes(id)||id===FISHING_ROD||ADVENTURE_EGGS.has(id);
         }
 
         function isCreativeMode() {
@@ -2127,6 +2131,7 @@
         ];
         
         function getBlockName(id) {
+            if(ADVENTURE_ITEMS[id])return ADVENTURE_ITEMS[id];
             if(MACHINE_ITEMS[id])return MACHINE_ITEMS[id];
             if(THERMAL_ITEMS[id])return THERMAL_ITEMS[id];
             const names = {
@@ -2346,6 +2351,7 @@
         }
 
         function respawnPlayer() {
+            dismountHorse(true);
             resetPlayerFlight();
             if(activeMech) {playerScale=activeMech.previousScale;clearMech();updatePlayerScaleView();}
             isRespawning = true;
@@ -2464,6 +2470,7 @@
         }
 
         function drinkSizePotion(item, nextScale) {
+            if (ridingHorse) { showToast('Dismount before drinking a size potion.'); return false; }
             if (activeMech) { showToast("Return to Player before drinking a size potion."); return false; }
             if (!hasInventoryItem(item)) { showToast("No potion available."); return false; }
             if (nextScale < MIN_PLAYER_SCALE * 0.99 || Math.abs(nextScale-playerScale) < playerScale*0.001) {
@@ -4494,6 +4501,7 @@
         }
 
         function canCreativeFly() {
+            if(ridingHorse)return false;
             return isCreativeMode() && !ridingMinecart && (!activeMech || activeMech.form === 'robot');
         }
 
@@ -4595,6 +4603,7 @@
             if(e.code==='Slash' && isGameStarted) {e.preventDefault();openCommandPanel();return;}
             if(e.code==='KeyE' && document.getElementById('home-panel')?.hidden===false) {closeFurniturePanel();return;}
             if(e.code==='KeyE' && drivingCar) {e.preventDefault();leaveCityCar();return;}
+            if(e.code==='KeyE' && ridingHorse) {e.preventDefault();dismountHorse();return;}
             if(e.code==='Space' && drivingCar) {e.preventDefault();carBraking=true;drivingCar.speed=0;return;}
             if((e.code==='KeyE'||e.code==='Space') && seatedAt) {e.preventDefault();standFromChair();return;}
             if (controls.isLocked && !e.repeat && e.code === 'KeyR' && activeMech) { transformMech(); return; }
@@ -4687,6 +4696,7 @@
         
         function updatePlayerMovement(playerDelta) {
             if (!controls.isLocked || !isGameStarted || isSleeping) return;
+            if(ridingHorse){updateHorseRiding(playerDelta);return;}
             if(seatedAt) {velocity.set(0,0,0);return;}
             if(drivingCar) {updateDrivingCar(playerDelta);return;}
             if (creativeFlying && !canCreativeFly()) resetPlayerFlight();
@@ -5374,6 +5384,7 @@
         }
 
         function enterMech(id) {
+            if(ridingHorse) {showToast('Dismount before transforming.');return false;}
             if(!MECH_TYPES[id] || !hasInventoryItem(id)) {showToast('Get a mech core from Mods first.');return false;}
             if(ridingMinecart) {showToast('Leave the minecart first.');return false;}
             const next={id,form:'robot',previousScale:activeMech?activeMech.previousScale:playerScale};
@@ -5469,7 +5480,8 @@
             rememberOriginalMaterials(group);return group;
         }
 
-        function spawnMobFromEgg(id,x,y,z) {
+        function spawnMobFromEgg(id,x,y,z,restoring=false) {
+            if(ADVENTURE_EGGS.has(id))return spawnAdventureMob(id,x,y,z,restoring);
             if(id===ENDER_EGG_ID) return spawnEnderman(x,y,z,true);
             let mob;
             if(id===67) {spawnVillagerAt(x,y,z);mob=villagers[villagers.length-1];}
@@ -5604,10 +5616,13 @@
 
         function damageMob(entity, amount, source='player') {
             if (!entity || entity.dying || (source==='player' && isCompanion(entity))) return false;
+            if(entity.type&&source==='player'&&entity.hurtTimer>.05)return false;
             if(!entity.hurtTimer||entity.hurtTimer<=0)playMobVoice(entity);
             if(entity.kind==='enderman') entity.anger=20;
             if(source==='player') companionOrder={target:entity,remaining:12};
             entity.hp = (entity.hp || 1) - amount;
+            if(entity.type&&entity.hp>0)panicAnimal(entity,camera.position);
+            if(entity.kind==='warden')entity.heard=8;
             entity.hurtTimer = 0.35;
             setEntityTint(entity.mesh, 0xff3b30);
             if (entity.hp <= 0) {
@@ -5763,14 +5778,14 @@
             return null;
         }
 
-        function spawnAnimal(type, x, y, z) {
+        function spawnAnimal(type, x, y, z, restorePosition=false) {
             if(currentDimension!=='overworld') return false;
-            const safeSpot = isAnimalSpawnSafe(x, y, z) ? { x, y, z } : findSafeAnimalSpot(x, z);
+            const safeSpot = restorePosition || isAnimalSpawnSafe(x, y, z) ? { x, y, z } : findSafeAnimalSpot(x, z);
             if (!safeSpot) return false;
             const mesh = createAnimalModel(type);
             mesh.position.set(safeSpot.x, safeSpot.y, safeSpot.z);
             scene.add(mesh);
-            const hp = type==='horse'?5:type === 'cow' ? 3 : 2;
+            const hp = type==='horse'?20:type === 'sheep'?8:10;
             animals.push({ mesh, type, vx: 0, vy: 0, vz: 0, timer: 0, onGround: false, hp, hurtTimer: 0, dying: false, deathTimer: 0, walkTime: 0, droppedMeat: false });
             return true;
         }
@@ -5953,6 +5968,7 @@
             for (let i = animals.length - 1; i >= 0; i--) {
                 let a = animals[i];
                 if (updateMobDamageState(a, delta)) {
+                    if(ridingHorse===a)dismountHorse(true);
                     dropAnimalMeat(a);
                     disposeModModel(a.mesh);
                     animals.splice(i, 1);
@@ -5960,9 +5976,11 @@
                 }
                 if (a.dying) continue;
                 updateAnimalVoice(a,delta);updateSpikeDamage(a,delta);
+                if(a.dying||ridingHorse===a)continue;
 
                 a.timer -= delta;
-                if (a.timer <= 0) {
+                const fleeing=updateAnimalPanic(a,delta);
+                if (!fleeing && a.timer <= 0) {
                     chooseAnimalDirection(a);
                 }
                 if(animalWouldEnterWater(a.mesh.position.x+a.vx*delta,a.mesh.position.y,a.mesh.position.z+a.vz*delta)){a.vx=0;a.vz=0;a.timer=.2;}
@@ -6119,7 +6137,7 @@
         }
 
         function getHeldWeaponDamage() {
-            if (currentBlock === 33) return 2;
+            if (SWORD_DAMAGE[currentBlock]) return SWORD_DAMAGE[currentBlock];
             if (currentBlock === AXE_ID) return 2.5;
             if (currentBlock === MACE_ID) return 4;
             if (currentBlock === TRIDENT_ID) return 3;
@@ -6163,7 +6181,8 @@
             const dir=direction.clone().normalize(),block=traceVoxelRay(origin,dir,range,(type,x,y,z)=>isSolid(x,y,z));
             let closest=block?block.distance:range,entity=null;
             const ray=new THREE.Ray(origin,dir),box=new THREE.Box3(),intersection=new THREE.Vector3();
-            if(includeMobs) for(const mob of [...zombies,...creepers,...villagers,...animals,...endermen]) {
+            if(includeMobs) for(const mob of [...zombies,...creepers,...villagers,...animals,...endermen,...adventureMobs]) {
+                if(mob===ridingHorse)continue;
                 if(mob.dying || mob.mesh.parent!==scene) continue;
                 mob.mesh.updateMatrixWorld(true);box.setFromObject(mob.mesh);
                 if(!ray.intersectBox(box,intersection)) continue;
@@ -6182,6 +6201,7 @@
         }
 
         function clearCombatState() {
+            dismountHorse(true);handSwing=handCooldown=0;
             clearFlyingArrows();clearWorldVoices();
             for(const shot of cannonProjectiles) disposeModModel(shot.mesh);
             for(const effect of combatEffects) disposeModModel(effect.mesh);
@@ -6271,6 +6291,7 @@
                 }
                 showToast('Craft this tool first.');return;
             }
+            if(handleAdventureClick(e))return;
             if(handleTreasureClick(e))return;
             if(fishingClick(e))return;
             if(e.button===2&&!e.shiftKey&&!drivingCar&&!isToolItem(currentBlock)&&tryEnterCityCar())return;
@@ -6332,11 +6353,13 @@
             raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
             const rayDir = raycaster.ray.direction.clone();
             const rayPos = raycaster.ray.origin.clone();
+            const interactionWall=traceVoxelRay(rayPos,rayDir,4,(type,x,y,z)=>isSolid(x,y,z));
 
             // 1. 先检测是否打中实体(僵尸/村民/动物)
             // 将射线步数从 50 (5格) 增加到 100 (10格)，并缩小步长到 0.1 保证精度
             let hitEntity = false;
-            for (let i = 0; i < 100; i++) {
+            for (let i = 0; e.button===2 && i < 40; i++) {
+                if(interactionWall&&i*.1>=interactionWall.distance)break;
                 let testPos = rayPos.clone().addScaledVector(rayDir, i * 0.1);
                 // 打僵尸和苦力怕
 	                for (let j = zombies.length - 1; j >= 0; j--) {
@@ -7462,10 +7485,12 @@
                 }else updatePlayerMovement(playerDelta);
 
                 updateEntities(delta);
+                updateAdventureMobs(delta);
                 updateMinecarts(delta);
             }
 
             updateMining(delta);
+            updateHandSwing(delta);
             updateDroppedItems(delta);
             updateExplosionParticles(delta);
             updateCombatEffects(delta);
@@ -7498,6 +7523,7 @@
         initRedstoneMachines();
         initTreasureWorld();
         initVoxelStyle();
+        initAdventureItems();
         initSoundControls();
         initCreativeInventory();
         initMultiplayer();

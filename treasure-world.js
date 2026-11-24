@@ -173,7 +173,7 @@ function ruinCandidate(rx,rz){
         x=rx*96+(!rx&&!rz?19:Math.floor(hash(rx+11,rz)*18)-9);z=rz*96+(!rx&&!rz?0:Math.floor(hash(rx,rz+47)*18)-9);kind='end';
     }else if(currentDimension==='nether'){if(hash(rx+31,rz+9)>.7)return null;kind='nether';}
     else if(selectedTerrain==='desert')kind='desert';else return null;
-    const heights=[];for(let dx=-6;dx<=6;dx++)for(let dz=-6;dz<=6;dz++)heights.push(getSurfaceHeight(x+dx,z+dz));
+    const heights=[],radius=kind==='desert'?12:6;for(let dx=-radius;dx<=radius;dx++)for(let dz=-radius;dz<=radius;dz++)heights.push(getSurfaceHeight(x+dx,z+dz));
     if(Math.min(...heights)===END_VOID_Y||Math.max(...heights)-Math.min(...heights)>10)return null;
     const y=Math.max(kind==='desert'?SEA_LEVEL+1:kind==='nether'?7:-Infinity,...heights);
     return {x,y,z,kind,rx,rz};
@@ -183,6 +183,7 @@ function ruinLoot(site){
     return base.map(([id,n],i)=>({id,count:Math.min(64,n+Math.floor(hash(site.x+i,site.z-891)*3))}));
 }
 function generateRuin(site){
+    if(site.kind==='desert')return generateDesertTemple(site);
     const {x,y,z,kind,rx,rz}=site,key=`ruin_${rx},${rz}`;if(worldMap.has(key))return false;
     worldMap.set(key,true);
     for(let dx=-6;dx<=6;dx++)for(let dz=-6;dz<=6;dz++){
@@ -234,7 +235,7 @@ function generateRuinsNearChunk(cx,cz){
     const rx=Math.floor(cx*16/96),rz=Math.floor(cz*16/96);
     for(let a=rx-1;a<=rx+1;a++)for(let b=rz-1;b<=rz+1;b++){
         if(worldMap.has(`ruin_${a},${b}`))continue;
-        const site=ruinCandidate(a,b);if(site&&site.x+6>=cx*16&&site.x-6<cx*16+16&&site.z+6>=cz*16&&site.z-6<cz*16+16)generateRuin(site);
+        const site=ruinCandidate(a,b),r=site?.kind==='desert'?12:6;if(site&&site.x+r>=cx*16&&site.x-r<cx*16+16&&site.z+r>=cz*16&&site.z-r<cz*16+16)generateRuin(site);
     }
 }
 function initTreasureWorld(){
