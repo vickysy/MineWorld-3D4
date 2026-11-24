@@ -362,6 +362,7 @@ function updateEndermen(delta) {
 }
 
 function createFurnitureModel(id,data={}) {
+    if(id===SPIKE_TRAP_ID)return buildSpikeTrap();
     if(id===CHEST_ID)return createChestModel(data);
     if(id===CAMPFIRE_ID){const model=buildThermalModel(id);model.userData.itemId=id;return model;}
     const group=new THREE.Group(),box=(w,h,d,c,x,y,z,name)=>addModelBox(group,w,h,d,c,x,y,z,name);

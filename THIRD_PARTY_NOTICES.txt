@@ -5,6 +5,79 @@ Converted to 22050 Hz mono PCM in assets/audio/zombie-moan-{1,2,3}.wav,
 and embedded in zombie-voices.js for offline/file URL compatibility.
 These are independent recordings, not audio extracted from Minecraft.
 
+Animal and material recordings (2026-11-24)
+------------------------------------------
+Distributed as unchanged OGG recordings in assets/audio/world, and as lossless
+base64 embeddings in world-audio-data.js. Playback applies gain, pitch and
+filtering in memory. Original files and their licenses remain unchanged.
+Source repository: https://github.com/VoxeLibre/VoxeLibre
+Exact source revision and filenames: assets/audio/world/source.json
+Upstream credits: assets/audio/world/mobs-license.md and blocks-license.txt
+These recordings and our original procedural textures are not Mojang assets.
+
+CC0 1.0: https://creativecommons.org/publicdomain/zero/1.0/
+CC BY 3.0: https://creativecommons.org/licenses/by/3.0/
+CC BY-SA 3.0: https://creativecommons.org/licenses/by-sa/3.0/
+The CC BY-SA recordings remain available under that same license.
+
+Animal recordings:
+- mobs_mc_cow.ogg: Zozzy, CC0; https://freesound.org/people/Zozzy/sounds/59245/
+- mobs_mc_cow_hurt.ogg: Bird_man, CC0 (modified upstream);
+  https://freesound.org/people/Bird_man/packs/16972/
+- mobs_mc_horse_random.1.ogg: GoodListener, CC BY 3.0;
+  https://freesound.org/people/GoodListener/sounds/322454/
+- mobs_mc_horse_random.2.ogg: ERH, CC BY 3.0;
+  https://freesound.org/people/ERH/sounds/32043/
+- mobs_pig.ogg and mobs_pig_angry.ogg: TenPlus1, MIT (permission below).
+- mobs_mc_sheep_random.1/.2.ogg, mobs_mc_sheep_damage.ogg,
+  mobs_mc_horse_hurt.ogg, mobs_mc_villager.1/.2.ogg,
+  mobs_mc_villager_hurt.1.ogg: CC0 under the upstream statement
+  "Sounds not mentioned here are licensed under CC0."
+
+Material recordings:
+- default_dig_crumbly.ogg, default_dirt_footstep.1/.2.ogg,
+  default_grass_footstep.1/.2.ogg, default_place_node.1/.2.ogg,
+  default_place_node_hard.1.ogg, default_wood_footstep.1/.2.ogg,
+  default_glass_footstep.ogg: Mito551, CC BY-SA 3.0;
+  https://github.com/VoxeLibre/VoxeLibre/tree/master/mods/CORE/mcl_sounds
+- default_dig_snappy.ogg: blukotek, CC0;
+  https://freesound.org/people/blukotek/sounds/251660/
+- default_dig_choppy.1/.2.ogg: Sheyvan, CC0;
+  https://freesound.org/people/Sheyvan/sounds/476113/
+- default_dig_cracky.1/.2.ogg: Benboncan, CC BY 3.0;
+  https://freesound.org/people/Benboncan/sounds/71823/
+- default_sand_footstep.1/.2.ogg: worthahep88, CC0;
+  https://freesound.org/people/worthahep88/sounds/319224/
+- default_dug_metal.1/.2.ogg: Iwan Gabovitch (qubodup), CC0;
+  https://opengameart.org/users/qubodup
+- default_break_glass.1.ogg: cmusounddesign, CC BY 3.0;
+  https://freesound.org/people/cmusounddesign/sounds/71947/
+- default_break_glass.2.ogg: Tomlija, CC BY 3.0;
+  https://freesound.org/people/Tomlija/sounds/97669/
+- default_hard_footstep.1/.2.ogg: Erdie, CC BY 3.0;
+  https://freesound.org/people/Erdie/sounds/41579/
+
+MIT License (pig recordings)
+Copyright (c) TenPlus1
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
 three-reflector-r128.js is the unmodified Reflector addon from Three.js r128.
 Source: https://github.com/mrdoob/three.js/blob/r128/examples/js/objects/Reflector.js
 

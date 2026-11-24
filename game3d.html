@@ -82,7 +82,7 @@
         #mech-status { display: none; position: absolute; top: 14px; left: 14px; max-width: 45vw; color: white; background: #20272de0; padding: 9px; font-size: 14px; z-index: 5; pointer-events: none; }
         #toast-msg { max-width: calc(100vw - 48px); box-sizing: border-box; width: max-content; text-align: center; pointer-events: none; }
         #craft-grid .slot { font-size: 9px; overflow-wrap: anywhere; }
-        #multiplayer-menu {box-sizing:border-box;max-width:calc(100vw - 24px);max-height:calc(100dvh - 24px);overflow:auto}
+        #multiplayer-menu,#pause-menu {box-sizing:border-box;max-width:calc(100vw - 24px);max-height:calc(100dvh - 24px);overflow:auto}
         #multiplayer-menu input {min-width:0;box-sizing:border-box}
         #multiplayer-menu button:disabled {opacity:0.5;cursor:wait}
         #multiplayer-menu #leave-room-btn[hidden],#pause-room-btn[hidden] {display:none}
@@ -345,6 +345,10 @@
         <div id="pause-menu" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0,0,0,0.85); padding: 30px; border-radius: 10px; color: white; text-align: center; border: 4px solid #555; z-index: 20; width: 350px; box-shadow: 0 10px 20px rgba(0,0,0,0.5);">
             <div style="position: absolute; top: 10px; right: 15px; font-size: 28px; cursor: pointer; color: #ff5555; font-weight: bold;" onclick="resumeGame()">✖</div>
             <h2 style="margin-top: 0;">Paused</h2>
+            <label for="sound-volume" style="display:flex;align-items:center;gap:10px;margin:12px auto;width:90%;font-size:14px">Sound
+                <input id="sound-volume" type="range" min="0" max="1" step="0.05" value="0.7" oninput="setSoundVolume(this.value)" style="min-width:0;flex:1">
+                <output id="sound-volume-value" for="sound-volume" style="width:38px">70%</output>
+            </label>
             <button id="pause-room-btn" onclick="showMultiplayerMenu()" hidden style="padding:12px;width:90%;background:#356b46;color:white;border:1px solid #87b38c;border-radius:5px;cursor:pointer">Room</button>
             <p style="margin-bottom: 30px; font-size: 16px;">Download and save this world?</p>
             <button onclick="downloadSave()" style="margin: 10px auto; padding: 12px; width: 90%; font-size: 18px; cursor: pointer; background-color: #FF9800; border: none; border-radius: 5px; color: white; font-weight: bold; display: block;">Download Save</button>
@@ -364,6 +368,7 @@
             </div>
 	            <button onclick="restartGameWithTerrain()" style="margin: 10px auto; padding: 12px; width: 90%; font-size: 18px; cursor: pointer; background-color: #f44336; border: none; border-radius: 5px; color: white; font-weight: bold; display: block;">Restart with Selected Terrain</button>
             <button onclick="resumeGame()" style="margin: 10px auto; padding: 12px; width: 90%; font-size: 18px; cursor: pointer; background-color: #4CAF50; border: none; border-radius: 5px; color: white; font-weight: bold; display: block;">Resume Game</button>
+            <a href="THIRD_PARTY_NOTICES.txt" target="_blank" rel="noopener" style="color:#b8cbc3;font-size:12px">Audio &amp; Library Credits</a>
         </div>
     </div>
 
@@ -380,13 +385,13 @@
     <script src="three-pointer-lock-r128.js"></script>
     <script src="three-reflector-r128.js"></script>
     <link rel="stylesheet" href="inventory.css?v=20261123-treasure">
-    <script src="world-expansion.js?v=20261123-treasure"></script>
+    <script src="world-expansion.js?v=20261124-living"></script>
     <script src="home-city.js?v=20261110-repairs"></script>
     <script src="kitchen-home.js?v=20261020-connected"></script>
     <script src="city-life.js?v=end-islands-1"></script>
     <script src="surveillance.js?v=20261018-tools"></script>
     <script src="peerjs-1.5.5.min.js"></script>
-    <script src="multiplayer.js?v=20261123-treasure"></script>
+    <script src="multiplayer.js?v=20261124-living"></script>
     <script src="thermal-world.js?v=20261021-wilderness"></script>
     <script src="launchers.js?v=20261110-repairs"></script>
     <script src="construction.js?v=20261118-outdoors"></script>
@@ -396,12 +401,16 @@
     <script src="rail-vehicles.js?v=20261020-connected"></script>
     <script src="connected-home.js?v=20261020-connected"></script>
     <script src="zombie-voices.js?v=20261021-recorded"></script>
-    <script src="wilderness.js?v=20261123-treasure"></script>
+    <script src="wilderness.js?v=20261124-living"></script>
     <script src="ecology.js?v=20261123-treasure"></script>
     <script src="outdoors.js?v=20261123-snow"></script>
     <script src="mining-cracks.js?v=20261123-cracks"></script>
     <script src="treasure-world.js?v=20261123-treasure"></script>
     <script src="creative-inventory.js?v=20261123-treasure"></script>
+    <script src="world-audio-data.js?v=20261124-living"></script>
+    <script src="world-audio.js?v=20261124-living"></script>
+    <script src="voxel-style.js?v=20261124-living"></script>
+    <script src="living-physics.js?v=20261124-living"></script>
     <script src="village-life.js?v=20261118-outdoors"></script>
     <script src="terrain-horizon.js?v=end-islands-1"></script>
     <script src="village-houses.js?v=20261104-ecology"></script>
@@ -613,6 +622,7 @@
 
         // --- 材质生成器 ---
         function createTexture(type) {
+            const classic=classicBlockTexture(type);if(classic)return classic;
             const canvas = document.createElement('canvas');
             canvas.width = 64; canvas.height = 64;
             const ctx = canvas.getContext('2d');
@@ -1390,6 +1400,7 @@
                 const AudioContext = window.AudioContext || window.webkitAudioContext;
                 audioCtx = new AudioContext();
                 loadZombieVoices();
+                warmWorldAudio();
             }
             if (audioCtx.state === 'suspended') {
                 audioCtx.resume();
@@ -1466,36 +1477,7 @@
         }
 
         function createRemotePlayer() {
-            const group = new THREE.Group();
-            // Keep the first six parts stable for existing walking animations.
-            const head=addModelBox(group,0.46,0.46,0.46,0xe7b99a,0,0.57,0,'head');
-            const body=addModelBox(group,0.48,0.62,0.28,0x397c9d,0,0,0,'body');
-            const limb=(x,y,w,h,color,name)=>{
-                const geometry=new THREE.BoxGeometry(w,h,w);geometry.translate(0,-h/2,0);
-                const part=new THREE.Mesh(geometry,new THREE.MeshLambertMaterial({color}));part.position.set(x,y,0);part.name=name;group.add(part);return part;
-            };
-            const arms=[limb(0.34,0.27,0.19,0.63,0x397c9d,'leftArm'),limb(-0.34,0.27,0.19,0.63,0x397c9d,'rightArm')];
-            const legs=[limb(0.13,-0.31,0.21,0.54,0x384659,'leftLeg'),limb(-0.13,-0.31,0.21,0.54,0x384659,'rightLeg')];
-            const detail=(parent,w,h,d,c,x,y,z)=>addModelBox(parent,w,h,d,c,x,y,z);
-            detail(head,0.48,0.11,0.48,0x493b32,0,0.21,0);
-            detail(head,0.48,0.22,0.06,0x493b32,0,0.08,0.22);
-            detail(head,0.17,0.09,0.025,0x493b32,-0.13,0.14,-0.24);
-            for(const x of [-0.1,0.1]) {
-                detail(head,0.1,0.065,0.016,0xf6f0e4,x,0.04,-0.238);
-                detail(head,0.04,0.055,0.02,0x34535d,x,0.04,-0.252);
-                detail(head,0.11,0.023,0.018,0x614437,x,0.1,-0.24);
-                detail(head,0.055,0.095,0.16,0xd9a786,Math.sign(x)*0.25,-0.035,0);
-            }
-            detail(head,0.075,0.07,0.06,0xd09a79,0,-0.055,-0.255);
-            detail(head,0.115,0.022,0.018,0x955f50,0,-0.14,-0.24);
-            detail(body,0.18,0.055,0.02,0xe6c6a7,0,0.29,-0.15);
-            detail(body,0.035,0.54,0.02,0x82b5c3,0,-0.015,-0.15);
-            detail(body,0.13,0.14,0.02,0x2d647e,-0.13,0.08,-0.15);
-            detail(body,0.49,0.06,0.3,0x273540,0,-0.28,0);
-            for(const arm of arms)detail(arm,0.19,0.22,0.2,0xe7b99a,0,-0.52,0);
-            for(const leg of legs){detail(leg,0.22,0.1,0.3,0x202c32,0,-0.49,-0.035);detail(leg,0.22,0.025,0.31,0xc7d0cf,0,-0.535,-0.035);}
-            scene.add(group);
-            return group;
+            const group=buildPlayerAvatar();scene.add(group);return group;
         }
 
 
@@ -1768,6 +1750,9 @@
 
         function playSound(type) {
             if (!audioCtx) return; 
+            if(['dig','place','stone','crackle'].includes(type)){
+                playBlockSound(type==='place'?'place':type==='crackle'?'hit':'break',type==='stone'?3:type==='place'?currentBlock:miningState?.blockType||2);return;
+            }
             if (audioCtx.state === 'suspended') audioCtx.resume();
             const now = audioCtx.currentTime;
             
@@ -1795,7 +1780,7 @@
 
                 noise.connect(filter);
                 filter.connect(noiseGain);
-                noiseGain.connect(audioCtx.destination);
+                noiseGain.connect(getSoundOutput());
                 
                 noise.start(now);
 
@@ -1811,7 +1796,7 @@
                 gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
 
                 osc.connect(gain);
-                gain.connect(audioCtx.destination);
+                gain.connect(getSoundOutput());
                 osc.start(now);
                 osc.stop(now + duration);
                 
@@ -1836,7 +1821,7 @@
                 
                 osc.connect(filter);
                 filter.connect(oscGain);
-                oscGain.connect(audioCtx.destination);
+                oscGain.connect(getSoundOutput());
                 osc.start(now);
                 osc.stop(now + duration);
                 
@@ -1851,7 +1836,7 @@
                 const nGain = audioCtx.createGain();
                 nGain.gain.setValueAtTime(0.5, now);
                 nGain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
-                noise.connect(nFilter).connect(nGain).connect(audioCtx.destination);
+                noise.connect(nFilter).connect(nGain).connect(getSoundOutput());
                 noise.start(now);
 
             } else if (type === 'explosion') {
@@ -1859,7 +1844,7 @@
                 const samples=buffer.getChannelData(0);for(let i=0;i<samples.length;i++)samples[i]=(Math.random()*2-1)*Math.exp(-i/(audioCtx.sampleRate*0.25));
                 const source=audioCtx.createBufferSource(),filter=audioCtx.createBiquadFilter(),gain=audioCtx.createGain();
                 source.buffer=buffer;filter.type='lowpass';filter.frequency.value=260;gain.gain.value=0.32;
-                source.connect(filter);filter.connect(gain);gain.connect(audioCtx.destination);source.start();
+                source.connect(filter);filter.connect(gain);gain.connect(getSoundOutput());source.start();
             } else if (type === 'crackle') {
                 const duration = 0.055;
                 const bufferSize = audioCtx.sampleRate * duration;
@@ -1883,7 +1868,7 @@
 
                 noise.connect(filter);
                 filter.connect(gain);
-                gain.connect(audioCtx.destination);
+                gain.connect(getSoundOutput());
                 noise.start(now);
 
             } else if (type === 'door') {
@@ -1910,7 +1895,7 @@
 
                 osc.connect(filter);
                 filter.connect(oscGain);
-                oscGain.connect(audioCtx.destination);
+                oscGain.connect(getSoundOutput());
                 
                 osc.start(now);
                 osc.stop(now + duration);
@@ -1939,7 +1924,7 @@
 
                 mainNoise.connect(filter);
                 filter.connect(gain);
-                gain.connect(audioCtx.destination);
+                gain.connect(getSoundOutput());
                 mainNoise.start(now);
 
                 // 几片玻璃渣落地声 (叮当)
@@ -1956,7 +1941,7 @@
                     sGain.gain.exponentialRampToValueAtTime(0.01, t + shardDur);
                     
                     osc.connect(sGain);
-                    sGain.connect(audioCtx.destination);
+                    sGain.connect(getSoundOutput());
                     osc.start(t);
                     osc.stop(t + shardDur);
                 }
@@ -1981,7 +1966,7 @@
 
                 noise.connect(filter);
                 filter.connect(gain);
-                gain.connect(audioCtx.destination);
+                gain.connect(getSoundOutput());
                 noise.start(now);
                 
                 // 枪的机械声
@@ -1995,7 +1980,7 @@
                 oscGain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
                 
                 osc.connect(oscGain);
-                oscGain.connect(audioCtx.destination);
+                oscGain.connect(getSoundOutput());
                 osc.start(now);
                 osc.stop(now + 0.1);
 
@@ -2272,7 +2257,7 @@
                  40:52, 41:53, 42:54, 43:55, 44:56, 45:57, 46:58,
                  47:59, 48:60, 49:61, 50:62, 51:63, 52:64, 53:65, 54:66,
                  55:67, 56:68, 57:69, 58:70, 59:71,
-                 60:72, 61:73, 62:74, 63:75, 64:76, 65:77, 66:78, 67:79, [CHEST_ID-12]:CHEST_ID,
+                 60:72, 61:73, 62:74, 63:75, 64:76, 65:77, 66:78, 67:79, [CHEST_ID-12]:CHEST_ID,[SPIKE_TRAP_ID-12]:SPIKE_TRAP_ID,
                  70:82, 71:83, 72:84, 73:85, 74:86, 75:87, 76:88, 77:89, 78:90, 79:91, 80:92,
                  81:93, 82:94, 83:95, 84:96, 85:97, 86:98, 88:100, 89:101, 90:102, 91:103,
                  ...Object.fromEntries(Object.keys({...KITCHEN_ITEMS,...CITY_LIFE_ITEMS,...HIDDEN_BLOCKS,...SURVEILLANCE_ITEMS,...THERMAL_ITEMS,...MACHINE_ITEMS,...CONNECTED_HOME_ITEMS,...NATURE_ITEMS,127:'Netherrack'}).map(id=>[Number(id)-12,Number(id)]))
@@ -3905,9 +3890,7 @@
 
         function playMineSound(blockType) {
             blockType=HIDDEN_BLOCKS[blockType]?.base || blockType;
-            if (blockType === 6) playSound('glass');
-            else if (blockType === 3 || blockType === 13) playSound('stone');
-            else playSound('dig');
+            playBlockSound('break',blockType);
         }
 
         function fillScannedColumn(x, y, z, blockType, dirtyChunks) {
@@ -4716,6 +4699,7 @@
             const physicsScale = activeMech ? 1 : playerScale;
             const onGroundPhys=checkScaledCollision(camera.position.clone().add(new THREE.Vector3(0,-0.004*Math.min(playerScale,1),0)));
             const inWaterPhys = liquidFraction >= 0.25 || (!onGroundPhys && liquidFraction > 0.05);
+            const footstepStart=camera.position.clone();
 
             // --- 物理引擎 ---
             if (inWaterPhys && !creativeFlying) {
@@ -4818,6 +4802,7 @@
                 if(moveTinyAxis('y',velocity.y*playerDelta))velocity.y=0;
             }
 
+            updateFootstepSound(footstepStart,onGroundPhys&&!inWaterPhys&&!onLadder);
             if (creativeFlying && holdingDescend && velocity.y === 0 &&
                 checkScaledCollision(camera.position.clone().add(new THREE.Vector3(0,-0.004*Math.min(playerScale,1),0)))) {
                 creativeFlying = false;
@@ -5552,80 +5537,11 @@
             return group;
         }
 
-        function createVillagerModel() {
-            const group = new THREE.Group();
-            addModelBox(group, 0.55, 0.5, 0.48, 0xc99563, 0, 0.68, 0, 'head');
-            addModelBox(group, 0.16, 0.16, 0.18, 0xb57c4d, 0, 0.63, 0.32, 'nose');
-            addModelBox(group, 0.08, 0.08, 0.035, 0x15321d, -0.13, 0.74, 0.26);
-            addModelBox(group, 0.08, 0.08, 0.035, 0x15321d, 0.13, 0.74, 0.26);
-            addModelBox(group, 0.62, 0.72, 0.34, 0x6b4a2f, 0, 0.02, 0, 'body');
-            addModelBox(group, 0.46, 0.12, 0.08, 0x8d6e63, 0, 0.28, 0.22, 'leftArm').rotation.z = -0.24;
-            addModelBox(group, 0.46, 0.12, 0.08, 0x8d6e63, 0, 0.12, 0.24, 'rightArm').rotation.z = 0.24;
-            addModelBox(group, 0.22, 0.7, 0.22, 0x5d4037, -0.14, -0.62, 0, 'leftLeg');
-            addModelBox(group, 0.22, 0.7, 0.22, 0x5d4037, 0.14, -0.62, 0, 'rightLeg');
-            group.children.forEach(part=>part.position.y+=0.47);
-            rememberOriginalMaterials(group);
-            return group;
-        }
+        function createVillagerModel() { return buildVillager(); }
 
-        function createAnimalModel(type) {
-            const group = new THREE.Group();
-            if (type === 'cow') {
-                addModelBox(group, 0.82, 0.58, 1.0, 0x5a3a24, 0, 0.02, 0, 'body');
-                addModelBox(group, 0.34, 0.30, 0.035, 0xf5f0e8, -0.18, 0.12, 0.52);
-                addModelBox(group, 0.28, 0.24, 0.035, 0xf5f0e8, 0.22, 0.04, 0.52);
-                addModelBox(group, 0.28, 0.04, 0.46, 0xf5f0e8, 0.18, 0.34, -0.14);
-                addModelBox(group, 0.42, 0.36, 0.34, 0x5a3a24, 0, 0.22, 0.62, 'head');
-                addModelBox(group, 0.30, 0.12, 0.12, 0xd7a37b, 0, 0.14, 0.86, 'snout');
-                addModelBox(group, 0.06, 0.06, 0.03, 0x101010, -0.10, 0.27, 0.81);
-                addModelBox(group, 0.06, 0.06, 0.03, 0x101010, 0.10, 0.27, 0.81);
-                addModelBox(group, 0.10, 0.08, 0.18, 0xe8dcc2, -0.28, 0.36, 0.60);
-                addModelBox(group, 0.10, 0.08, 0.18, 0xe8dcc2, 0.28, 0.36, 0.60);
-                addModelBox(group, 0.13, 0.48, 0.13, 0x2d1d14, -0.28, -0.38, 0.28, 'leftLeg');
-                addModelBox(group, 0.13, 0.48, 0.13, 0x2d1d14, 0.28, -0.38, 0.28, 'rightLeg');
-                addModelBox(group, 0.13, 0.48, 0.13, 0x2d1d14, -0.28, -0.38, -0.28, 'backLeftLeg');
-                addModelBox(group, 0.13, 0.48, 0.13, 0x2d1d14, 0.28, -0.38, -0.28, 'backRightLeg');
-            } else if (type === 'sheep') {
-                addModelBox(group, 0.92, 0.68, 0.98, 0xf3f0e8, 0, 0.06, 0, 'body');
-                addModelBox(group, 0.72, 0.08, 0.62, 0xffffff, 0, 0.44, 0.02);
-                addModelBox(group, 0.38, 0.34, 0.34, 0x2b2b2b, 0, 0.22, 0.66, 'head');
-                addModelBox(group, 0.34, 0.16, 0.30, 0xffffff, 0, 0.43, 0.62);
-                addModelBox(group, 0.06, 0.06, 0.03, 0xffffff, -0.10, 0.28, 0.85);
-                addModelBox(group, 0.06, 0.06, 0.03, 0xffffff, 0.10, 0.28, 0.85);
-                addModelBox(group, 0.12, 0.46, 0.12, 0x1f1f1f, -0.28, -0.38, 0.26, 'leftLeg');
-                addModelBox(group, 0.12, 0.46, 0.12, 0x1f1f1f, 0.28, -0.38, 0.26, 'rightLeg');
-                addModelBox(group, 0.12, 0.46, 0.12, 0x1f1f1f, -0.28, -0.38, -0.26, 'backLeftLeg');
-                addModelBox(group, 0.12, 0.46, 0.12, 0x1f1f1f, 0.28, -0.38, -0.26, 'backRightLeg');
-            } else {
-                addModelBox(group, 0.76, 0.48, 0.9, 0xf3a1b8, 0, 0.02, 0, 'body');
-                addModelBox(group, 0.42, 0.34, 0.36, 0xf3a1b8, 0, 0.18, 0.62, 'head');
-                addModelBox(group, 0.26, 0.16, 0.12, 0xf48aa7, 0, 0.12, 0.86, 'snout');
-                addModelBox(group, 0.05, 0.05, 0.03, 0x101010, -0.11, 0.24, 0.82);
-                addModelBox(group, 0.05, 0.05, 0.03, 0x101010, 0.11, 0.24, 0.82);
-                addModelBox(group, 0.12, 0.34, 0.12, 0xdb7891, -0.24, -0.32, 0.24, 'leftLeg');
-                addModelBox(group, 0.12, 0.34, 0.12, 0xdb7891, 0.24, -0.32, 0.24, 'rightLeg');
-                addModelBox(group, 0.12, 0.34, 0.12, 0xdb7891, -0.24, -0.32, -0.24, 'backLeftLeg');
-                addModelBox(group, 0.12, 0.34, 0.12, 0xdb7891, 0.24, -0.32, -0.24, 'backRightLeg');
-            }
-            rememberOriginalMaterials(group);
-            return group;
-        }
+        function createAnimalModel(type) { return buildLivestock(type); }
 
-        function entityHitsWallAt(pos, height, radius) {
-            const offsets = [
-                [radius, 0], [-radius, 0], [0, radius], [0, -radius],
-                [radius, radius], [radius, -radius], [-radius, radius], [-radius, -radius]
-            ];
-            const ySamples = [pos.y, pos.y + height * 0.25, pos.y + height * 0.45];
-            for (let y of ySamples) {
-                for (let off of offsets) {
-                    if (isSolid(Math.round(pos.x + off[0]), Math.round(y), Math.round(pos.z + off[1]))) {
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
+        function entityHitsWallAt(pos, height, radius) { return mobBodyBlocked(pos,height,radius); }
 
         function tryMoveEntityFlat(entity, moveX, moveZ, height, radius, maxStep) {
             const pos = entity.mesh.position;
@@ -5688,6 +5604,7 @@
 
         function damageMob(entity, amount, source='player') {
             if (!entity || entity.dying || (source==='player' && isCompanion(entity))) return false;
+            if(!entity.hurtTimer||entity.hurtTimer<=0)playMobVoice(entity);
             if(entity.kind==='enderman') entity.anger=20;
             if(source==='player') companionOrder={target:entity,remaining:12};
             entity.hp = (entity.hp || 1) - amount;
@@ -5782,7 +5699,7 @@
             playerInventory[39] = (playerInventory[39] || 0) + 1;
             updateHotbarUI();
             updateInventoryCounts();
-            const name = animal.type === 'cow' ? 'Cow' : animal.type === 'sheep' ? 'Sheep' : 'Pig';
+            const name = animal.type[0].toUpperCase()+animal.type.slice(1);
             showToast(name + " dropped Raw Meat x1.");
         }
 
@@ -5816,7 +5733,7 @@
             const group = createVillagerModel();
             group.position.set(x, y, z);
             scene.add(group);
-            villagers.push({ mesh: group, vx: 0, vy: 0, vz: 0, timer: 0, onGround: false, walkTime: 0, hp: 4, hurtTimer: 0, dying: false, deathTimer: 0 });
+            villagers.push({ mesh: group, kind:'villager', vx: 0, vy: 0, vz: 0, timer: 0, onGround: false, walkTime: 0, hp: 4, hurtTimer: 0, dying: false, deathTimer: 0 });
         }
 
         function isAnimalSpawnSafe(x, y, z) {
@@ -5853,7 +5770,7 @@
             const mesh = createAnimalModel(type);
             mesh.position.set(safeSpot.x, safeSpot.y, safeSpot.z);
             scene.add(mesh);
-            const hp = type === 'cow' ? 3 : (type === 'sheep' ? 2 : 2);
+            const hp = type==='horse'?5:type === 'cow' ? 3 : 2;
             animals.push({ mesh, type, vx: 0, vy: 0, vz: 0, timer: 0, onGround: false, hp, hurtTimer: 0, dying: false, deathTimer: 0, walkTime: 0, droppedMeat: false });
             return true;
         }
@@ -6037,40 +5954,21 @@
                 let a = animals[i];
                 if (updateMobDamageState(a, delta)) {
                     dropAnimalMeat(a);
-                    scene.remove(a.mesh);
+                    disposeModModel(a.mesh);
                     animals.splice(i, 1);
                     continue;
                 }
                 if (a.dying) continue;
+                updateAnimalVoice(a,delta);updateSpikeDamage(a,delta);
 
                 a.timer -= delta;
                 if (a.timer <= 0) {
                     chooseAnimalDirection(a);
                 }
-                a.vy -= 25.0 * delta;
-
-                const nextX = a.mesh.position.x + a.vx * delta;
-                const nextZ = a.mesh.position.z + a.vz * delta;
-                const oldX = a.mesh.position.x;
-                const oldZ = a.mesh.position.z;
-                a.mesh.position.x = nextX;
-                a.mesh.position.z = nextZ;
-                if (entityHitsWallAt(a.mesh.position, 0.85, 0.38) || animalWouldEnterWater(a.mesh.position.x, a.mesh.position.y, a.mesh.position.z)) {
-                    a.mesh.position.x = oldX;
-                    a.mesh.position.z = oldZ;
-                    a.vx = 0;
-                    a.vz = 0;
-                    a.timer = 0.15;
-                }
-                
-                a.mesh.position.y += a.vy * delta;
-                a.onGround = false;
-                if (isSolid(Math.round(a.mesh.position.x), Math.round(a.mesh.position.y - 0.6), Math.round(a.mesh.position.z))) {
-                    a.mesh.position.y -= a.vy * delta;
-                    a.vy = 0;
-                    a.onGround = true;
-                    a.mesh.position.y = Math.round(a.mesh.position.y - 0.6) + 0.6;
-                }
+                if(animalWouldEnterWater(a.mesh.position.x+a.vx*delta,a.mesh.position.y,a.mesh.position.z+a.vz*delta)){a.vx=0;a.vz=0;a.timer=.2;}
+                const before=a.mesh.position.clone();
+                moveWalkingMob(a,delta,a.mesh.userData.mobHeight,a.mesh.userData.mobRadius);
+                if(Math.hypot(a.mesh.position.x-before.x,a.mesh.position.z-before.z)<1e-5){a.vx=0;a.vz=0;a.timer=.2;}
 	                
                 if (Math.abs(a.vx) > 0.1 || Math.abs(a.vz) > 0.1) {
                     a.walkTime += delta * 7;
@@ -6092,12 +5990,14 @@
             for (let i = villagers.length - 1; i >= 0; i--) {
                 let v = villagers[i];
                 updateVillagerLavaDamage(v,delta);
+                updateSpikeDamage(v,delta);
                 if (updateMobDamageState(v, delta)) {
-                    scene.remove(v.mesh);
+                    disposeModModel(v.mesh);
                     villagers.splice(i, 1);
                     continue;
                 }
                 if (v.dying) continue;
+                updateAnimalVoice(v,delta);
 
                 v.timer -= delta;
                 if(v.merchantId) {v.timer=10;v.vx=0;v.vz=0;}
@@ -6108,36 +6008,14 @@
                     v.vx = Math.cos(angle) * 1.0;
                     v.vz = Math.sin(angle) * 1.0;
                 }
-                v.vy -= 25.0 * delta;
-	                
-                v.mesh.position.x += v.vx * delta;
-                if (entityHitsWallAt(v.mesh.position, 1.8, 0.35)) {
-                    v.mesh.position.x -= v.vx * delta;
-                    if (v.onGround) v.vy = 6;
-                }
-	                
-                v.mesh.position.z += v.vz * delta;
-                if (entityHitsWallAt(v.mesh.position, 1.8, 0.35)) {
-                    v.mesh.position.z -= v.vz * delta;
-                    if (v.onGround) v.vy = 6;
-                }
+                const moved=moveWalkingMob(v,delta,1.98,.4);
+                if(!moved&&Math.hypot(v.vx,v.vz)>.1)v.timer=Math.min(v.timer,.3);
                 
-                v.mesh.position.y += v.vy * delta;
-                v.onGround = false;
-                if (isSolid(Math.round(v.mesh.position.x), Math.round(v.mesh.position.y - 1), Math.round(v.mesh.position.z))) {
-                    v.mesh.position.y -= v.vy * delta;
-                    v.vy = 0;
-                    v.onGround = true;
-                    v.mesh.position.y = Math.round(v.mesh.position.y - 1) + 1;
-                }
-                
-                let isMoving = Math.abs(v.vx) > 0.1 || Math.abs(v.vz) > 0.1;
+                let isMoving = moved;
                 if (isMoving) {
-                    v.walkTime += delta * 10;
-                    v.mesh.userData.leftArm.rotation.x = Math.sin(v.walkTime) * 0.5;
-                    v.mesh.userData.rightArm.rotation.x = -Math.sin(v.walkTime) * 0.5;
-                    v.mesh.userData.leftLeg.rotation.x = -Math.sin(v.walkTime) * 0.5;
-                    v.mesh.userData.rightLeg.rotation.x = Math.sin(v.walkTime) * 0.5;
+                    v.walkTime += delta * 6;
+                    v.mesh.userData.leftLeg.rotation.x = -Math.sin(v.walkTime) * 0.35;
+                    v.mesh.userData.rightLeg.rotation.x = Math.sin(v.walkTime) * 0.35;
                     // 面向行走方向
                     v.mesh.rotation.y = Math.atan2(v.vx, v.vz);
                 } else {
@@ -6304,6 +6182,7 @@
         }
 
         function clearCombatState() {
+            clearFlyingArrows();clearWorldVoices();
             for(const shot of cannonProjectiles) disposeModModel(shot.mesh);
             for(const effect of combatEffects) disposeModModel(effect.mesh);
             cannonProjectiles.length=0;combatEffects.length=0;companionOrder=null;mechAttackTime=-Infinity;
@@ -6331,6 +6210,7 @@
         }
 
         function updateCombatEffects(delta) {
+            updateFlyingArrows(delta);
             if(isGameStarted && controls.isLocked && !isSleeping) for(let i=cannonProjectiles.length-1;i>=0;i--) {
                 const shot=cannonProjectiles[i],distance=Math.min(shot.remaining,shot.speed*delta);
                 if(shot.dimension!==currentDimension) {disposeModModel(shot.mesh);cannonProjectiles.splice(i,1);continue;}
@@ -6353,6 +6233,7 @@
         }
 
         function shootRangedWeapon(itemId) {
+            if(itemId===BOW_ID||itemId===CROSSBOW_ID)return fireArrow(itemId);
             const gun=itemId===35;
             const damage=gun || itemId===CROSSBOW_ID?3:itemId===TRIDENT_ID?4:2;
             const range=gun?100:itemId===TRIDENT_ID?35:itemId===CROSSBOW_ID?50:38;
@@ -6858,13 +6739,7 @@
                         updateHotbarUI();
 
                         // 播放放置音效
-                        if (matId === 6) {
-                            playSound('glass');
-                        } else if (matId === 3 || matId === 13) {
-                            playSound('stone');
-                        } else {
-                            playSound('place'); 
-                        }
+                        playBlockSound('place',matId);
                         
                         if (matId === 8) { 
                             if ([0,SNOW_LAYER_ID].includes(getBlock(placePos.x, placePos.y, placePos.z)) &&
@@ -7537,7 +7412,7 @@
                         let x = camera.position.x + Math.cos(angle) * dist;
                         let z = camera.position.z + Math.sin(angle) * dist;
                         let y = getSurfaceHeight(x, z) + 2;
-                        let type = Math.random() < 0.33 ? 'pig' : (Math.random() < 0.5 ? 'sheep' : 'cow');
+                        let type = ['pig','sheep','cow','horse'][Math.floor(Math.random()*4)];
                         spawnAnimal(type, x, y, z);
                     }
                 } else {
@@ -7622,6 +7497,8 @@
         initThermalWorld();
         initRedstoneMachines();
         initTreasureWorld();
+        initVoxelStyle();
+        initSoundControls();
         initCreativeInventory();
         initMultiplayer();
         initModIcons();

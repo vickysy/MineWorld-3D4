@@ -1,0 +1,87 @@
+{
+  "repository": "https://github.com/VoxeLibre/VoxeLibre",
+  "commit": "4492ce6ff8d856daa4567abe2ea689f4e7a39842",
+  "entries": {
+    "cow": [
+      "mobs_mc_cow.ogg"
+    ],
+    "cow_hurt": [
+      "mobs_mc_cow_hurt.ogg"
+    ],
+    "sheep": [
+      "mobs_mc_sheep_random.1.ogg",
+      "mobs_mc_sheep_random.2.ogg"
+    ],
+    "sheep_hurt": [
+      "mobs_mc_sheep_damage.ogg"
+    ],
+    "pig": [
+      "mobs_pig.ogg"
+    ],
+    "pig_hurt": [
+      "mobs_pig_angry.ogg"
+    ],
+    "horse": [
+      "mobs_mc_horse_random.1.ogg",
+      "mobs_mc_horse_random.2.ogg"
+    ],
+    "horse_hurt": [
+      "mobs_mc_horse_hurt.ogg"
+    ],
+    "villager": [
+      "mobs_mc_villager.1.ogg",
+      "mobs_mc_villager.2.ogg"
+    ],
+    "villager_hurt": [
+      "mobs_mc_villager_hurt.1.ogg"
+    ],
+    "dirt": [
+      "default_dig_crumbly.ogg",
+      "default_dirt_footstep.1.ogg",
+      "default_dirt_footstep.2.ogg"
+    ],
+    "grass": [
+      "default_grass_footstep.1.ogg",
+      "default_grass_footstep.2.ogg",
+      "default_dig_snappy.ogg"
+    ],
+    "stone": [
+      "default_dig_cracky.1.ogg",
+      "default_dig_cracky.2.ogg"
+    ],
+    "wood": [
+      "default_dig_choppy.1.ogg",
+      "default_dig_choppy.2.ogg"
+    ],
+    "sand": [
+      "default_sand_footstep.1.ogg",
+      "default_sand_footstep.2.ogg"
+    ],
+    "metal": [
+      "default_dug_metal.1.ogg",
+      "default_dug_metal.2.ogg"
+    ],
+    "glass": [
+      "default_break_glass.1.ogg",
+      "default_break_glass.2.ogg"
+    ],
+    "glass_step": [
+      "default_glass_footstep.ogg"
+    ],
+    "wood_step": [
+      "default_wood_footstep.1.ogg",
+      "default_wood_footstep.2.ogg"
+    ],
+    "stone_step": [
+      "default_hard_footstep.1.ogg",
+      "default_hard_footstep.2.ogg"
+    ],
+    "place": [
+      "default_place_node.1.ogg",
+      "default_place_node.2.ogg"
+    ],
+    "hard_place": [
+      "default_place_node_hard.1.ogg"
+    ]
+  }
+}

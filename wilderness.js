@@ -289,9 +289,9 @@ function initWilderness(){
     materials[127]??=new THREE.MeshLambertMaterial({map:materials[3].map,color:0x9f5051});
     const colors=[0xffffff,0xc98032,0xb34448,0xe1bf4c,0x71a345,0xa7974d,0x78a94c,0x427f4a,0x508f63,0x39826b,0x687fa2,0xd2584e,0x528bc0,0xd8839e,0xe4ba52,0x9a66b6];
     for(const [text,name] of Object.entries(NATURE_ITEMS)){
-        const id=Number(text),color=TREASURE_COLORS[id]??ECOLOGY_COLORS[id]??(id===END_STONE_ID?0xd8d7a0:id===SNOW_LAYER_ID?0xffffff:id>=170?BRICK_COLORS[id-170][1]:colors[id-154]);
+        const id=Number(text),color=CRAFT_STYLE_COLORS[id]??TREASURE_COLORS[id]??ECOLOGY_COLORS[id]??(id===END_STONE_ID?0xd8d7a0:id===SNOW_LAYER_ID?0xffffff:id>=170?BRICK_COLORS[id-170][1]:colors[id-154]);
         NATURE_COLORS[id]=color;
-        materials[id]=new THREE.MeshLambertMaterial({map:TREASURE_ITEMS[id]?treasureTexture(id):ECOLOGY_ITEMS[id]?ecologyTexture(id):natureTexture(id,color,id>=170&&id<=185),...(LEAF_TYPES.has(id)?{alphaTest:.5}:{})});
+        materials[id]=new THREE.MeshLambertMaterial({map:classicBlockTexture(id)||(TREASURE_ITEMS[id]?treasureTexture(id):ECOLOGY_ITEMS[id]?ecologyTexture(id):natureTexture(id,color,id>=170&&id<=185)),...(LEAF_TYPES.has(id)?{alphaTest:.5}:{})});
         const slot=document.createElement('button');slot.className='slot nature-slot';slot.id=`inv-${id-12}`;slot.textContent=name;slot.onclick=()=>selectSlot(id-12);
         const swatch=document.createElement('img');swatch.alt='';swatch.src=materials[id].map.image.toDataURL();slot.prepend(swatch);document.getElementById('tab-build').append(slot);
         if([188,189,194,198,199,200,203,WHEAT_YOUNG,WHEAT_GREEN,WHEAT_RIPE].includes(id))slot.hidden=true;
@@ -408,6 +408,6 @@ function playZombieVoice(type,now){
     const distance=Math.min(12,...zombies.filter(z=>!z.dying).map(z=>z.mesh.position.distanceTo(camera.position)));
     const volume=(type==='zombie'?.12:.16)*Math.max(.15,1-distance/16);
     gain.gain.setValueAtTime(0,now);gain.gain.linearRampToValueAtTime(volume,now+.08);gain.gain.setValueAtTime(volume,now+Math.max(.08,duration-.2));gain.gain.linearRampToValueAtTime(0,now+duration);
-    voice.connect(gain).connect(audioCtx.destination);voice.start(now);voice.stop(now+duration);nextZombieVoice=now+duration+.4;
+    voice.connect(gain).connect(getSoundOutput());voice.start(now);voice.stop(now+duration);nextZombieVoice=now+duration+.4;
     voice.onended=()=>{voice.disconnect();gain.disconnect();};
 }

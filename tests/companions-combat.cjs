@@ -26,6 +26,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
             worldMap.clear();heightCache.clear();restoreMicroEdits([]);
             for(let x=-20;x<=20;x++) for(let z=-24;z<=20;z++) worldMap.set(`${x},0,${z}`,3);
             gameMode='survival';isGameStarted=true;isRespawning=false;isSleeping=false;controls.isLocked=true;
+            playerInventory[35]=1;
             camera.position.set(0,2.1,0);health=maxHealth;
             let ally=spawnMobFromEgg(69,0.6,1,0),creeper=spawnMobFromEgg(68,-0.6,1,0);
             step(240);

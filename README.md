@@ -247,3 +247,15 @@ field 100×100×100
 | Sandstone ×4 | 4 Sand |
 
 `tests/treasure-inventory.cjs` 检查实际创造菜单、中文搜索、九格配置、数量、键盘与滚轮、手机布局、生存工具合成、熔炉、箱子组合/拆除、精确存取、重复与竞争请求、真实存档读取，以及三种自然遗迹的宝物、地基、入口、旧建筑保护和画布像素。`tests/multiplayer.cjs` 检查真实双人取物、存物和库存扣除。双方刷新新版后重新创建联机房间。
+
+## 人物、动物、材质声音与飞箭
+- 人物和村民改用原创像素皮肤、完整五官、衣服细节及肩部/腿部关节。联机人物与镜子共用新版模型；村民保留抱臂姿态。牛有棕白花纹、角和鼻子，羊有羊毛与浅色脸，猪有鼻孔与耳朵，马有鬃毛、长颈和尾巴。野外动物现在包括马，四条腿交替摆动。
+- 加入 37 段授权录音：牛、羊、猪、马、村民的叫声与受伤声，以及泥土、草、石头、木头、沙、金属、玻璃的材质声。动物在 22 格外不播放，近处随距离衰减；叫声间隔随机，最多同时播放 10 段新录音。声音本地打包，直接打开 HTML 也能使用；并非 Minecraft 原版音频。来源、作者与许可证见 `THIRD_PARTY_NOTICES.txt`，暂停菜单也提供 Credits 链接。
+- 放置、挖掘敲击、破坏和走路按材质区分；玻璃放置不再发出破碎声。暂停菜单 `Sound` 滑杆调节游戏音效并记住设置，默认 70%；原菜单音乐不受此滑杆影响。
+- 村民使用完整身体体积碰撞和分步移动，不再只检测几个点；最多上一级台阶，两格高的墙和关着的门会挡住，开门和隐藏通道仍可通行。`Spike Trap` 在 Home 分类，可搜索 `尖刺`；接触持续受伤并死亡化灰。它与装饰用金、银四棱锥是不同物品。
+- 手持 `Bow` 或 `Crossbow` 右键发射可见的箭，飞行中有重力，碰到生物才造成伤害，遇墙和玻璃会插住约 25 秒，支撑方块拆掉后会落下。不会瞬间穿过墙打中后面的村民。最多保留 48 支箭，暂停冻结飞行，换世界时清理。
+- 重画泥土、草、石头和树干纹理；新增 `Oak Planks`、`Stone Bricks`、`Quartz Block`，可在创造背包搜索英文名称或 `木板`、`石砖`、`石英块`。工作台配方：4 Wood → 16 Oak Planks，4 Stone → 4 Stone Bricks，4 White Cobblestone → 4 Quartz Block，2 Iron Ingot + 1 Stone → 2 Spike Trap。
+
+外观参考 [Minecraft 方块图册](https://education.minecraft.net/lessonsupportfiles/Minecraft-block-items.pdf)、[牛](https://www.minecraft.net/en-us/article/cow)与[马](https://www.minecraft.net/en-us/article/mob-menagerie--horse)的官方介绍；模型和纹理由 `voxel-style.js` 自行制作，不打包官方贴图。录音来自 [VoxeLibre](https://github.com/VoxeLibre/VoxeLibre)，原文件、固定版本清单及上游授权保留在 `assets/audio/world/`；`scripts/build-world-audio.cjs` 可重建离线音频数据。
+
+`tests/living-world.cjs` 检查全部录音解码与非静音数据、材质路由、距离和同时发声限制，村民墙体/天花板/门/隐藏块碰撞、落地与尖刺死亡，真实右键飞箭、重力、命中、插墙、暂停与清理，以及人物关节、桌面/手机画布像素、音量滑杆。联机双方需要刷新后重新建房，避免旧版本缺少新增方块。
