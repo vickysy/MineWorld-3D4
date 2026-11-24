@@ -274,41 +274,36 @@
     </div>
 
     <div id="blocker">
-        <div id="start-menu" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #555; background-image: radial-gradient(#444 15%, transparent 16%), radial-gradient(#444 15%, transparent 16%); background-size: 32px 32px; background-position: 0 0, 16px 16px; text-align: center; color: white; z-index: 30;">
-            <div style="margin-bottom: 50px;">
-                <h1 style="font-size: 72px; font-weight: 900; text-shadow: 4px 4px 8px black; margin: 0; letter-spacing: 2px;">Daniel Game Minecraft</h1>
-                <h2 style="font-size: 32px; font-weight: normal; color: #AEEA00; text-shadow: 2px 2px 4px black; margin: 10px 0 0 0;">3D Edition</h2>
-            </div>
-            <div style="display: flex; gap: 40px; justify-content: center; margin-bottom: 20px;">
-                <div style="display: flex; flex-direction: column; gap: 10px;">
-	                    <select id="terrain-select" onchange="setTerrainChoice(this.value)" style="padding: 15px; font-size: 20px; border-radius: 8px; border: 2px solid #4CAF50; background: #333; color: white; cursor: pointer; outline: none;">
-	                        <option value="plains">Terrain: Plains</option>
-	                        <option value="desert">Terrain: Desert</option>
-	                        <option value="moon">Terrain: Moon</option>
-	                        <option value="mountains">Terrain: Mountains</option>
-	                        <option value="jungle">Terrain: Jungle</option>
-	                    </select>
-                    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; width: 320px;">
-                        <button class="terrain-btn" data-terrain="plains" onclick="chooseTerrain('plains')" style="padding: 10px 4px; cursor: pointer; background: #4CAF50; color: white; border: 2px solid #fff; border-radius: 5px;">Plains</button>
-                        <button class="terrain-btn" data-terrain="desert" onclick="chooseTerrain('desert')" style="padding: 10px 4px; cursor: pointer; background: #333; color: white; border: 2px solid #777; border-radius: 5px;">Desert</button>
-                        <button class="terrain-btn" data-terrain="moon" onclick="chooseTerrain('moon')" style="padding: 10px 4px; cursor: pointer; background: #333; color: white; border: 2px solid #777; border-radius: 5px;">Moon</button>
-                        <button class="terrain-btn" data-terrain="mountains" onclick="chooseTerrain('mountains')" style="padding: 10px 4px; cursor: pointer; background: #333; color: white; border: 2px solid #777; border-radius: 5px;">Mountains</button>
-                        <button class="terrain-btn" data-terrain="jungle" onclick="chooseTerrain('jungle')" style="padding: 10px 4px; cursor: pointer; background: #333; color: white; border: 2px solid #777; border-radius: 5px;">Jungle</button>
-                    </div>
-                    <select id="mode-select" onchange="setGameMode(this.value)" style="padding: 15px; font-size: 20px; border-radius: 8px; border: 2px solid #2196F3; background: #333; color: white; cursor: pointer; outline: none;">
-                        <option value="survival">Mode: Survival</option>
-                        <option value="creative">Mode: Creative</option>
-                    </select>
-                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; width: 320px;">
-                        <button class="mode-btn" data-mode="survival" onclick="chooseGameMode('survival')" style="padding: 10px 4px; cursor: pointer; background: #2196F3; color: white; border: 2px solid #fff; border-radius: 5px;">Survival</button>
-                        <button class="mode-btn" data-mode="creative" onclick="chooseGameMode('creative')" style="padding: 10px 4px; cursor: pointer; background: #333; color: white; border: 2px solid #777; border-radius: 5px;">Creative</button>
-                    </div>
-	                    <button onclick="startGameFromMenu()" style="padding: 20px 50px; font-size: 26px; cursor: pointer; background-color: #4CAF50; border: none; border-radius: 8px; color: white; font-weight: bold; width: 320px; box-shadow: 0 6px 10px rgba(0,0,0,0.4); transition: transform 0.1s;">Start Game</button>
+        <div id="start-menu">
+            <header class="menu-brand"><span>3D EDITION</span><h1>Daniel Game<br>Minecraft</h1></header>
+            <section class="quick-play" aria-labelledby="quick-play-title">
+                <h2 id="quick-play-title">Quick Play</h2>
+                <div class="play-modes">
+                    <button class="play-mode multiplayer-choice" onclick="showMultiplayerMenu()"><img src="assets/ui/users.svg" alt="">Play with Others</button>
+                    <button class="play-mode mode-btn" data-mode="survival" aria-pressed="true" onclick="chooseGameMode('survival')"><img src="assets/ui/swords.svg" alt="">Survival</button>
+                    <button class="play-mode mode-btn" data-mode="creative" aria-pressed="false" onclick="chooseGameMode('creative')"><img src="assets/ui/blocks.svg" alt="">Creative</button>
                 </div>
-                <button onclick="showMultiplayerMenu()" style="padding: 20px 50px; font-size: 26px; cursor: pointer; background-color: #FF9800; border: none; border-radius: 8px; color: white; font-weight: bold; width: 320px; box-shadow: 0 6px 10px rgba(0,0,0,0.4); transition: transform 0.1s; height: 100px;">Play with Others</button>
-            </div>
-            <button onclick="document.getElementById('load-file').click()" style="padding: 15px 40px; font-size: 20px; cursor: pointer; background-color: #2196F3; border: none; border-radius: 8px; color: white; font-weight: bold; width: 320px; box-shadow: 0 4px 6px rgba(0,0,0,0.4);">Load Save</button>
+                <select id="mode-select" hidden aria-label="Game mode"><option value="survival">Survival</option><option value="creative">Creative</option></select>
+                <div class="world-options">
+                    <label for="difficulty-select">Difficulty</label>
+                    <select id="difficulty-select"><option value="easy">Easy</option><option value="normal" selected>Normal</option><option value="hard">Hard</option><option value="peaceful">Peaceful</option></select>
+                    <label for="terrain-select">World</label>
+                    <select id="terrain-select" onchange="setTerrainChoice(this.value)"><option value="plains">Plains</option><option value="desert">Desert</option><option value="moon">Moon</option><option value="mountains">Mountains</option><option value="jungle">Jungle</option></select>
+                </div>
+                <div class="terrain-shortcuts" aria-label="Terrain">
+                    <button class="terrain-btn" data-terrain="plains" onclick="chooseTerrain('plains')">Plains</button>
+                    <button class="terrain-btn" data-terrain="desert" onclick="chooseTerrain('desert')">Desert</button>
+                    <button class="terrain-btn" data-terrain="moon" onclick="chooseTerrain('moon')">Moon</button>
+                    <button class="terrain-btn" data-terrain="mountains" onclick="chooseTerrain('mountains')">Mountains</button>
+                    <button class="terrain-btn" data-terrain="jungle" onclick="chooseTerrain('jungle')">Jungle</button>
+                </div>
+                <div class="menu-actions">
+                    <button id="start-game-button" onclick="startGameFromMenu()"><img src="assets/ui/play.svg" alt="">Start Game</button>
+                    <button class="load-save-button" onclick="document.getElementById('load-file').click()"><img src="assets/ui/folder-open.svg" alt="">Load Save</button>
+                </div>
+            </section>
             <input type="file" id="load-file" accept=".json" onchange="loadSaveFile(event)" style="display:none">
+            <footer class="menu-footer"><img src="assets/ui/mountain-snow.svg" alt="">Snowy Highlands</footer>
         </div>
         
         <!-- Multiplayer menu -->
@@ -374,13 +369,18 @@
 
     <div id="cooked-meat-ui" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(20,20,20,0.92); padding: 24px; border-radius: 10px; color: white; text-align: center; border: 4px solid #8B4513; z-index: 70; width: 340px; box-shadow: 0 10px 20px rgba(0,0,0,0.5);">
         <h2 style="margin-top: 0;">Cooked Meat Ready</h2>
-        <p style="font-size: 16px; margin-bottom: 18px;">Eat now? Eating restores health and hunger for one day.</p>
+        <p style="font-size: 16px; margin-bottom: 18px;">Eat now?</p>
         <button onclick="eatCookedMeatFromPrompt()" style="margin: 8px auto; padding: 12px; width: 90%; font-size: 18px; cursor: pointer; background-color: #4CAF50; border: none; border-radius: 6px; color: white; font-weight: bold; display: block;">Eat Cooked Meat</button>
         <button onclick="closeCookedMeatPrompt()" style="margin: 8px auto; padding: 10px; width: 90%; font-size: 16px; cursor: pointer; background-color: #555; border: none; border-radius: 6px; color: white; display: block;">Save for Later</button>
     </div>
 
     <div id="toast-msg" style="display: none; position: absolute; top: 20%; left: 50%; transform: translateX(-50%); font-size: 24px; color: #FFFFFF; font-weight: bold; background-color: rgba(0,0,0,0.6); padding: 10px 20px; border-radius: 8px; text-shadow: 2px 2px 4px black; z-index: 100; transition: opacity 0.5s;"></div>
 
+    <div id="world-loading" role="status" aria-live="polite" aria-busy="true">
+        <div class="loading-content"><div class="loading-blocks" aria-hidden="true"><i></i><i></i><i></i></div><h2>Loading</h2><p id="loading-stage">Preparing game</p><progress id="loading-progress" max="100" value="0"></progress><span id="loading-percent">0%</span><button id="loading-retry" hidden onclick="location.reload()">Try Again</button></div>
+    </div>
+    <div id="food-progress" hidden role="status"><span>Eating</span><progress max="1" value="0"></progress></div>
+    <link rel="stylesheet" href="start-menu.css?v=20261124-menu">
     <script src="three-r128.min.js"></script>
     <script src="three-pointer-lock-r128.js"></script>
     <script src="three-reflector-r128.js"></script>
@@ -391,7 +391,7 @@
     <script src="city-life.js?v=end-islands-1"></script>
     <script src="surveillance.js?v=20261018-tools"></script>
     <script src="peerjs-1.5.5.min.js"></script>
-    <script src="multiplayer.js?v=20261124-adventure"></script>
+    <script src="multiplayer.js?v=20261124-menu"></script>
     <script src="thermal-world.js?v=20261124-adventure"></script>
     <script src="launchers.js?v=20261110-repairs"></script>
     <script src="construction.js?v=20261118-outdoors"></script>
@@ -400,23 +400,24 @@
     <script src="cannons.js?v=20261019-closed-gates"></script>
     <script src="rail-vehicles.js?v=20261020-connected"></script>
     <script src="connected-home.js?v=20261020-connected"></script>
-    <script src="zombie-voices.js?v=20261021-recorded"></script>
-    <script src="wilderness.js?v=20261124-adventure"></script>
+    <script src="wilderness.js?v=20261124-menu"></script>
     <script src="ecology.js?v=20261123-treasure"></script>
     <script src="outdoors.js?v=20261123-snow"></script>
     <script src="mining-cracks.js?v=20261123-cracks"></script>
     <script src="treasure-world.js?v=20261124-polish"></script>
     <script src="creative-inventory.js?v=20261124-adventure"></script>
-    <script src="world-audio-data.js?v=20261124-living"></script>
-    <script src="world-audio.js?v=20261124-polish"></script>
-    <script src="voxel-style.js?v=20261124-polish"></script>
+    <script src="world-audio-data.js?v=20261124-menu"></script>
+    <script src="world-audio.js?v=20261124-menu"></script>
+    <script src="voxel-style.js?v=20261124-menu"></script>
     <script src="living-physics.js?v=20261124-adventure"></script>
     <script src="adventure-items.js?v=20261124-adventure"></script>
-    <script src="adventure-mobs.js?v=20261124-polish"></script>
+    <script src="adventure-mobs.js?v=20261124-menu"></script>
     <script src="desert-temple.js?v=20261124-polish"></script>
     <script src="village-life.js?v=20261118-outdoors"></script>
     <script src="terrain-horizon.js?v=end-islands-1"></script>
     <script src="village-houses.js?v=20261104-ecology"></script>
+    <script src="survival-state.js?v=20261124-menu"></script>
+    <script src="start-menu.js?v=20261124-menu"></script>
 
     <script>
         // --- 场景、相机、渲染器 ---
@@ -1497,6 +1498,7 @@
             if (modeSelect) modeSelect.value = gameMode;
             document.querySelectorAll('.mode-btn').forEach(btn => {
                 const active = btn.dataset.mode === gameMode;
+                btn.setAttribute('aria-pressed',String(active));
                 btn.style.background = active ? (gameMode === 'creative' ? '#9C27B0' : '#2196F3') : '#333';
                 btn.style.borderColor = active ? '#fff' : '#777';
             });
@@ -1517,7 +1519,7 @@
             if(multiplayerRoom)leaveMultiplayerRoom();
             setTerrainChoice(getTerrainFromSelect('terrain-select'));
             setGameModeChoice(document.getElementById('mode-select')?.value || gameMode);
-            window.startNewGame(true, terrainChoice);
+            return beginQuickPlay();
         };
 
         window.restartGameWithTerrain = function() {
@@ -1526,7 +1528,7 @@
             window.startNewGame(true, terrainChoice);
         };
 
-        window.startNewGame = function(forceReset, terrainOverride) {
+        window.startNewGame = function(forceReset, terrainOverride, deferTerrain=false) {
             if(forceReset&&multiplayerRoom?.worldReady)leaveMultiplayerRoom('Room closed before restarting the world.');
             const nextTerrain = terrainOverride || terrainChoice || readTerrainSelection();
             selectedTerrain = nextTerrain;
@@ -1537,11 +1539,12 @@
             window.stopBGM(); 
 	            
             if (forceReset || !isGameStarted) {
-                window.resetWorld();
+                window.resetWorld(deferTerrain);
                 showToast("Current terrain: " + getTerrainName(selectedTerrain));
             }
             isGameStarted = true;
-            controls.lock();
+            document.body.classList.remove('menu-open');
+            if(!controls.isLocked&&!deferTerrain)controls.lock();
             document.getElementById('hud-container').style.display = 'flex';
         };
 
@@ -1607,6 +1610,7 @@
                 if(shouldApply&&!shouldApply())return;
                 try {
                     const data = JSON.parse(e.target.result);
+                    resetSurvivalState();document.body.classList.remove('menu-open');
                     clearMech();
                     clearCombatState();
                     resetPlayerFlight();
@@ -2147,12 +2151,15 @@
             }
         }
         
-        function takeDamage(amount) {
+        function takeDamage(amount,cause='contact') {
             if (isCreativeMode()) return;
-            if (!isGameStarted || isRespawning) return;
-            health -= amount;
+            if (!playerIsActive() || !(amount>0) || !Number.isFinite(amount)) return;
+            const previous=health;
+            const multiplier=cause==='fall'||cause==='starvation'?1:SURVIVAL_RULES[gameDifficulty].damage;
+            health -= amount*multiplier;
             if (health < 0) health = 0;
-            updateHUD();
+            showPlayerHurt(cause);
+            if(Math.ceil(previous*2)!==Math.ceil(health*2))updateHUD();
             if (health <= 0) {
                 respawnPlayer();
             }
@@ -2175,6 +2182,7 @@
         }
 
         function respawnPlayer() {
+            cancelEating();resetFallTracking();
             dismountHorse(true);
             resetPlayerFlight();
             if(activeMech) {playerScale=activeMech.previousScale;clearMech();updatePlayerScaleView();}
@@ -2184,6 +2192,7 @@
             setTimeout(() => {
                 camera.position.set(point.x, point.y, point.z);
                 velocity.set(0, 0, 0);
+                resetFallTracking();hurtViewTime=0;
                 health = maxHealth;
                 oxygen = 20;
                 updateHUD();
@@ -2268,17 +2277,7 @@
                 showToast("No cooked meat to eat.");
                 return false;
             }
-            consumeInventoryItem(40);
-            health = maxHealth;
-            hunger = maxHunger;
-            foodProtectionTimer = DAY_SECONDS;
-            resetFoodTimers();
-            updateHUD();
-            updateHotbarUI();
-            updateInventoryCounts();
-            playSound('dig');
-            showToast("Cooked meat eaten. Health and hunger restored for one day.");
-            return true;
+            return startEating(40,2,true);
         }
 
         function drinkShrinkPotion() {
@@ -4272,6 +4271,8 @@
         
         controls.addEventListener('unlock', () => {
             clearMovementInput();
+            cancelEating();
+            if(worldLoading)return;
             if(photoMode)return;
             if(document.getElementById('home-panel')?.hidden===false || document.getElementById('command-panel')?.hidden===false) return;
             let ui1 = document.getElementById('autobuild-ui');
@@ -4519,10 +4520,10 @@
         });
         
         function updatePlayerMovement(playerDelta) {
-            if (!controls.isLocked || !isGameStarted || isSleeping) return;
-            if(ridingHorse){updateHorseRiding(playerDelta);return;}
-            if(seatedAt) {velocity.set(0,0,0);return;}
-            if(drivingCar) {updateDrivingCar(playerDelta);return;}
+            if (!controls.isLocked || !isGameStarted || isSleeping || worldLoading) return;
+            if(ridingHorse){resetFallTracking();updateHorseRiding(playerDelta);return;}
+            if(seatedAt) {resetFallTracking();velocity.set(0,0,0);return;}
+            if(drivingCar) {resetFallTracking();updateDrivingCar(playerDelta);return;}
             if (creativeFlying && !canCreativeFly()) resetPlayerFlight();
             const bx = Math.round(camera.position.x), bz = Math.round(camera.position.z);
             const environment = getPlayerEnvironment();
@@ -4637,6 +4638,7 @@
             }
 
             updateFootstepSound(footstepStart,onGroundPhys&&!inWaterPhys&&!onLadder);
+            updateFallDamage(footstepStart,environment,onGroundPhys);
             if (creativeFlying && holdingDescend && velocity.y === 0 &&
                 checkScaledCollision(camera.position.clone().add(new THREE.Vector3(0,-0.004*Math.min(playerScale,1),0)))) {
                 creativeFlying = false;
@@ -4657,16 +4659,8 @@
         inventoryUI.style.display = 'none';
         bindTerrainSelects();
 
-        // 尝试在页面加载时播放主菜单 BGM（注意：浏览器可能会拦截自动播放，通常需要用户点击屏幕才会真正出声）
-        // 为了确保能听到，我们给 document 加个点击事件，一旦用户点击任何地方（包括页面空白处），如果 BGM 没在播放就播
-        let bgmHasStarted = false;
-        document.addEventListener('click', () => {
-            if (!isGameStarted && !bgmHasStarted) {
-                window.initAudio();
-                window.startBGM();
-                bgmHasStarted = true;
-            }
-        }, { once: true });
+        // Decode recordings after a user gesture; do not schedule hundreds of menu oscillators.
+        document.addEventListener('pointerdown', () => window.initAudio(), { once: true });
 
         // --- 强制刷新所有区块并重生 ---
         function findSafeSpawn() {
@@ -4684,7 +4678,8 @@
             return { x: 0, y: getSurfaceHeight(0, 0) + 5, z: 0 };
         }
 
-        window.resetWorld = function() {
+        window.resetWorld = function(deferTerrain=false) {
+            resetSurvivalState();
             clearMech();
             clearCombatState();
             resetPlayerFlight();
@@ -4749,7 +4744,8 @@
             updateHUD();
             playerInventory={};chestPending.clear();craftingGrid.fill(0);catalogSelection=0;restoreHotbar();updateHotbarUI();
             
-            updateChunks(camera.position);
+            velocity.set(0,0,0);
+            if(!deferTerrain)updateChunks(camera.position);
         }
 
         let currentBlock = 2; 
@@ -5419,10 +5415,11 @@
         function damageMob(entity, amount, source='player') {
             if (!entity || entity.dying || (source==='player' && isCompanion(entity))) return false;
             if(entity.type&&source==='player'&&entity.hurtTimer>.05)return false;
-            if(!entity.hurtTimer||entity.hurtTimer<=0)playMobVoice(entity);
+            const canVoice=!entity.hurtTimer||entity.hurtTimer<=0;
             if(entity.kind==='enderman') entity.anger=20;
             if(source==='player') companionOrder={target:entity,remaining:12};
             entity.hp = (entity.hp || 1) - amount;
+            if(canVoice||entity.hp<=0)playMobVoice(entity,entity.hp<=0?'death':'hurt');
             if(entity.type&&entity.hp>0)panicAnimal(entity,camera.position);
             if(entity.kind==='warden')entity.heard=8;
             entity.hurtTimer = 0.35;
@@ -5434,9 +5431,7 @@
                 entity.ashStarted = false;
                 entity.vx = 0;
                 entity.vz = 0;
-                if (entity.kind === 'zombie') playSound('zombie_death');
-            } else if (entity.kind === 'zombie') {
-                playSound('zombie_hurt');
+                if(entity.kind==='creeper')stopCreeperHiss(entity);
             }
             return true;
         }
@@ -5676,7 +5671,7 @@
                 // 僵尸发声
                 z.soundTimer -= delta;
                 if (z.soundTimer <= 0) {
-                    if(z.mesh.position.distanceTo(camera.position)<12)playSound('zombie');
+                    if(z.mesh.position.distanceTo(camera.position)<12)playHostileVoice(z,'idle');
                     z.soundTimer = 8 + Math.random() * 8;
                 }
 
@@ -5749,17 +5744,20 @@
                 if (!isCompanion(c) && hostileMobsEnabled() && distToPlayer < 3.0 && hasClearLineBetween(c.mesh.position,camera.position)) {
                     c.vx = 0;
                     c.vz = 0;
+                    startCreeperHiss(c);
                     c.fuseTimer += delta;
                     // 膨胀提示
                     let scale = 1 + (c.fuseTimer / 1.5) * 0.5;
                     c.mesh.scale.set(scale, scale, scale);
                     if (c.fuseTimer > 1.5) { // 1.5秒后爆炸
+                        stopCreeperHiss(c);
                         if(thermalAuthority())detonateAt(c.mesh.position.toArray().map(Math.round));
                         scene.remove(c.mesh);
                         creepers.splice(i, 1);
                         continue;
                     }
                 } else {
+                    stopCreeperHiss(c);
                     c.fuseTimer = 0;
                     c.mesh.scale.set(1, 1, 1);
                 }
@@ -6075,6 +6073,11 @@
             if (!controls.isLocked) return;
             if(document.getElementById('home-panel')?.hidden===false||document.getElementById('command-panel')?.hidden===false)return;
             e.preventDefault();
+            if(worldLoading||eatingState)return;
+            if([39,40].includes(currentBlock)&&(e.button===0||e.button===2)){
+                const target=e.button===2?expansionRay():null;
+                if(!(currentBlock===39&&target?.type===13&&!isTinyMode())){startEating(currentBlock,e.button);return;}
+            }
             if(isToolItem(currentBlock)&&!hasInventoryItem(currentBlock)){
                 if(e.button===2&&!e.shiftKey){
                     const hit=expansionRay();
@@ -6112,16 +6115,7 @@
             if (isTinyMode() && (e.button === 0 || e.button === 2)) {
                 cancelMining();
                 if (currentBlock === SHRINK_POTION_ID) { drinkShrinkPotion(); return; }
-                if (currentBlock === 40) { eatCookedMeat(); return; }
-                if (currentBlock === 39) {
-                    if (hasInventoryItem(39)) {
-                        consumeInventoryItem(39);
-                        restoreHunger(2);
-                        updateHotbarUI();
-                        updateInventoryCounts();
-                    }
-                    return;
-                }
+                if ([39,40].includes(currentBlock)) { startEating(currentBlock,e.button); return; }
                 raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
                 const hit = findMicroBlockHit(raycaster.ray.origin, raycaster.ray.direction);
                 if (hit) {
@@ -6312,18 +6306,8 @@
                 if (e.button === 0) { 
                     // 左键挖方块或攻击
                     // 处理吃东西/攻击逻辑
-                    if (currentBlock === 39) { // 拿着生肉左键
-                        if (hasInventoryItem(39)) {
-                            consumeInventoryItem(39);
-                            updateHotbarUI();
-                            updateInventoryCounts();
-                            restoreHunger(2); // 生肉也能维持生活，但比烤肉少
-                            showToast("Raw meat eaten. Hunger restored for one day.");
-                            playSound('dig'); // 咀嚼声
-                        }
-                        return;
-                    } else if (currentBlock === 40) { // 拿着烤肉左键
-                        eatCookedMeat();
+                    if ([39,40].includes(currentBlock)) {
+                        startEating(currentBlock,e.button);
                         return;
                     } else if (currentBlock === SHRINK_POTION_ID) {
                         drinkShrinkPotion();
@@ -7059,41 +7043,8 @@
             if (delta > 0.05) delta = 0.05; // 防止区块生成卡帧后物理一次性跳太远
             const playerDelta = Math.min(delta, MAX_PLAYER_STEP);
             prevTime = time;
-
-            if (isGameStarted && !isCreativeMode()) {
-                let isMoving = false;
-                if (foodProtectionTimer > 0) {
-                    foodProtectionTimer = Math.max(0, foodProtectionTimer - delta);
-                } else {
-                    hungerTimer += delta;
-                    if (hungerTimer >= 180) {
-                        hungerTimer = 0;
-                        if (hunger > 0) {
-                            hunger -= 1;
-                            updateHUD();
-                        }
-                    }
-                }
-
-                // 只有饥饿值为 0 时，才会触发“饿掉血”
-                if (hunger === 0) {
-                    starvationTimer += delta;
-                    // 如果不吃饭（饥饿值为0持续30分钟），再每 10 分钟（600秒）掉一滴血
-                    if (starvationTimer >= 1800) {
-                        if (starvationTimer >= 1800 + 600) {
-                            starvationTimer -= 600;
-                            takeDamage(1);
-                        }
-                    }
-                } else {
-                    starvationTimer = 0; // 只要吃了饭（有饥饿值），就不算挨饿
-                }
-            } else if (isGameStarted && isCreativeMode()) {
-                health = maxHealth;
-                hunger = maxHunger;
-                foodProtectionTimer = 0;
-                resetFoodTimers();
-            }
+            if(!isGameStarted||worldLoading){renderStartPanorama(delta);return;}
+            updateSurvival(delta);
 
             if (portalCooldown > 0) portalCooldown = Math.max(0, portalCooldown - delta);
 
@@ -7143,7 +7094,7 @@
                     scene.fog.near = 0.1;
                     scene.fog.far = 15;
                 }
-                if (!isCreativeMode()) oxygen -= delta;
+                if (playerIsActive() && !isCreativeMode()) oxygen -= delta;
                 document.getElementById('oxygen-ui').style.display = 'block';
                 let mins = Math.floor(Math.max(0, oxygen) / 60);
                 let secs = Math.floor(Math.max(0, oxygen) % 60);
@@ -7283,6 +7234,7 @@
 
             updateMining(delta);
             updateHandSwing(delta);
+            updateEating(delta);
             updateDroppedItems(delta);
             updateExplosionParticles(delta);
             updateCombatEffects(delta);
@@ -7303,7 +7255,7 @@
                     if (c.position.z < camera.position.z - 150) c.position.z += 300;
                 }
 
-                renderer.render(scene, updateMechView(delta));
+                renderPlayerView(updateMechView(delta));
                 updateSurveillance();
         }
 
@@ -7320,6 +7272,7 @@
         initCreativeInventory();
         initMultiplayer();
         initModIcons();
+        initStartMenu();
         animate();
     </script>
 </body>

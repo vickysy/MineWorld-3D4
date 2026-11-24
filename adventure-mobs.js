@@ -4,8 +4,14 @@ let ridingHorse=null,horseReturnPosition=null,adventureSpawnTime=0;
 const adventurePlayerLast=new THREE.Vector3();
 function buildPillager(){
     const g=new THREE.Group(),cloth=skinMaterial('pillager-coat',['#59464c','#655159','#514047']);
-    const skin=skinMaterial('pillager-skin',['#a5a59e','#adada5']),face=skinMaterial('pillager-face',['#a5a59e','#adada5'],r=>{r(2,5,12,2,'#4a4a43');r(3,8,3,2,'#e5eadb');r(10,8,3,2,'#e5eadb');r(4,8,2,2,'#476254');r(10,8,2,2,'#476254');r(6,13,4,1,'#65594e');});
-    const head=skinnedPart(g,.54,.58,.5,[skin,skin,skin,skin,face,skin],0,1.18,0,'head');addModelBox(head,.15,.28,.2,0x96968d,0,-.08,.3);
+    const skin=skinMaterial('pillager-skin',['#8e9694','#949b99','#89918f']),face=skinMaterial('pillager-face',['#969e9b','#909895'],r=>{
+        r(0,0,16,2,'#7e8785');r(2,2,4,2,'#a0a7a3');r(2,6,12,2,'#3c4543');
+        r(2,8,4,2,'#e1e4dc');r(10,8,4,2,'#e1e4dc');r(4,8,2,2,'#466653');r(10,8,2,2,'#466653');
+        r(0,10,2,4,'#7a8481');r(14,10,2,4,'#7a8481');r(6,14,4,2,'#53605b');
+    });
+    const head=skinnedPart(g,.54,.62,.5,[skin,skin,skin,skin,face,skin],0,1.2,0,'head');
+    const nose=skinMaterial('pillager-nose',['#808c86','#85918a'],r=>{r(2,12,4,2,'#5c6b61');r(10,12,4,2,'#5c6b61');});
+    skinnedPart(head,.135,.31,.22,nose,0,-.09,.34,'nose');
     skinnedPart(g,.64,.9,.38,cloth,0,.43,0,'body');addModelBox(g,.65,.12,.4,0x342f32,0,.07,0);addModelBox(g,.14,.14,.025,0xb9ad8b,0,.07,.215);
     for(const x of [-.4,.4]){skinnedPart(g,.2,.66,.22,cloth.clone(),x,.45,.16).rotation.x=-.6;addModelBox(g,.2,.15,.2,0x9d9f96,x,.21,.36);}
     const bow=buildWeaponModel(CROSSBOW_ID);bow.scale.setScalar(.85);bow.position.set(0,.47,.55);bow.rotation.x=Math.PI/2;g.add(bow);
@@ -166,6 +172,7 @@ function villageRaidCrop(home){
     return null;
 }
 function startVillageRaid(home){
+    // Creative protects the player, not village crops. Only Peaceful disables visits.
     if(!isNightTime()||gameDifficulty==='peaceful'||currentDimension!=='overworld'||!thermalAuthority())return false;
     const key=home.farm?`farm:${home.x},${home.z}`:`village:${Math.round(home.x/128)},${Math.round(home.z/128)}`;
     if(villageRaidVisits.has(key)||adventureMobs.filter(m=>!m.eggId).length>=3)return false;
@@ -176,7 +183,7 @@ function startVillageRaid(home){
         const m=spawnAdventureMob(PILLAGER_EGG,x,y,z);if(!m)continue;
         m.eggId=null;m.raid={home:{...home},exit:[x,y,z],time:75,target:null,loot:null,leaving:false};count++;
     }
-    if(count)villageRaidVisits.add(key);return count>0;
+    if(count){villageRaidVisits.add(key);showToast('Pillagers are approaching the village.');}return count>0;
 }
 function dropRaidLoot(mob){
     const loot=mob.raid?.loot;if(!loot)return;
@@ -213,6 +220,7 @@ function updateAdventureMobs(delta){
         const m=adventureMobs[i],warden=m.kind==='warden';
         if(updateMobDamageState(m,delta)||m.dimension!==currentDimension){if(m.dimension===currentDimension)dropRaidLoot(m);disposeModModel(m.mesh);adventureMobs.splice(i,1);continue;}if(m.dying)continue;
         updateSpikeDamage(m,delta);if(m.dying)continue;m.attackTimer=Math.max(0,m.attackTimer-delta);m.heard=Math.max(0,m.heard-delta);
+        if(!warden)updateHostileVoice(m,delta);
         const p=m.mesh.position,dx=camera.position.x-p.x,dz=camera.position.z-p.z,d=Math.hypot(dx,dz);
         if(warden&&hostileMobsEnabled()&&((noisy&&d<14)||d<3))m.heard=5;
         const chase=hostileMobsEnabled()&&d<(m.raid?12:24)&&Math.abs(camera.position.y-p.y)<10&&(!warden||m.heard>0);

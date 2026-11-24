@@ -6,7 +6,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
   const page=await browser.newPage({viewport:{width:1200,height:800}}),errors=[];page.on('pageerror',e=>{errors.push(e.message);console.error(e.message);});page.setDefaultNavigationTimeout(120000);
   await page.addInitScript(()=>requestAnimationFrame=()=>0);await page.goto(process.env.GAME_URL||pathToFileURL(path.resolve(__dirname,'../game3d.html')).href);
   await page.waitForFunction(()=>expansionReady&&typeof generateDesertTemple==='function',null,{polling:50});
-  await page.getByRole('button',{name:'Creative',exact:true}).click();await page.getByRole('button',{name:'Plains',exact:true}).click();await page.getByRole('button',{name:'Start Game',exact:true}).click();await page.waitForFunction(()=>controls.isLocked,null,{polling:50});
+  await page.getByRole('button',{name:'Creative',exact:true}).click();await page.getByRole('button',{name:'Plains',exact:true}).click();await page.getByRole('button',{name:'Start Game',exact:true}).click();await page.waitForFunction(()=>controls.isLocked&&!worldLoading,null,{polling:50});
   await page.keyboard.press('e');
   for(const [query,id] of [['掠夺者',245],['监守者',246],['马刷怪蛋',247],['木剑',241],['石剑',242],['金剑',243],['蓝宝石剑',244]]){
    await page.locator('#catalog-search').fill(query);assert(await page.locator('#inv-'+(id-12)).isVisible(),query);await page.locator('#inv-'+(id-12)).click();await page.locator('#inventory-hotbar [data-index="0"]').click();assert.equal(await page.evaluate(()=>currentBlock),id);

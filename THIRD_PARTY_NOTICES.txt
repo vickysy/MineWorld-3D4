@@ -15,6 +15,26 @@ Exact source revision and filenames: assets/audio/world/source.json
 Upstream credits: assets/audio/world/mobs-license.md and blocks-license.txt
 These recordings and our original procedural textures are not Mojang assets.
 
+New event-specific voices (2026-11-24):
+- mobs_mc_zombie_growl.ogg: Under7dude, CC0;
+  https://freesound.org/people/Under7dude/sounds/163445/
+- mobs_mc_zombie_hurt.ogg, mobs_mc_zombie_death.ogg: haratman, CC0;
+  https://freesound.org/people/haratman/sounds/393749/
+- mobs_mc_creeper_death.ogg: j1987, CC0;
+  https://freesound.org/people/j1987/sounds/111325/
+- mobs_mc_creeper_hurt.ogg (fuse): themightyglider, CC0;
+  https://opengameart.org/content/simple-fuse-sound
+- mobs_mc_pillager_grunt1/2.ogg, mobs_mc_pillager_ow1/2.ogg: CC0 under
+  the upstream statement "Sounds not mentioned here are licensed under CC0."
+- player_damage.ogg: sonictechtonic, CC BY 3.0;
+  https://freesound.org/people/sonictechtonic/sounds/241872/
+- player_falling_damage.ogg: Adam_N, CC0;
+  https://freesound.org/people/Adam_N/sounds/346692/
+Legacy zombie-voices.js is retained for old releases, but no longer loaded.
+
+Menu icons: Lucide 0.468.0, ISC license (assets/ui/lucide-LICENSE).
+Source: https://github.com/lucide-icons/lucide/tree/0.468.0/icons
+
 CC0 1.0: https://creativecommons.org/publicdomain/zero/1.0/
 CC BY 3.0: https://creativecommons.org/licenses/by/3.0/
 CC BY-SA 3.0: https://creativecommons.org/licenses/by-sa/3.0/

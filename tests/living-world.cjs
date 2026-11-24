@@ -8,7 +8,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
   await page.goto(process.env.GAME_URL||pathToFileURL(path.resolve(__dirname,'../game3d.html')).href);
   await page.waitForFunction(()=>typeof initVoxelStyle==='function'&&expansionReady,null,{polling:50});
   await page.getByRole('button',{name:'Creative',exact:true}).click();await page.getByRole('button',{name:'Plains',exact:true}).click();await page.getByRole('button',{name:'Start Game',exact:true}).click();
-  await page.waitForFunction(()=>controls.isLocked,null,{polling:50});
+  await page.waitForFunction(()=>controls.isLocked&&!worldLoading,null,{polling:50});
   console.log(await page.evaluate(async()=>{
    window.ok=(v,s)=>{if(!v)throw Error(s);};
    await Promise.all(Object.keys(WORLD_AUDIO_DATA).map(loadWorldAudio));
@@ -21,7 +21,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
    const old=playWorldRecording,calls=[];playWorldRecording=(kind,opts)=>{calls.push({kind,...opts});return true;};
    try{
     playBlockSound('break',1);playBlockSound('break',2);playBlockSound('break',3);playBlockSound('place',2);playBlockSound('break',6);playBlockSound('step',OAK_PLANKS_ID);
-    ok(calls.map(c=>c.kind).join(',')==='grass,dirt,stone,place,glass,wood_step','Material/action routing');
+    ok(calls.map(c=>c.kind).join(',')==='grass_break,dirt_break,stone,place,glass,wood_step','Material/action routing');
     const v={type:'sheep',mesh:{position:camera.position.clone()},voiceTimer:0};updateAnimalVoice(v,.1);ok(calls.at(-1).kind==='sheep'&&v.voiceTimer>=5&&v.voiceTimer<=14,'Idle calls are spaced apart');
    }finally{playWorldRecording=old;}
    clearWorldVoices();ok(!playWorldRecording('cow',{position:camera.position.clone().addScalar(50)}),'Distant animals quiet');

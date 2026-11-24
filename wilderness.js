@@ -15,8 +15,9 @@ let natureFish=[],caveVisits=new Set();
 function isWaterType(id){return id===24||WATER_PLANTS.has(id);}
 function hostileMobsEnabled(){return !isCreativeMode()&&gameDifficulty!=='peaceful';}
 function setDifficulty(value){
-    gameDifficulty=value==='peaceful'?'peaceful':'normal';
+    gameDifficulty=['peaceful','easy','normal','hard'].includes(value)?value:'normal';
     const select=document.getElementById('difficulty-select');if(select)select.value=gameDifficulty;
+    document.querySelectorAll('[data-difficulty]').forEach(btn=>btn.setAttribute('aria-pressed',String(btn.dataset.difficulty===gameDifficulty)));
 }
 
 function setWildernessVersion(version){
@@ -301,10 +302,8 @@ function initWilderness(){
     TERRAIN_NAMES.random='Random World';
     for(const id of ['terrain-select','pause-terrain-select']){const option=new Option('Random World','random');document.getElementById(id).prepend(option);}
     setTerrainChoice('random');
-    const label=document.createElement('label');label.className='difficulty-choice';label.textContent='Difficulty ';
-    const select=document.createElement('select');select.id='difficulty-select';select.append(new Option('Normal','normal'),new Option('Peaceful','peaceful'));select.onchange=()=>setDifficulty(select.value);label.append(select);document.getElementById('mode-select').parentElement.append(label);
+    const select=document.getElementById('difficulty-select');select.onchange=()=>setDifficulty(select.value);setDifficulty(gameDifficulty);
     const style=document.createElement('style');style.textContent='.difficulty-choice{display:block;margin:10px 0;font-size:16px}.difficulty-choice select{padding:10px;background:#333;color:white;border:2px solid #739d8a;border-radius:4px;max-width:100%}.nature-slot{flex-direction:column;box-sizing:border-box;width:100px!important;height:104px!important;gap:4px;padding:5px;font-size:13px!important}.nature-slot img{width:44px;height:44px;image-rendering:pixelated}#blocker{overflow-y:auto}#start-menu{max-height:100dvh;overflow-y:auto}';document.head.append(style);
-    style.textContent+='@media(max-width:600px){#start-menu{box-sizing:border-box;padding:24px 12px}#start-menu>div:first-child{margin-bottom:22px!important}#start-menu h1{font-size:32px!important;letter-spacing:0!important;overflow-wrap:anywhere}#start-menu h2{font-size:22px!important}#start-menu>div:nth-child(2){flex-wrap:wrap;gap:14px!important}#start-menu button,#start-menu select{max-width:100%}#start-menu>div:nth-child(2)>button{height:70px!important;font-size:20px!important}}';
     matWater.color.setHex(0x7abac5);matWater.opacity=.5;matWater.side=THREE.DoubleSide;
 }
 
@@ -399,20 +398,10 @@ function updateRemoteAppearance(model,p){
     model.userData.form=mech?.form||'human';
 }
 
-let nextZombieVoice=0,zombieVoiceBuffers=null,zombieVoiceLoading=null;
 function loadZombieVoices(){
-    if(!audioCtx)return Promise.resolve(null);
-    if(!zombieVoiceLoading)zombieVoiceLoading=Promise.all(ZOMBIE_VOICE_DATA.map(data=>audioCtx.decodeAudioData(Uint8Array.from(atob(data),c=>c.charCodeAt(0)).buffer))).then(buffers=>zombieVoiceBuffers=buffers).catch(()=>{zombieVoiceLoading=null;return null;});
-    return zombieVoiceLoading;
+    return loadWorldAudio('zombie');
 }
-function playZombieVoice(type,now){
-    if(!zombieVoiceBuffers){loadZombieVoices();return;}
-    if(now<nextZombieVoice)return;
-    const voice=audioCtx.createBufferSource();voice.buffer=zombieVoiceBuffers[Math.floor(Math.random()*zombieVoiceBuffers.length)];voice.playbackRate.value=.94+Math.random()*.08;
-    const duration=Math.min(type==='zombie_hurt'?.65:2.3,voice.buffer.duration/voice.playbackRate.value),gain=audioCtx.createGain();
-    const distance=Math.min(12,...zombies.filter(z=>!z.dying).map(z=>z.mesh.position.distanceTo(camera.position)));
-    const volume=(type==='zombie'?.12:.16)*Math.max(.15,1-distance/16);
-    gain.gain.setValueAtTime(0,now);gain.gain.linearRampToValueAtTime(volume,now+.08);gain.gain.setValueAtTime(volume,now+Math.max(.08,duration-.2));gain.gain.linearRampToValueAtTime(0,now+duration);
-    voice.connect(gain).connect(getSoundOutput());voice.start(now);voice.stop(now+duration);nextZombieVoice=now+duration+.4;
-    voice.onended=()=>{voice.disconnect();gain.disconnect();};
+function playZombieVoice(type){
+    const nearest=zombies.filter(z=>!z.dying).sort((a,b)=>a.mesh.position.distanceToSquared(camera.position)-b.mesh.position.distanceToSquared(camera.position))[0];
+    if(nearest)playHostileVoice(nearest,type==='zombie'?'idle':type==='zombie_death'?'death':'hurt');
 }

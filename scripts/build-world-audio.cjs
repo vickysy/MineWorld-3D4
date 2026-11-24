@@ -7,6 +7,12 @@ const entries={
  pig:['mobs_pig.ogg'],pig_hurt:['mobs_pig_angry.ogg'],
  horse:['mobs_mc_horse_random.1.ogg','mobs_mc_horse_random.2.ogg'],horse_hurt:['mobs_mc_horse_hurt.ogg'],
  villager:['mobs_mc_villager.1.ogg','mobs_mc_villager.2.ogg'],villager_hurt:['mobs_mc_villager_hurt.1.ogg'],
+ zombie:['mobs_mc_zombie_growl.ogg'],zombie_hurt:['mobs_mc_zombie_hurt.ogg'],zombie_death:['mobs_mc_zombie_death.ogg'],
+ pillager:['mobs_mc_pillager_grunt1.ogg','mobs_mc_pillager_grunt2.ogg'],pillager_hurt:['mobs_mc_pillager_ow1.ogg','mobs_mc_pillager_ow2.ogg'],
+ creeper_fuse:['mobs_mc_creeper_hurt.ogg'],creeper_death:['mobs_mc_creeper_death.ogg'],
+ player_hurt:['player_damage.ogg'],player_fall:['player_falling_damage.ogg'],
+ dirt_step:['default_dirt_footstep.1.ogg','default_dirt_footstep.2.ogg'],grass_step:['default_grass_footstep.1.ogg','default_grass_footstep.2.ogg'],
+ dirt_break:['default_dig_crumbly.ogg'],grass_break:['default_dig_snappy.ogg'],
  dirt:['default_dig_crumbly.ogg','default_dirt_footstep.1.ogg','default_dirt_footstep.2.ogg'],
  grass:['default_grass_footstep.1.ogg','default_grass_footstep.2.ogg','default_dig_snappy.ogg'],
  stone:['default_dig_cracky.1.ogg','default_dig_cracky.2.ogg'],
@@ -25,7 +31,7 @@ async function get(url){const r=await fetch(url,{signal:AbortSignal.timeout(3000
  const out=path.join(root,'assets/audio/world');fs.mkdirSync(out,{recursive:true});
  for(const [kind,files] of Object.entries(entries)){
   data[kind]=[];
-  for(const file of files){const folder=file.startsWith('default_')?'CORE/mcl_sounds/':'ENTITIES/mobs_mc/';
+  for(const file of files){const folder=/^(default_|player_)/.test(file)?'CORE/mcl_sounds/':'ENTITIES/mobs_mc/';
    const local=path.join(out,file),bytes=fs.existsSync(local)?fs.readFileSync(local):Buffer.from(await(await get(base+folder+'sounds/'+file)).arrayBuffer());
    if(bytes.toString('ascii',0,4)!=='OggS')throw Error('Invalid OGG '+file);
    fs.writeFileSync(path.join(out,file),bytes);data[kind].push(bytes.toString('base64'));console.log(file,bytes.length);

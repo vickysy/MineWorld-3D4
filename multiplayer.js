@@ -55,7 +55,7 @@ function showMultiplayerMenu() {
 function hideMultiplayerMenu() {
     if(multiplayerRoom&&!['ready','playing'].includes(multiplayerRoom.phase))leaveMultiplayerRoom();
     document.getElementById('multiplayer-menu').style.display='none';
-    document.getElementById(isGameStarted?'pause-menu':'start-menu').style.display=isGameStarted?'block':'flex';
+    document.getElementById(isGameStarted?'pause-menu':'start-menu').style.display='block';
 }
 
 async function copyRoomCode() {

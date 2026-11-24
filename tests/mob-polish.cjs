@@ -8,7 +8,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
   await page.goto(process.env.GAME_URL||pathToFileURL(path.resolve(__dirname,'../game3d.html')).href,{timeout:120000});
   await page.waitForFunction(()=>expansionReady,null,{polling:50});
   await page.getByRole('button',{name:'Creative',exact:true}).click();await page.getByRole('button',{name:'Plains',exact:true}).click();await page.getByRole('button',{name:'Start Game',exact:true}).click();
-  await page.waitForFunction(()=>controls.isLocked,null,{polling:50});
+  await page.waitForFunction(()=>controls.isLocked&&!worldLoading,null,{polling:50});
   console.log(await page.evaluate(()=>{
    window.ok=(v,s)=>{if(!v)throw Error(s);};
    window.resetPolish=()=>{
@@ -58,6 +58,11 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
    return 'PASS: furniture/stone material routing, decoded recordings and non-chirping pickup.';
   }));
   console.log(await page.evaluate(()=>{
+   for(const difficulty of ['easy','normal','hard']){
+    resetPolish();setDifficulty(difficulty);dayTime=Math.PI*1.5;spawnVillagerAt(0,80,0);adventureSpawnTime=20;updateAdventureMobs(.01);
+    ok(adventureMobs.length===2&&adventureMobs.every(m=>m.raid),'Creative village visitors at '+difficulty);
+    for(let i=0;i<60;i++)updateAdventureMobs(1/60);ok(health===maxHealth&&!flyingArrows.length,'Creative player stays protected at '+difficulty);
+   }
    resetPolish();dayTime=Math.PI*1.5;spawnVillagerAt(0,80,0);adventureSpawnTime=20;updateAdventureMobs(.01);
    ok(adventureMobs.length===2&&adventureMobs.every(m=>m.raid),'Night visitors spawn in Creative');
    const home=adventureMobs[0].raid.home;ok(!startVillageRaid(home),'One bounded visit per village per night');

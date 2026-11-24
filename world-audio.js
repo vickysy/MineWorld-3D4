@@ -26,7 +26,7 @@ function loadWorldAudio(kind){
     worldAudioPending.set(kind,task);return task;
 }
 function warmWorldAudio(){if(!audioCtx||worldAudioReady)return;worldAudioReady=true;for(const kind of Object.keys(WORLD_AUDIO_DATA))loadWorldAudio(kind);}
-function playWorldRecording(kind,{position=null,gain=.22,rate=1,duration=null,ambient=false,lowpass=5200}={}){
+function playWorldRecording(kind,{position=null,gain=.22,rate=1,duration=null,ambient=false,lowpass=5200,onStart=null}={}){
     if(!audioCtx||audioCtx.state==='closed')return false;
     if(audioCtx.state==='suspended')audioCtx.resume();warmWorldAudio();
     const distance=position?position.distanceTo(camera.position):0;
@@ -44,7 +44,9 @@ function playWorldRecording(kind,{position=null,gain=.22,rate=1,duration=null,am
     source.connect(filter);filter.connect(volume);
     const pan=audioCtx.createStereoPanner();if(position){const right=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,0);pan.pan.value=THREE.MathUtils.clamp(position.clone().sub(camera.position).dot(right)/12,-.8,.8);}
     volume.connect(pan);pan.connect(getSoundOutput());worldAudioVoices.add(source);
-    source.onended=()=>{worldAudioVoices.delete(source);source.disconnect();filter.disconnect();volume.disconnect();pan.disconnect();};source.start(time);source.stop(time+length+.01);return true;
+    source.onended=()=>{worldAudioVoices.delete(source);source.disconnect();filter.disconnect();volume.disconnect();pan.disconnect();};source.start(time);source.stop(time+length+.01);
+    if(onStart)onStart(()=>{if(worldAudioVoices.has(source)){volume.gain.cancelScheduledValues(audioCtx.currentTime);volume.gain.setTargetAtTime(0,audioCtx.currentTime,.012);source.stop(audioCtx.currentTime+.06);}});
+    return true;
 }
 function blockSoundFamily(id){
     id=HIDDEN_BLOCKS[id]?.base||id;
@@ -57,11 +59,21 @@ function blockSoundFamily(id){
     if([17,18,19,20,GOLD_BLOCK,SILVER_BLOCK,IRON_BLOCK,GOLD_PYRAMID,SILVER_PYRAMID,26,27,PISTON_ID].includes(id)||HOME_ITEMS[id]||CAR_ITEMS[id])return 'metal';
     return 'stone';
 }
+const BLOCK_SOUND_PROFILES={
+    dirt:{hit:'dirt_step',step:'dirt_step',break:'dirt_break',place:'place',rate:1,lowpass:3800},
+    grass:{hit:'grass_step',step:'grass_step',break:'grass_break',place:'grass_step',rate:.95,lowpass:4000},
+    stone:{hit:'hard_place',step:'stone_step',break:'stone',place:'hard_place',rate:.84,lowpass:2200},
+    wood:{hit:'wood_step',step:'wood_step',break:'wood',place:'wood',rate:.9,lowpass:3000},
+    sand:{hit:'sand',step:'sand',break:'dirt_break',place:'sand',rate:.9,lowpass:3600},
+    glass:{hit:'glass_step',step:'glass_step',break:'glass',place:'glass_step',rate:.9,lowpass:4000},
+    cloth:{hit:'wood_step',step:'wood_step',break:'wood_step',place:'wood_step',rate:.82,lowpass:900},
+    ceramic:{hit:'hard_place',step:'stone_step',break:'stone',place:'hard_place',rate:.96,lowpass:2700},
+    metal:{hit:'hard_place',step:'stone_step',break:'metal',place:'hard_place',rate:.88,lowpass:2600}
+};
 function playBlockSound(action,id,position=null){
-    const family=blockSoundFamily(id);
-    const hard=['stone','ceramic','metal'].includes(family);
-    const kind=family==='cloth'?'wood_step':family==='ceramic'?'hard_place':family==='glass'&&action!=='break'?'glass_step':action==='step'&&['wood','stone'].includes(family)?family+'_step':action==='place'&&['dirt','stone'].includes(family)?(family==='dirt'?'place':'hard_place'):family;
-    return playWorldRecording(kind,{position,gain:family==='cloth'?.09:action==='hit'?.085:action==='step'?.07:action==='place'?.18:.25,rate:hard?.82:action==='place'?.85:1,duration:action==='hit'?.13:action==='step'||family==='cloth'?.18:null,lowpass:hard?2200:family==='cloth'?1200:5200});
+    const family=blockSoundFamily(id),p=BLOCK_SOUND_PROFILES[family],quiet=family==='cloth';
+    return playWorldRecording(p[action]||p.hit,{position,gain:(quiet?.45:1)*({hit:.105,step:.065,place:.19,break:.26}[action]||.1),
+        rate:p.rate,duration:action==='hit'?.16:action==='step'?.22:action==='place'?.3:quiet?.24:.65,lowpass:p.lowpass});
 }
 function updateFootstepSound(before,grounded){
     if(!grounded||creativeFlying||activeMech||ridingMinecart){footstepDistance=0;return;}
@@ -78,8 +90,28 @@ function updateAnimalVoice(entity,delta){
     if(playWorldRecording(entity.type||'villager',{position:entity.mesh.position,gain:entity.type==='pig'?.58:.4,ambient:true}))entity.voiceTimer=5+Math.random()*9;
     else entity.voiceTimer=1+Math.random()*3;
 }
-function playMobVoice(entity){
+function playMobVoice(entity,phase='hurt'){
+    if(['zombie','pillager','creeper'].includes(entity.kind))return playHostileVoice(entity,phase);
     const kind=entity.type|| (entity.kind==='villager'?'villager':null);
     if(kind)playWorldRecording(kind==='pig'?'pig':kind+'_hurt',{position:entity.mesh.position,gain:kind==='pig'?.48:.32,rate:kind==='pig'?1.12:1,duration:kind==='pig'?.42:null});
 }
+function playHostileVoice(entity,phase='idle'){
+    const kind=entity.kind;
+    if(!['zombie','pillager','creeper'].includes(kind))return false;
+    if(kind==='creeper'&&phase!=='death')return false;
+    const clip=kind==='pillager'&&phase==='death'?'pillager_hurt':phase==='idle'?kind:kind+'_'+phase;
+    return playWorldRecording(clip,{position:entity.mesh.position,ambient:phase==='idle',gain:phase==='idle'?.21:.29,
+        rate:kind==='zombie'?.92:1,lowpass:kind==='zombie'?2600:3500});
+}
+function updateHostileVoice(entity,delta){
+    entity.voiceTimer=(entity.voiceTimer??(3+Math.random()*5))-delta;
+    if(entity.voiceTimer>0||entity.dying)return;
+    const audible=entity.mesh.position.distanceTo(camera.position)<18&&playHostileVoice(entity,'idle');
+    entity.voiceTimer=audible?7+Math.random()*9:2;
+}
+function startCreeperHiss(entity){
+    if(entity.stopHiss)return;
+    playWorldRecording('creeper_fuse',{position:entity.mesh.position,gain:.22,duration:1.55,lowpass:4800,onStart:stop=>entity.stopHiss=stop});
+}
+function stopCreeperHiss(entity){if(entity.stopHiss){entity.stopHiss();entity.stopHiss=null;}}
 function clearWorldVoices(){for(const source of worldAudioVoices)source.stop();worldAudioVoices.clear();}

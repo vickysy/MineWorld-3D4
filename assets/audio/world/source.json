@@ -35,6 +35,49 @@
     "villager_hurt": [
       "mobs_mc_villager_hurt.1.ogg"
     ],
+    "zombie": [
+      "mobs_mc_zombie_growl.ogg"
+    ],
+    "zombie_hurt": [
+      "mobs_mc_zombie_hurt.ogg"
+    ],
+    "zombie_death": [
+      "mobs_mc_zombie_death.ogg"
+    ],
+    "pillager": [
+      "mobs_mc_pillager_grunt1.ogg",
+      "mobs_mc_pillager_grunt2.ogg"
+    ],
+    "pillager_hurt": [
+      "mobs_mc_pillager_ow1.ogg",
+      "mobs_mc_pillager_ow2.ogg"
+    ],
+    "creeper_fuse": [
+      "mobs_mc_creeper_hurt.ogg"
+    ],
+    "creeper_death": [
+      "mobs_mc_creeper_death.ogg"
+    ],
+    "player_hurt": [
+      "player_damage.ogg"
+    ],
+    "player_fall": [
+      "player_falling_damage.ogg"
+    ],
+    "dirt_step": [
+      "default_dirt_footstep.1.ogg",
+      "default_dirt_footstep.2.ogg"
+    ],
+    "grass_step": [
+      "default_grass_footstep.1.ogg",
+      "default_grass_footstep.2.ogg"
+    ],
+    "dirt_break": [
+      "default_dig_crumbly.ogg"
+    ],
+    "grass_break": [
+      "default_dig_snappy.ogg"
+    ],
     "dirt": [
       "default_dig_crumbly.ogg",
       "default_dirt_footstep.1.ogg",

@@ -85,11 +85,12 @@ function buildLivestock(type){
     rememberOriginalMaterials(group);return group;
 }
 function buildCreeper(){
-    const group=new THREE.Group(),colors=['#638f42','#77a44c','#8ab65d','#547d39'];
-    const speckles=r=>{for(const [x,y] of [[1,3],[6,10],[11,2],[12,13],[4,6]])r(x,y,2,2,'#b0ca82');};
+    const group=new THREE.Group(),colors=['#528c38','#70a74b','#80b75b','#417830'];
+    const speckles=r=>{for(const [x,y,color] of [[0,0,'#a2c87a'],[6,2,'#aacb82'],[12,0,'#355e27'],[0,8,'#bad499'],[10,10,'#386a29'],[4,14,'#91b767']])r(x,y,2,2,color);};
     const skin=skinMaterial('creeper-hide',colors,speckles),face=skinMaterial('creeper-face',colors,r=>{
-        speckles(r);r(2,4,4,4,'#182716');r(10,4,4,4,'#182716');r(6,8,4,3,'#182716');
-        r(4,10,8,3,'#182716');r(4,13,3,2,'#182716');r(9,13,3,2,'#182716');
+        // Coarse, square facial pixels; the expression belongs on the front only.
+        speckles(r);r(2,4,4,4,'#10180d');r(10,4,4,4,'#10180d');r(6,8,4,2,'#152010');
+        r(4,10,8,4,'#10180d');r(4,14,2,2,'#10180d');r(10,14,2,2,'#10180d');
     });
     skinnedPart(group,.56,.56,.56,[skin,skin,skin,skin,face,skin],0,.92,0,'head');
     skinnedPart(group,.42,.76,.3,skin,0,.26,0,'body');
@@ -97,9 +98,13 @@ function buildCreeper(){
     rememberOriginalMaterials(group);return group;
 }
 function buildZombie(){
-    const group=new THREE.Group(),greens=['#608a43','#668f47','#587f3c'];
-    const skin=skinMaterial('zombie-skin',greens,r=>{r(2,3,3,2,'#75974f');r(9,11,4,2,'#4c7235');});
-    const face=skinMaterial('zombie-face',greens,r=>{r(1,1,14,3,'#4b6c36');r(2,6,4,2,'#263f26');r(10,6,4,2,'#263f26');r(6,9,4,2,'#507238');r(4,13,8,1,'#334e2c');});
+    const group=new THREE.Group(),greens=['#4a6637','#506d3d','#456033'];
+    const skin=skinMaterial('zombie-skin',greens,r=>{r(2,2,4,2,'#5d7546');r(10,10,4,4,'#3c552d');});
+    const face=skinMaterial('zombie-face',greens,r=>{
+        r(0,0,16,2,'#3d542e');r(0,2,4,4,'#415a30');r(12,0,4,4,'#394e2b');
+        r(2,6,4,2,'#172513');r(10,6,4,2,'#172513');r(6,8,4,4,'#40582e');
+        r(4,12,8,4,'#334b27');r(6,12,4,2,'#263d21');r(2,10,2,2,'#5b7545');
+    });
     const shirt=skinMaterial('zombie-shirt',['#329997','#389f9c','#2e8d8e'],r=>{r(6,0,4,2,'#587f3c');r(2,13,2,3,'#467f72');r(11,14,3,2,'#608a43');});
     const pants=skinMaterial('zombie-pants',['#504b83','#56518b','#4a467a'],r=>{r(2,10,3,2,'#666094');r(11,6,2,4,'#403b65');});
     skinnedPart(group,.5,.5,.5,[skin,skin,skin,skin,face,skin],0,1.2,0,'head');
