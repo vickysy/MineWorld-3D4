@@ -385,7 +385,7 @@
     <script src="three-pointer-lock-r128.js"></script>
     <script src="three-reflector-r128.js"></script>
     <link rel="stylesheet" href="inventory.css?v=20261123-treasure">
-    <script src="world-expansion.js?v=20261124-adventure"></script>
+    <script src="world-expansion.js?v=20261124-polish"></script>
     <script src="home-city.js?v=20261124-adventure"></script>
     <script src="kitchen-home.js?v=20261020-connected"></script>
     <script src="city-life.js?v=end-islands-1"></script>
@@ -405,15 +405,15 @@
     <script src="ecology.js?v=20261123-treasure"></script>
     <script src="outdoors.js?v=20261123-snow"></script>
     <script src="mining-cracks.js?v=20261123-cracks"></script>
-    <script src="treasure-world.js?v=20261124-adventure"></script>
+    <script src="treasure-world.js?v=20261124-polish"></script>
     <script src="creative-inventory.js?v=20261124-adventure"></script>
     <script src="world-audio-data.js?v=20261124-living"></script>
-    <script src="world-audio.js?v=20261124-adventure"></script>
-    <script src="voxel-style.js?v=20261124-living"></script>
+    <script src="world-audio.js?v=20261124-polish"></script>
+    <script src="voxel-style.js?v=20261124-polish"></script>
     <script src="living-physics.js?v=20261124-adventure"></script>
     <script src="adventure-items.js?v=20261124-adventure"></script>
-    <script src="adventure-mobs.js?v=20261124-adventure"></script>
-    <script src="desert-temple.js?v=20261124-adventure"></script>
+    <script src="adventure-mobs.js?v=20261124-polish"></script>
+    <script src="desert-temple.js?v=20261124-polish"></script>
     <script src="village-life.js?v=20261118-outdoors"></script>
     <script src="terrain-horizon.js?v=end-islands-1"></script>
     <script src="village-houses.js?v=20261104-ecology"></script>
@@ -1760,195 +1760,19 @@
             if (audioCtx.state === 'suspended') audioCtx.resume();
             const now = audioCtx.currentTime;
             
-            if (type === 'dig' || type === 'place') {
-                // 咔嚓/沙沙声 (泥土/放置/采集)：清脆的带通白噪声
-                const duration = 0.12; 
+            if (type === 'pickup') {
+                playWorldRecording('wood_step',{gain:.045,rate:.9,duration:.09,lowpass:1800});
                 
-                const bufferSize = audioCtx.sampleRate * duration;
-                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-                const data = buffer.getChannelData(0);
-                for (let i = 0; i < bufferSize; i++) {
-                    data[i] = (Math.random() * 2 - 1);
-                }
-                const noise = audioCtx.createBufferSource();
-                noise.buffer = buffer;
-
-                const filter = audioCtx.createBiquadFilter();
-                filter.type = 'bandpass'; 
-                filter.frequency.setValueAtTime(1500, now);
-                filter.Q.setValueAtTime(0.5, now);
-
-                const noiseGain = audioCtx.createGain();
-                noiseGain.gain.setValueAtTime(2.0, now);
-                noiseGain.gain.exponentialRampToValueAtTime(0.01, now + duration);
-
-                noise.connect(filter);
-                filter.connect(noiseGain);
-                noiseGain.connect(getSoundOutput());
-                
-                noise.start(now);
-
-            } else if (type === 'pickup') {
-                const duration = 0.09;
-                const osc = audioCtx.createOscillator();
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(420, now);
-                osc.frequency.exponentialRampToValueAtTime(620, now + duration);
-
-                const gain = audioCtx.createGain();
-                gain.gain.setValueAtTime(0.08, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
-
-                osc.connect(gain);
-                gain.connect(getSoundOutput());
-                osc.start(now);
-                osc.stop(now + duration);
-                
-            } else if (type === 'stone') {
-                // 咣咣声 (石头)：沉闷、有敲击感的低频方波+极短的噪声
-                const duration = 0.15;
-                
-                // 敲击核心 (咣)
-                const osc = audioCtx.createOscillator();
-                osc.type = 'square'; 
-                osc.frequency.setValueAtTime(120, now); // 低沉的音调
-                osc.frequency.exponentialRampToValueAtTime(50, now + duration);
-                
-                const filter = audioCtx.createBiquadFilter();
-                filter.type = 'lowpass';
-                filter.frequency.setValueAtTime(800, now);
-                filter.frequency.exponentialRampToValueAtTime(200, now + duration);
-                
-                const oscGain = audioCtx.createGain();
-                oscGain.gain.setValueAtTime(1.5, now);
-                oscGain.gain.exponentialRampToValueAtTime(0.01, now + duration);
-                
-                osc.connect(filter);
-                filter.connect(oscGain);
-                oscGain.connect(getSoundOutput());
-                osc.start(now);
-                osc.stop(now + duration);
-                
-                // 附加一点敲击碎屑声
-                const noiseBuf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.05, audioCtx.sampleRate);
-                for(let i=0; i<noiseBuf.length; i++) noiseBuf.getChannelData(0)[i] = Math.random()*2-1;
-                const noise = audioCtx.createBufferSource();
-                noise.buffer = noiseBuf;
-                const nFilter = audioCtx.createBiquadFilter();
-                nFilter.type = 'highpass';
-                nFilter.frequency.setValueAtTime(1000, now);
-                const nGain = audioCtx.createGain();
-                nGain.gain.setValueAtTime(0.5, now);
-                nGain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
-                noise.connect(nFilter).connect(nGain).connect(getSoundOutput());
-                noise.start(now);
-
             } else if (type === 'explosion') {
                 const duration=1.2,buffer=audioCtx.createBuffer(1,Math.floor(audioCtx.sampleRate*duration),audioCtx.sampleRate);
                 const samples=buffer.getChannelData(0);for(let i=0;i<samples.length;i++)samples[i]=(Math.random()*2-1)*Math.exp(-i/(audioCtx.sampleRate*0.25));
                 const source=audioCtx.createBufferSource(),filter=audioCtx.createBiquadFilter(),gain=audioCtx.createGain();
                 source.buffer=buffer;filter.type='lowpass';filter.frequency.value=260;gain.gain.value=0.32;
                 source.connect(filter);filter.connect(gain);gain.connect(getSoundOutput());source.start();
-            } else if (type === 'crackle') {
-                const duration = 0.055;
-                const bufferSize = audioCtx.sampleRate * duration;
-                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-                const data = buffer.getChannelData(0);
-                for (let i = 0; i < bufferSize; i++) {
-                    const decay = Math.exp(-i / (audioCtx.sampleRate * 0.025));
-                    data[i] = (Math.random() * 2 - 1) * decay;
-                }
-                const noise = audioCtx.createBufferSource();
-                noise.buffer = buffer;
-
-                const filter = audioCtx.createBiquadFilter();
-                filter.type = 'bandpass';
-                filter.frequency.setValueAtTime(1350 + Math.random() * 350, now);
-                filter.Q.setValueAtTime(0.9, now);
-
-                const gain = audioCtx.createGain();
-                gain.gain.setValueAtTime(0.22, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
-
-                noise.connect(filter);
-                filter.connect(gain);
-                gain.connect(getSoundOutput());
-                noise.start(now);
-
             } else if (type === 'door') {
-                // 开门/关门的“吱呀”声 (Creak)：低频锯齿波配合频率下滑和一点粗糙感
-                const duration = 0.35;
-                const osc = audioCtx.createOscillator();
-                osc.type = 'sawtooth';
-                
-                // 频率缓慢下滑，模拟木头摩擦
-                osc.frequency.setValueAtTime(180, now);
-                osc.frequency.exponentialRampToValueAtTime(80, now + duration);
-
-                // 添加低通滤波器让声音显得发闷、更像木头
-                const filter = audioCtx.createBiquadFilter();
-                filter.type = 'lowpass';
-                filter.frequency.setValueAtTime(600, now);
-                filter.frequency.linearRampToValueAtTime(200, now + duration);
-
-                const oscGain = audioCtx.createGain();
-                oscGain.gain.setValueAtTime(0, now);
-                // 快速淡入，缓慢淡出
-                oscGain.gain.linearRampToValueAtTime(1.5, now + 0.05);
-                oscGain.gain.exponentialRampToValueAtTime(0.01, now + duration);
-
-                osc.connect(filter);
-                filter.connect(oscGain);
-                oscGain.connect(getSoundOutput());
-                
-                osc.start(now);
-                osc.stop(now + duration);
-
+                playWorldRecording('wood',{gain:.14,rate:.8,duration:.22,lowpass:1800});
             } else if (type === 'glass') {
-                // 真正的玻璃碎裂声 (清脆、爆裂、高频碎片)
-                const duration = 0.4;
-                const bufferSize = audioCtx.sampleRate * duration;
-                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-                const data = buffer.getChannelData(0);
-                
-                // 瞬间爆裂的粉碎噪声
-                for (let i = 0; i < bufferSize; i++) {
-                    let decay = Math.exp(-i / (audioCtx.sampleRate * 0.03));
-                    data[i] = (Math.random() * 2 - 1) * decay;
-                }
-                const mainNoise = audioCtx.createBufferSource();
-                mainNoise.buffer = buffer;
-
-                const filter = audioCtx.createBiquadFilter();
-                filter.type = 'highpass';
-                filter.frequency.setValueAtTime(5000, now); // 极高频过滤，只保留刺耳的碎片声
-
-                const gain = audioCtx.createGain();
-                gain.gain.setValueAtTime(4.0, now);
-
-                mainNoise.connect(filter);
-                filter.connect(gain);
-                gain.connect(getSoundOutput());
-                mainNoise.start(now);
-
-                // 几片玻璃渣落地声 (叮当)
-                for (let i = 0; i < 5; i++) {
-                    const t = now + 0.02 + Math.random() * 0.15;
-                    const shardDur = 0.1;
-                    const osc = audioCtx.createOscillator();
-                    osc.type = 'triangle'; // 三角波最适合模拟玻璃的清脆“叮”声
-                    osc.frequency.setValueAtTime(6000 + Math.random() * 4000, t);
-                    
-                    const sGain = audioCtx.createGain();
-                    sGain.gain.setValueAtTime(0.0, t - 0.001); // 避免爆音
-                    sGain.gain.linearRampToValueAtTime(1.0, t + 0.01);
-                    sGain.gain.exponentialRampToValueAtTime(0.01, t + shardDur);
-                    
-                    osc.connect(sGain);
-                    sGain.connect(getSoundOutput());
-                    osc.start(t);
-                    osc.stop(t + shardDur);
-                }
+                playBlockSound('break',6);
             } else if (type === 'gun') {
                 // 枪声：极其短促有力的爆裂声
                 const duration = 0.3;
@@ -5469,15 +5293,7 @@
         }
 
         function createCreeperModel() {
-            const group=new THREE.Group();
-            addModelBox(group,0.56,0.56,0.56,0x6cab45,0,0.88,0,'head');
-            addModelBox(group,0.42,0.68,0.38,0x79b851,0,0.3,0,'body');
-            for(const x of [-0.14,0.14]) addModelBox(group,0.12,0.14,0.03,0x162516,x,0.94,0.3);
-            addModelBox(group,0.13,0.2,0.03,0x162516,0,0.76,0.3);
-            for(const x of [-0.1,0.1]) addModelBox(group,0.08,0.15,0.03,0x162516,x,0.67,0.3);
-            for(const x of [-0.2,0.2]) for(const z of [-0.2,0.2]) addModelBox(group,0.23,0.42,0.27,0x4c8735,x,-0.29,z);
-            for(const [x,y] of [[-0.12,0.23],[0.1,0.48],[-0.18,1.06]]) addModelBox(group,0.09,0.09,0.025,0xa3ca73,x,y,0.3);
-            rememberOriginalMaterials(group);return group;
+            return buildCreeper();
         }
 
         function spawnMobFromEgg(id,x,y,z,restoring=false) {
@@ -5532,21 +5348,7 @@
         }
 
         function createZombieModel() {
-            const group = new THREE.Group();
-            addModelBox(group, 0.55, 0.45, 0.28, 0x2f7d42, 0, 0.68, 0, 'head');
-            addModelBox(group, 0.12, 0.08, 0.035, 0x101010, -0.13, 0.73, 0.16);
-            addModelBox(group, 0.12, 0.08, 0.035, 0x101010, 0.13, 0.73, 0.16);
-            addModelBox(group, 0.20, 0.06, 0.035, 0x203020, 0, 0.60, 0.16);
-            addModelBox(group, 0.58, 0.7, 0.28, 0x2767aa, 0, 0.06, 0, 'body');
-            const leftArm = addModelBox(group, 0.18, 0.75, 0.18, 0x2f7d42, -0.42, 0.10, 0.04, 'leftArm');
-            const rightArm = addModelBox(group, 0.18, 0.75, 0.18, 0x2f7d42, 0.42, 0.10, 0.04, 'rightArm');
-            leftArm.rotation.x = -0.18;
-            rightArm.rotation.x = -0.18;
-            addModelBox(group, 0.22, 0.7, 0.22, 0x52318c, -0.15, -0.62, 0, 'leftLeg');
-            addModelBox(group, 0.22, 0.7, 0.22, 0x52318c, 0.15, -0.62, 0, 'rightLeg');
-            group.children.forEach(part=>part.position.y+=0.47);
-            rememberOriginalMaterials(group);
-            return group;
+            return buildZombie();
         }
 
         function createVillagerModel() { return buildVillager(); }
@@ -5853,7 +5655,7 @@
                 }
                 z.vy -= 25.0 * delta; // 重力
 	                
-                if (!tryMoveEntityFlat(z, z.vx * delta, z.vz * delta, 1.8, 0.35, 1)) {
+                if (!tryMoveEntityFlat(z, z.vx * delta, z.vz * delta, 1.95, 0.35, 1)) {
                     z.vx = 0;
                     z.vz = 0;
                 }
@@ -5895,8 +5697,8 @@
 
                 if (Math.abs(z.vx) > 0.05 || Math.abs(z.vz) > 0.05) {
                     z.walkTime += delta * 5;
-                    z.mesh.userData.leftArm.rotation.x = -0.32 + Math.sin(z.walkTime) * 0.14;
-                    z.mesh.userData.rightArm.rotation.x = -0.32 - Math.sin(z.walkTime) * 0.14;
+                    z.mesh.userData.leftArm.rotation.x = -Math.PI/2 + Math.sin(z.walkTime) * 0.08;
+                    z.mesh.userData.rightArm.rotation.x = -Math.PI/2 - Math.sin(z.walkTime) * 0.08;
                     z.mesh.userData.leftLeg.rotation.x = -Math.sin(z.walkTime) * 0.24;
                     z.mesh.userData.rightLeg.rotation.x = Math.sin(z.walkTime) * 0.24;
                     z.mesh.rotation.y = Math.atan2(z.vx, z.vz);
@@ -5962,6 +5764,9 @@
                     c.mesh.scale.set(1, 1, 1);
                 }
                 c.mesh.rotation.y=Math.atan2(dx,dz);
+                c.walkTime=(c.walkTime||0)+delta*Math.hypot(c.vx,c.vz)*5;
+                const stride=Math.hypot(c.vx,c.vz)>.1?Math.sin(c.walkTime)*.28:0;
+                for(const [name,sign] of [['leftLeg',1],['rightLeg',-1],['backLeftLeg',-1],['backRightLeg',1]])c.mesh.userData[name].rotation.x=stride*sign;
             }
 
             // 更新动物
@@ -5986,22 +5791,9 @@
                 if(animalWouldEnterWater(a.mesh.position.x+a.vx*delta,a.mesh.position.y,a.mesh.position.z+a.vz*delta)){a.vx=0;a.vz=0;a.timer=.2;}
                 const before=a.mesh.position.clone();
                 moveWalkingMob(a,delta,a.mesh.userData.mobHeight,a.mesh.userData.mobRadius);
-                if(Math.hypot(a.mesh.position.x-before.x,a.mesh.position.z-before.z)<1e-5){a.vx=0;a.vz=0;a.timer=.2;}
-	                
-                if (Math.abs(a.vx) > 0.1 || Math.abs(a.vz) > 0.1) {
-                    a.walkTime += delta * 7;
-                    const legSwing = Math.sin(a.walkTime) * 0.35;
-                    if (a.mesh.userData.leftLeg) a.mesh.userData.leftLeg.rotation.x = legSwing;
-                    if (a.mesh.userData.rightLeg) a.mesh.userData.rightLeg.rotation.x = -legSwing;
-                    if (a.mesh.userData.backLeftLeg) a.mesh.userData.backLeftLeg.rotation.x = -legSwing;
-                    if (a.mesh.userData.backRightLeg) a.mesh.userData.backRightLeg.rotation.x = legSwing;
-                    a.mesh.rotation.y = Math.atan2(a.vx, a.vz);
-                } else {
-                    if (a.mesh.userData.leftLeg) a.mesh.userData.leftLeg.rotation.x = 0;
-                    if (a.mesh.userData.rightLeg) a.mesh.userData.rightLeg.rotation.x = 0;
-                    if (a.mesh.userData.backLeftLeg) a.mesh.userData.backLeftLeg.rotation.x = 0;
-                    if (a.mesh.userData.backRightLeg) a.mesh.userData.backRightLeg.rotation.x = 0;
-                }
+                const distance=Math.hypot(a.mesh.position.x-before.x,a.mesh.position.z-before.z);
+                if(distance<1e-5){a.vx=0;a.vz=0;a.timer=.2;}
+                animateWalkingAnimal(a,distance,delta);
             }
 
             // 更新村民

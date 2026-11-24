@@ -9,6 +9,9 @@ const TREASURE_SHAPED=new Set([GOLD_PYRAMID,SILVER_PYRAMID,...TREASURE_COMPONENT
 const treasureShapes=new Map(),chestPending=new Map();let chestRequestNumber=Date.now()*1000+Math.floor(Math.random()*1000);
 
 function treasureTexture(id){
+    if(id===SANDSTONE)return pixelPattern('sandstone',['#ddc693','#e1cb9b','#d8c18c'],r=>{
+        r(0,15,16,1,'#c8b07c');r(1,1,14,1,'#e8d5a8');r(2,7,5,1,'#d0b984');r(10,11,4,1,'#d0b984');
+    });
     const canvas=document.createElement('canvas');canvas.width=canvas.height=32;
     const ctx=canvas.getContext('2d'),color=new THREE.Color(TREASURE_COLORS[id]);
     ctx.fillStyle='#'+color.getHexString();ctx.fillRect(0,0,32,32);

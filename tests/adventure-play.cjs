@@ -77,13 +77,15 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
    // Flood-fill walking cells with one-block steps and two clear cells of headroom.
    const start=[0,80,13],queue=[start],seen=new Set([start.join(',')]);
    for(let i=0;i<queue.length;i++){const [x,y,z]=queue[i];for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]])for(const dy of [0,1,-1]){
-    const nx=x+dx,ny=y+dy,nz=z+dz,key=[nx,ny,nz].join(',');if(Math.abs(nx)>13||Math.abs(nz)>14||ny<80||ny>94||seen.has(key))continue;
+    const nx=x+dx,ny=y+dy,nz=z+dz,key=[nx,ny,nz].join(',');if(Math.abs(nx)>13||Math.abs(nz)>14||ny<72||ny>94||seen.has(key))continue;
     if(isSolid(nx,ny-1,nz)&&!isSolid(nx,ny,nz)&&!isSolid(nx,ny+1,nz)&&(!dy||!isSolid(x,Math.max(y,ny)+1,z))){seen.add(key);queue.push([nx,ny,nz]);}
    }}
-   for(const [x,y,z] of [[0,80,-2],[3,85,-6],[-3,90,-6]]){const c=furnitureRecord(x,y,z);ok(c?.id===CHEST_ID&&chestSlots(c.data).filter(Boolean).length>=4,'Real chest on each floor');ok([[1,0],[-1,0],[0,1],[0,-1]].some(([a,b])=>seen.has([x+a,y,z+b].join(','))),'Chest is reachable from entrance on floor '+y);}
-   const chest=furnitureRecord(3,85,-6);chestTransfer(chest,0,'take',chestSlots(chest.data)[0].id,64);generateRuin(site);ok(!chestSlots(chest.data)[0],'No regenerating treasure');
+   for(const [x,y,z] of [[0,80,-2],[7,84,-5],[-3,72,0],[3,72,0],[0,72,-3],[0,72,3]]){const c=furnitureRecord(x,y,z);ok(c?.id===CHEST_ID&&chestSlots(c.data).filter(Boolean).length>=4,'Real chest on each floor');ok([[1,0],[-1,0],[0,1],[0,-1]].some(([a,b])=>seen.has([x+a,y,z+b].join(','))),'Chest is reachable from entrance on floor '+y);}
+   for(let x=-5;x<=5;x++)for(let z=-5;z<=5;z++)ok(isSolid(x,71,z),'Solid vault floor');
+   ok(getBlock(9,87,12)===175&&getBlock(0,94,0)===SANDSTONE,'Tower motif and pyramid apex');
+   const chest=furnitureRecord(7,84,-5);chestTransfer(chest,0,'take',chestSlots(chest.data)[0].id,64);generateRuin(site);ok(!chestSlots(chest.data)[0],'No regenerating treasure');
    for(let x=-1;x<=0;x++)for(let z=-1;z<=1;z++)buildChunkMesh(x,z);syncFurnitureMeshes();heldItemGroup.visible=false;camera.position.set(25,100,30);camera.lookAt(0,85,0);renderer.render(scene,camera);
-   const gl=renderer.getContext(),pixels=new Uint8Array(gl.drawingBufferWidth*gl.drawingBufferHeight*4),colors=new Set();gl.readPixels(0,0,gl.drawingBufferWidth,gl.drawingBufferHeight,gl.RGBA,gl.UNSIGNED_BYTE,pixels);for(let i=0;i<pixels.length;i+=256)colors.add(pixels.slice(i,i+3).join(','));ok(colors.size>80,'Temple pixels visible');return {reachableCells:seen.size,templeColors:colors.size};
+   const gl=renderer.getContext(),pixels=new Uint8Array(gl.drawingBufferWidth*gl.drawingBufferHeight*4),colors=new Set();gl.readPixels(0,0,gl.drawingBufferWidth,gl.drawingBufferHeight,gl.RGBA,gl.UNSIGNED_BYTE,pixels);for(let i=0;i<pixels.length;i+=256)colors.add(pixels.slice(i,i+3).join(','));ok(colors.size>32&&renderer.info.render.triangles>1000,'Temple pixels visible: '+colors.size);return {reachableCells:seen.size,templeColors:colors.size};
   }));
   await page.screenshot({path:'/private/tmp/mc-adventure-temple.png'});
   await page.evaluate(()=>{resetAdventure();for(let x=-1;x<=0;x++)for(let z=-1;z<=0;z++)buildChunkMesh(x,z);spawnAdventureMob(PILLAGER_EGG,-2,80,0);spawnAdventureMob(WARDEN_EGG,1,80,0);spawnAnimal('horse',4,80,0);camera.position.set(0,82.5,8);camera.lookAt(1,81,0);currentBlock=SAPPHIRE_SWORD;updateHeldItem3D(currentBlock);updateHandSwing(0);renderer.render(scene,camera);});

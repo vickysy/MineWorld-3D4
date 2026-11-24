@@ -32,7 +32,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
             step(240);
             check(health===maxHealth,'Summoned zombie never damages its nearby owner in Survival');
             check(creepers.includes(creeper) && creeper.fuseTimer===0 && explosionParticles.length===0,'Summoned creeper never ignites or explodes near the player');
-            check(ally.mesh.children.some(m=>m.material && m.material.color.getHex()===0x46d9c2),'Companions have a visible turquoise band');
+            check(ally.mesh.children.some(m=>m.material?.color?.getHex()===0x46d9c2),'Companions have a visible turquoise band');
             camera.position.z=10;
             const oldZombieZ=ally.mesh.position.z,oldCreeperZ=creeper.mesh.position.z;
             step(120);

@@ -26,7 +26,7 @@ function loadWorldAudio(kind){
     worldAudioPending.set(kind,task);return task;
 }
 function warmWorldAudio(){if(!audioCtx||worldAudioReady)return;worldAudioReady=true;for(const kind of Object.keys(WORLD_AUDIO_DATA))loadWorldAudio(kind);}
-function playWorldRecording(kind,{position=null,gain=.22,rate=1,duration=null,ambient=false}={}){
+function playWorldRecording(kind,{position=null,gain=.22,rate=1,duration=null,ambient=false,lowpass=5200}={}){
     if(!audioCtx||audioCtx.state==='closed')return false;
     if(audioCtx.state==='suspended')audioCtx.resume();warmWorldAudio();
     const distance=position?position.distanceTo(camera.position):0;
@@ -36,7 +36,7 @@ function playWorldRecording(kind,{position=null,gain=.22,rate=1,duration=null,am
     if(ambient)worldAudioLastAnimal=audioCtx.currentTime;
     const choice=choices[Math.floor(Math.random()*choices.length)],source=audioCtx.createBufferSource(),volume=audioCtx.createGain(),filter=audioCtx.createBiquadFilter();
     source.buffer=choice.buffer;source.playbackRate.value=rate*(.97+Math.random()*.06);
-    filter.type='lowpass';filter.frequency.value=5200;
+    filter.type='lowpass';filter.frequency.value=lowpass;
     const time=audioCtx.currentTime,length=Math.min(duration||choice.buffer.duration,choice.buffer.duration)/source.playbackRate.value;
     const attenuation=distance<=4?1:Math.max(0,1-(distance-4)/28)/(1+(distance-4)*.045),level=gain*choice.normal*attenuation;
     volume.gain.setValueAtTime(0,time);volume.gain.linearRampToValueAtTime(level,time+.008);
@@ -50,15 +50,18 @@ function blockSoundFamily(id){
     id=HIDDEN_BLOCKS[id]?.base||id;
     if([1,5,25,42].includes(id)||LEAF_TYPES.has(id)||NATURE_PLANTS.has(id))return 'grass';
     if(id===2)return 'dirt';if([23,SANDSTONE,SNOW_LAYER_ID,154].includes(id))return 'sand';
-    if([4,7,8,9,10,11,12,14,15,TRAPDOOR,TRAPDOOR_OPEN,CHEST_ID,OAK_PLANKS_ID].includes(id))return 'wood';
-    if([6,GLASS_SENSOR_DOOR_BOTTOM_ID,GLASS_SENSOR_DOOR_TOP_ID,GLASS_SENSOR_DOOR_OPEN_ID].includes(id))return 'glass';
-    if([17,18,19,20,GOLD_BLOCK,SILVER_BLOCK,IRON_BLOCK,GOLD_PYRAMID,SILVER_PYRAMID,26,27,PISTON_ID].includes(id))return 'metal';
+    if([14,15,83,84,91,92,97,117,126,149].includes(id))return 'cloth';
+    if([4,7,8,9,10,11,12,82,88,111,118,151,152,TRAPDOOR,TRAPDOOR_OPEN,CHEST_ID,OAK_PLANKS_ID].includes(id))return 'wood';
+    if([6,87,112,GLASS_SENSOR_DOOR_BOTTOM_ID,GLASS_SENSOR_DOOR_TOP_ID,GLASS_SENSOR_DOOR_OPEN_ID,SHOWER_DOOR_ID].includes(id))return 'glass';
+    if([85,86,90,108,113,119].includes(id))return 'ceramic';
+    if([17,18,19,20,GOLD_BLOCK,SILVER_BLOCK,IRON_BLOCK,GOLD_PYRAMID,SILVER_PYRAMID,26,27,PISTON_ID].includes(id)||HOME_ITEMS[id]||CAR_ITEMS[id])return 'metal';
     return 'stone';
 }
 function playBlockSound(action,id,position=null){
     const family=blockSoundFamily(id);
-    const kind=family==='glass'&&action!=='break'?'glass_step':action==='step'&&['wood','stone'].includes(family)?family+'_step':action==='place'&&['dirt','stone'].includes(family)?(family==='dirt'?'place':'hard_place'):family;
-    return playWorldRecording(kind,{position,gain:action==='hit'?.085:action==='step'?.07:action==='place'?.18:.25,rate:action==='place'?.85:action==='hit'?1.12:1,duration:action==='hit'?.13:action==='step'?.18:null});
+    const hard=['stone','ceramic','metal'].includes(family);
+    const kind=family==='cloth'?'wood_step':family==='ceramic'?'hard_place':family==='glass'&&action!=='break'?'glass_step':action==='step'&&['wood','stone'].includes(family)?family+'_step':action==='place'&&['dirt','stone'].includes(family)?(family==='dirt'?'place':'hard_place'):family;
+    return playWorldRecording(kind,{position,gain:family==='cloth'?.09:action==='hit'?.085:action==='step'?.07:action==='place'?.18:.25,rate:hard?.82:action==='place'?.85:1,duration:action==='hit'?.13:action==='step'||family==='cloth'?.18:null,lowpass:hard?2200:family==='cloth'?1200:5200});
 }
 function updateFootstepSound(before,grounded){
     if(!grounded||creativeFlying||activeMech||ridingMinecart){footstepDistance=0;return;}

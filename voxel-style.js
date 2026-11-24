@@ -25,15 +25,20 @@ function classicBlockTexture(type){
     if(type===QUARTZ_BLOCK_ID)return pixelPattern('quartz',['#efede7','#ebe8e0','#f1efe8'],(r)=>{r(0,15,16,1,'#d6d3ca');r(15,0,1,16,'#dfdcd3');r(1,1,14,1,'#faf9f2');});
     return null;
 }
-function skinMaterial(key,colors,draw){return new THREE.MeshLambertMaterial({map:pixelPattern(key,colors,draw)});}
+function skinMaterial(key,colors,draw){
+    const map=pixelPattern(key,colors,draw);
+    // Keep close-up pixels crisp, but filter minified skins while mobs move.
+    map.minFilter=THREE.NearestMipmapLinearFilter;
+    return new THREE.MeshLambertMaterial({map});
+}
 function skinnedPart(parent,w,h,d,material,x,y,z,name){
     const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),material);mesh.position.set(x,y,z);parent.add(mesh);
     if(name){mesh.name=name;parent.userData[name]=mesh;}return mesh;
 }
 function jointLeg(root,x,y,z,width,length,material,name,hoof=0x39372f){
     const joint=new THREE.Group();joint.position.set(x,y,z);joint.name=name;root.add(joint);root.userData[name]=joint;
-    skinnedPart(joint,width,length,width,material.clone(),0,-length/2,0);
-    addModelBox(joint,width+.008,.12,width+.016,hoof,0,-length+.06,.008);return joint;
+    skinnedPart(joint,width,length-.12,width,material.clone(),0,-(length-.12)/2,0);
+    addModelBox(joint,width,.12,width,hoof,0,-length+.06,0);return joint;
 }
 function faceMaterial(kind){
     const villager=kind==='villager',pig=kind==='pig',sheep=kind==='sheep';
@@ -77,6 +82,33 @@ function buildLivestock(type){
     const legMat=skinMaterial(type+'-legs',pig?['#dc9694','#e5a09d']:sheep?['#b2a38f','#bbaa94']:horse?['#825536','#8b5c3c']:['#72614f','#806d57']);
     for(const [name,x,z] of [['leftLeg',-.25,.37],['rightLeg',.25,.37],['backLeftLeg',-.25,-.37],['backRightLeg',.25,-.37]])jointLeg(group,x,-.5+legLength,z,horse?.18:.19,legLength,legMat,name,pig?0x9b7470:0x403d35);
     group.userData.mobHeight=horse?1.95:sheep?1.25:pig?1.04:1.3;group.userData.mobRadius=horse?.76:.65;
+    rememberOriginalMaterials(group);return group;
+}
+function buildCreeper(){
+    const group=new THREE.Group(),colors=['#638f42','#77a44c','#8ab65d','#547d39'];
+    const speckles=r=>{for(const [x,y] of [[1,3],[6,10],[11,2],[12,13],[4,6]])r(x,y,2,2,'#b0ca82');};
+    const skin=skinMaterial('creeper-hide',colors,speckles),face=skinMaterial('creeper-face',colors,r=>{
+        speckles(r);r(2,4,4,4,'#182716');r(10,4,4,4,'#182716');r(6,8,4,3,'#182716');
+        r(4,10,8,3,'#182716');r(4,13,3,2,'#182716');r(9,13,3,2,'#182716');
+    });
+    skinnedPart(group,.56,.56,.56,[skin,skin,skin,skin,face,skin],0,.92,0,'head');
+    skinnedPart(group,.42,.76,.3,skin,0,.26,0,'body');
+    for(const [name,x,z] of [['leftLeg',-.19,.2],['rightLeg',.19,.2],['backLeftLeg',-.19,-.2],['backRightLeg',.19,-.2]])jointLeg(group,x,-.1,z,.25,.4,skin,name,0x41652f);
+    rememberOriginalMaterials(group);return group;
+}
+function buildZombie(){
+    const group=new THREE.Group(),greens=['#608a43','#668f47','#587f3c'];
+    const skin=skinMaterial('zombie-skin',greens,r=>{r(2,3,3,2,'#75974f');r(9,11,4,2,'#4c7235');});
+    const face=skinMaterial('zombie-face',greens,r=>{r(1,1,14,3,'#4b6c36');r(2,6,4,2,'#263f26');r(10,6,4,2,'#263f26');r(6,9,4,2,'#507238');r(4,13,8,1,'#334e2c');});
+    const shirt=skinMaterial('zombie-shirt',['#329997','#389f9c','#2e8d8e'],r=>{r(6,0,4,2,'#587f3c');r(2,13,2,3,'#467f72');r(11,14,3,2,'#608a43');});
+    const pants=skinMaterial('zombie-pants',['#504b83','#56518b','#4a467a'],r=>{r(2,10,3,2,'#666094');r(11,6,2,4,'#403b65');});
+    skinnedPart(group,.5,.5,.5,[skin,skin,skin,skin,face,skin],0,1.2,0,'head');
+    skinnedPart(group,.52,.7,.28,shirt,0,.6,0,'body');
+    for(const [name,x] of [['leftArm',-.39],['rightArm',.39]]){
+        const joint=new THREE.Group();joint.position.set(x,.9,0);joint.rotation.x=-Math.PI/2;group.add(joint);group.userData[name]=joint;
+        skinnedPart(joint,.24,.24,.24,shirt.clone(),0,-.12,0);skinnedPart(joint,.24,.48,.24,skin.clone(),0,-.48,0);
+    }
+    jointLeg(group,-.135,.25,0,.24,.75,pants,'leftLeg',0x414453);jointLeg(group,.135,.25,0,.24,.75,pants,'rightLeg',0x414453);
     rememberOriginalMaterials(group);return group;
 }
 function buildVillager(){

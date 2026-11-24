@@ -606,7 +606,7 @@ function placeFurniture(id,x,y,z) {
         showToast(`Camera ${ensureSecurityCameraNumber(data)} placed.`);
     }
     for(const p of parts) setBlockNoRebuild(...p,FURNITURE_PART_ID,dirty);
-    addDirtyChunksToQueue(dirty);syncFurnitureMeshes();updateInventoryCounts();playSound('place');return true;
+    addDirtyChunksToQueue(dirty);syncFurnitureMeshes();updateInventoryCounts();playBlockSound('place',id,new THREE.Vector3(x,y,z));return true;
 }
 
 function handleExpansionClick(e) {
