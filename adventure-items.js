@@ -10,7 +10,7 @@ let handSwing=0,handCooldown=0,handSwingItem=0,handSwingAction='melee';
 const handRest=[0,0,0,0,0,0,0],handReturn=[1,0,0,0,0,0,0];
 // Time, grip translation (x/y/z), then wrist pitch/yaw/roll in camera space.
 const HAND_SWING_POSES={
-    sword:[handRest,[.16,0,.12,0,.05,0,0],[.44,0,-.15,0,-.7,0,0],[.64,0,-.17,0,-.85,0,0],handReturn],
+    sword:[handRest,[.18,0,.14,0,.06,0,0],[.46,0,-.3,0,-.35,0,0],[.64,0,-.32,0,-.4,0,0],handReturn],
     pickaxe:[handRest,[.17,0,.09,0,.05,0,0],[.43,0,-.22,0,-.3,0,0],[.62,0,-.26,0,-.34,0,0],handReturn],
     axe:[handRest,[.2,0,.14,0,.06,0,0],[.46,0,-.25,0,-.33,0,0],[.65,0,-.3,0,-.38,0,0],handReturn],
     mace:[handRest,[.22,0,.17,0,.06,0,0],[.47,0,-.28,0,-.34,0,0],[.66,0,-.31,0,-.38,0,0],handReturn],
@@ -21,12 +21,8 @@ const HAND_SWING_POSES={
     release:[handRest,[.15,0,.02,.06,.06,0,-.02],[.4,-.015,0,-.04,-.05,0,.015],handReturn]
 };
 const handPose=new Float64Array(6);
-function swordPalette(id){
-    return id===WOOD_SWORD?['#b2854f','#d9b77d','#705033']:id===STONE_SWORD?['#929b9b','#c7ceca','#60686c']:
-        id===GOLD_SWORD?['#e3b53d','#fff0a0','#957425']:id===SAPPHIRE_SWORD?['#39afc5','#a6f1ed','#21667f']:['#b6c3cb','#edf5f5','#617483'];
-}
 
-// Tools share their icon silhouette; swords use a matching palette on a beveled blade.
+// The same pixel silhouette supplies the inventory image and the extruded model.
 function weaponPattern(id){
     if(weaponPixels.has(id))return weaponPixels.get(id);
     const grid=Array.from({length:16},()=>Array(16).fill(null));
@@ -35,9 +31,13 @@ function weaponPattern(id){
     const line=(x,y,dx,dy,n,c)=>{for(let i=0;i<n;i++)dot(x+dx*i,y+dy*i,c);};
     const brown='#986b3b',dark='#43342c',edge='#495760';
     if(SWORD_DAMAGE[id]){
-        const [blade,sharp,shade]=swordPalette(id);
-        rect(6,2,4,9,shade);rect(6,2,1,9,sharp);rect(7,2,2,9,blade);rect(7,0,2,2,sharp);
-        rect(3,10,10,2,shade);rect(4,10,8,1,blade);rect(7,12,2,3,brown);rect(6,15,4,1,shade);
+        const blade=id===WOOD_SWORD?'#b2854f':id===STONE_SWORD?'#929b9b':id===GOLD_SWORD?'#f0c850':id===SAPPHIRE_SWORD?'#47c8db':'#d8e3e5';
+        for(let i=0;i<5;i++){rect(2+i,13-i,2,2,dark);dot(3+i,13-i,brown);}
+        line(4,8,1,1,5,dark);line(4,7,1,1,5,blade);dot(3,8,dark);dot(8,13,dark);
+        for(let i=0;i<8;i++)rect(6+i,7-i,3,3,edge);
+        for(let i=0;i<8;i++)rect(7+i,7-i,2,2,blade);
+        for(let i=0;i<8;i++)dot(7+i,7-i,'#f4eee0');
+        dot(14,0,blade);dot(15,0,edge);
     }else if(id===55){
         for(const [x,y] of [[7,1],[9,2],[10,3],[11,4],[12,5],[12,6],[12,7],[12,8],[11,9],[10,10],[9,11],[7,12]]){rect(x,y,2,2,dark);dot(x,y,brown);}
         line(7,2,0,1,11,'#ded6bc');line(2,7,1,0,12,brown);dot(14,7,'#d7e5eb');dot(13,6,'#d7e5eb');dot(13,8,'#d7e5eb');rect(2,6,2,3,'#dad5be');
@@ -58,7 +58,6 @@ function weaponPattern(id){
 }
 function weaponGeometry(id){
     if(weaponShapes.has(id))return weaponShapes.get(id);
-    if(SWORD_DAMAGE[id]){const geometry=swordGeometry(id);weaponShapes.set(id,geometry);return geometry;}
     const {grid}=weaponPattern(id),positions=[],normals=[],colors=[];
     for(let y=0;y<16;y++)for(let x=0;x<16;x++)if(grid[y][x]){
         const box=new THREE.BoxGeometry(.065,.065,.065).toNonIndexed();box.translate((x-7.5)*.065,(7.5-y)*.065,0);
@@ -67,36 +66,15 @@ function weaponGeometry(id){
     }
     const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));geo.computeBoundingSphere();weaponShapes.set(id,geo);return geo;
 }
-function swordGeometry(id){
-    const positions=[],colors=[],[body,edge,shade]=swordPalette(id);
-    const triangle=(a,b,c,color)=>{positions.push(...a,...b,...c);const rgb=new THREE.Color(color);for(let i=0;i<3;i++)colors.push(rgb.r,rgb.g,rgb.b);};
-    const box=(w,h,d,x,y,z,color)=>{
-        const geometry=new THREE.BoxGeometry(w,h,d).toNonIndexed();geometry.translate(x,y,z);const rgb=new THREE.Color(color);
-        positions.push(...geometry.attributes.position.array);for(let i=0;i<geometry.attributes.position.count;i++)colors.push(rgb.r,rgb.g,rgb.b);geometry.dispose();
-    };
-    // A diamond cross-section has thin cutting edges, rather than a rectangular slab's broad striking face.
-    const ring=(y,w,t)=>[[-w,y,0],[0,y,-t],[w,y,0],[0,y,t]],rings=[ring(.16,.075,.024),ring(.59,.06,.021),ring(.74,.004,.004)];
-    for(let r=1;r<rings.length;r++)for(let i=0;i<4;i++){
-        const a=rings[r-1][i],b=rings[r-1][(i+1)%4],c=rings[r][(i+1)%4],d=rings[r][i],color=[edge,body,shade,body][i];
-        triangle(a,d,b,color);triangle(b,d,c,color);
-    }
-    triangle(rings[2][0],rings[2][3],rings[2][1],edge);triangle(rings[2][1],rings[2][3],rings[2][2],edge);
-    triangle(rings[0][0],rings[0][1],rings[0][3],shade);triangle(rings[0][1],rings[0][2],rings[0][3],shade);
-    box(.25,.045,.07,0,.13,0,shade);box(.19,.016,.075,0,.151,0,body);
-    box(.068,.23,.06,0,-.006,0,'#5c4030');for(const y of [-.08,-.025,.03,.085])box(.072,.025,.064,0,y,0,'#977049');
-    box(.1,.045,.08,0,-.14,0,shade);
-    const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));geometry.computeVertexNormals();geometry.computeBoundingSphere();return geometry;
-}
 function buildWeaponModel(id){
     const mesh=new THREE.Mesh(weaponGeometry(id).clone(),new THREE.MeshLambertMaterial({vertexColors:true}));mesh.userData.modItem=true;mesh.userData.weaponId=id;return mesh;
 }
 function buildGrippedWeapon(id){
     const mesh=buildWeaponModel(id);
-    if(SWORD_DAMAGE[id]){mesh.rotation.y=Math.PI/3;return mesh;}
     const diagonal=!!SWORD_DAMAGE[id]||id===34||id===54;
     const grip=diagonal?[3,13]:id===35?[4,11]:id===55?[10,10]:id===57||id===58?[7.5,14]:[7.5,12];
     const size=id===35?.52:SWORD_DAMAGE[id]?.62:.68;
-    mesh.scale.setScalar(size);mesh.rotation.set(0,0,diagonal?Math.PI/4:0);
+    mesh.scale.setScalar(size);mesh.rotation.set(0,SWORD_DAMAGE[id]?Math.PI/4:0,diagonal?Math.PI/4:0);
     // Place the handle at the animation origin, not the middle of the blade.
     mesh.position.set((grip[0]-7.5)*.065,(7.5-grip[1])*.065,0)
         .multiplyScalar(-size).applyEuler(mesh.rotation);
@@ -126,15 +104,17 @@ function applyHandPose(pose){
     const viewScale=Math.min(1,Math.max(.3,camera.aspect/1.1));
     const x=Math.min(.4,camera.aspect*.4)-(1-viewScale)*.23;
     const id=heldItemGroup.userData.itemId,vertical=!!SWORD_DAMAGE[id]||[34,54,58].includes(id);
-    const z=vertical?-.9:-.8;
+    const z=vertical?-1.05:-.8;
+    // Keep the forearm entering from below the viewport even when portrait framing scales it down.
+    const handY=vertical?-.26-(1-viewScale)*.52:-.4;
     heldItemGroup.scale.setScalar(playerScale*viewScale);
     heldItemGroup.position.set((x+pose[0]*viewScale)*playerScale,
-        ((vertical?-.28:-.4)+pose[1]*viewScale)*playerScale,(z+pose[2]*viewScale)*playerScale);
+        (handY+pose[1]*viewScale)*playerScale,(z+pose[2]*viewScale)*playerScale);
     // Align the vertical swing plane with the eye so perspective does not turn it into a diagonal slash.
     heldItemGroup.rotation.order=vertical?'YXZ':'XYZ';
     heldItemGroup.rotation.set(pose[3],pose[4]+(vertical?Math.atan2(-x,-z):0),pose[5]);
     const arm=heldItemGroup.children[0]?.userData.gripArm;
-    if(arm)arm.rotation.x=-pose[3]-.32;
+    if(arm)arm.rotation.x=-pose[3]-(vertical?.08:.32);
 }
 function resetHandAnimation(){handSwing=0;handPose.fill(0);applyHandPose(handPose);}
 function startHandAnimation(action='melee'){handSwing=HAND_SWING_SECONDS;handSwingItem=currentBlock;handSwingAction=action;}

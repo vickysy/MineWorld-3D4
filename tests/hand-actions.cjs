@@ -1,4 +1,5 @@
 const assert=require('node:assert/strict'),path=require('node:path'),{pathToFileURL}=require('node:url');
+const {createHash}=require('node:crypto');
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 (async()=>{
  const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH});
@@ -12,6 +13,11 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
   await page.getByRole('button',{name:'Plains',exact:true}).click();
   await page.getByRole('button',{name:'Start Game',exact:true}).click();
   await page.waitForFunction(()=>isGameStarted&&controls.isLocked&&!worldLoading,null,{polling:50});
+  // Fingerprints of the original pixel icons, vertices, normals and colors from 9b852b1.
+  const originalSwords={33:'10aa24c5ea9af5e364a96d014906402e819e6ef522856ce872fed5409008a10a',241:'d7a0feac3c4870f5c2722910377bd6868e85c99a5ea06cda1b2fc5c94412dd53',242:'9745dc17db6aa8b8539901b75771b4a58b989f7ee64349a77dc4bb58ea24c4eb',243:'856a6efa661ab6d41c96251a4773fffb0b64931fec9202df7ace7a017a183597',244:'6778a67c6799e4c81d0de187b9bfbb5bb7e05785c5193823eb71d739ef55ecb3'};
+  const swordData=await page.evaluate(()=>[33,241,242,243,244].map(id=>({id,grid:weaponPattern(id).grid,attributes:Object.fromEntries(Object.entries(weaponGeometry(id).attributes).map(([key,attr])=>[key,Array.from(attr.array)]))})));
+  for(const {id,grid,attributes} of swordData)assert.equal(createHash('sha256').update(JSON.stringify({grid,attributes})).digest('hex'),originalSwords[id],'Original pixel sword unchanged: '+id);
+  console.log('PASS: all five sword shapes, icons and colors exactly match the original pixel models.');
   console.log(await page.evaluate(()=>{
    const checks=[],ok=(v,label)=>{if(!v)throw Error(label);checks.push(label);};window.handCheck=ok;
    clearCombatState();clearExpansionWorld();worldMap.clear();modifiedColumns.clear();columnMinY.clear();chunkMaxY.clear();chunkScanYRanges.clear();heightCache.clear();
@@ -24,7 +30,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
    blocker.style.display=inventoryUI.style.display='none';document.getElementById('toast-msg').style.visibility='hidden';heldItemGroup.visible=true;
    window.equipHand=id=>{currentBlock=id;updateHeldItem3D(id);cancelMining();handCooldown=0;resetHandAnimation();};
    for(const id of [33,241,242,243,244,34,54]){
-    equipHand(id);const rig=heldItemGroup.children[0],mesh=rig.userData.weapon,grip=SWORD_DAMAGE[id]?new THREE.Vector3():new THREE.Vector3((3-7.5)*.065,(7.5-13)*.065,0);
+    equipHand(id);const rig=heldItemGroup.children[0],mesh=rig.userData.weapon,grip=new THREE.Vector3((3-7.5)*.065,(7.5-13)*.065,0);
     mesh.updateMatrix();grip.applyMatrix4(mesh.matrix);ok(grip.length()<1e-8,'Weapon pivots at its grip: '+id);
     rig.updateMatrixWorld(true);ok(rig.userData.gripArm.children.length===1,'Arm is one continuous mesh: '+id);
     ok(new THREE.Box3().setFromObject(rig.userData.gripArm).containsPoint(rig.localToWorld(new THREE.Vector3())),'Fist encloses weapon grip: '+id);
@@ -42,9 +48,10 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
     ok(heldItemGroup.rotation.z===0&&heldItemGroup.rotation.y===yaw,'No wrist roll or animated yaw: '+id);
     ok(Math.abs(tip.x-strike.x)<1e-7&&strike.y<tip.y-.1,'Projected swing stays vertical on screen: '+id);
     if(SWORD_DAMAGE[id]){
-     const blade=heldItemGroup.children[0].userData.weapon,edge=blade.localToWorld(new THREE.Vector3(.07,.35,0)),center=blade.localToWorld(new THREE.Vector3(0,.35,0));
-     ok(edge.y<center.y-.02,'Thin cutting edge leads the downward strike: '+id);
-     ok(Math.abs(heldItemGroup.rotation.x)<1,'Blade never flattens into an almost invisible horizontal strip: '+id);
+     const blade=heldItemGroup.children[0].userData.weapon,edge=blade.localToWorld(new THREE.Vector3((11-7.5)*.065,(7.5-7)*.065,0)),center=blade.localToWorld(new THREE.Vector3((10-7.5)*.065,(7.5-6)*.065,0));
+     ok(edge.y<center.y-.012,'Original pixel blade edge faces the downstroke: '+id);
+     ok(Math.abs(heldItemGroup.rotation.x)<=.4,'Sword tilts modestly instead of flipping toward the camera: '+id);
+     ok(raised.y-heldItemGroup.position.y>.4&&heldItemGroup.position.z===raised.z,'Clear downstroke without pushing the hand toward the camera: '+id);
     }
     updateHandSwing(.25);ok(handSwing===0&&heldItemGroup.rotation.x===0&&heldItemGroup.position.x===.4,'Clean recovery '+id);
    }
@@ -67,7 +74,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
    ok(position.equals(camera.position)&&quaternion.equals(camera.quaternion),'Animation does not change aim or player position');
    for(const scale of [1,.05,.005,2]){
     playerScale=scale;updatePlayerScaleView();equipHand(34);beginHandSwing();updateHandSwing(.15);
-    ok(Math.abs(heldItemGroup.position.z/scale+.9)<1e-8&&heldItemGroup.scale.x===scale,'Motion scales with the player: '+scale);
+    ok(Math.abs(heldItemGroup.position.z/scale+1.05)<1e-8&&heldItemGroup.scale.x===scale,'Motion scales with the player: '+scale);
    }
    playerScale=1;updatePlayerScaleView();equipHand(34);gameMode='survival';playerInventory[34]=1;setGenBlock(0,81,1,3);
    document.dispatchEvent(new MouseEvent('mousedown',{button:0}));ok(miningState?.duration===.28,'Actual pickaxe click starts faster mining duration');
@@ -92,9 +99,16 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
     const point=new THREE.Vector3();
     for(const id of [33,241,242,243,244,34,54,58,57,35,55,56]){
      for(const action of [35,55,56,57].includes(id)?['melee','use']:['melee']){
-      equipHand(id);const mesh=heldItemGroup.children[0].userData.weapon;let maxX=0,maxY=0;
+      equipHand(id);const mesh=heldItemGroup.children[0].userData.weapon,arm=heldItemGroup.children[0].userData.gripArm,armStart=arm.getWorldQuaternion(new THREE.Quaternion());let maxX=0,maxY=0;
       for(let t=0;t<=1;t+=.025){
        startHandAnimation(action);updateHandSwing(t*HAND_SWING_SECONDS);camera.updateMatrixWorld(true);
+       if([33,241,242,243,244,34,54,58].includes(id)){
+        handCheck(armStart.angleTo(arm.getWorldQuaternion(new THREE.Quaternion()))<1e-6,'Forearm does not twist or flip during vertical swings');
+        handCheck(new THREE.Box3().setFromObject(arm).containsPoint(heldItemGroup.getWorldPosition(new THREE.Vector3())),'Fist keeps the grip throughout the swing');
+        const sleeve=arm.children[0],vertices=sleeve.geometry.attributes.position;let bottom=Infinity;
+        for(let i=0;i<vertices.count;i++)bottom=Math.min(bottom,point.fromBufferAttribute(vertices,i).applyMatrix4(sleeve.matrixWorld).project(camera).y);
+        handCheck(bottom< -1,'Forearm continues below the viewport instead of floating: '+id+'/'+innerWidth+'/'+t);
+       }
        const positions=mesh.geometry.attributes.position;
        for(let i=0;i<positions.count;i++){
         point.fromBufferAttribute(positions,i).applyMatrix4(mesh.matrixWorld).project(camera);
