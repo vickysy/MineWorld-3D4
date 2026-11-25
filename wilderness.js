@@ -385,14 +385,16 @@ function updateRemoteAppearance(model,p){
         model.userData.heldId=held;model.userData.held=null;
         if(held){
             let item;
-            if(WEAPON_IDS.has(held))item=buildWeaponModel(held);
+            if(WEAPON_IDS.has(held))item=buildGrippedWeapon(held);
             else if(HOME_ITEMS[held])item=createFurnitureModel(held,{});
             else if(held>=67&&held<=71)item=createModItemModel(held);
             else {
                 const source=materials[held],m=Array.isArray(source)?source.map(v=>v.clone()):source.clone();
                 item=new THREE.Mesh((natureGeometry(held)||boxGeo).clone(),m);
             }
-            item.scale.setScalar(WEAPON_IDS.has(held)?.65:.32);item.position.set(0,-.55,-.18);model.children[3].add(item);model.userData.held=item;
+            if(WEAPON_IDS.has(held))item.position.add(new THREE.Vector3(0,-.62,-.04));
+            else{item.scale.setScalar(.32);item.position.set(0,-.55,-.18);}
+            model.children[3].add(item);model.userData.held=item;
         }
     }
     model.userData.form=mech?.form||'human';

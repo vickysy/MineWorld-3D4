@@ -21,8 +21,11 @@ async function assertScenePixels(page) {
         for(const page of [host,guest]) {
             page.setDefaultNavigationTimeout(120000);
             page.on('pageerror',e=>errors.push(e.message));
+            page.on('console',m=>{if(m.type()==='warning'||m.type()==='error')console.log(page===host?'HOST':'GUEST',m.text());});
             await page.goto(url);await page.waitForFunction(()=>expansionReady);
         }
+        const skinFor=async(page,color)=>page.evaluate(color=>{const skin=defaultPlayerSkin(),c=skin.getContext('2d');c.fillStyle=color;c.fillRect(...skinFaceRect('body','front'));savePlayerSkin(skin);return localSkinPacket;},color);
+        const hostSkin=await skinFor(host,'#d23d4c'),guestSkin=await skinFor(guest,'#3979d6');
         await host.getByRole('button',{name:'Creative',exact:true}).click();
         await host.getByRole('button',{name:'Moon',exact:true}).click();
         await host.locator('#difficulty-select').selectOption('peaceful');
@@ -43,7 +46,8 @@ async function assertScenePixels(page) {
         assert(await guest.evaluate(()=>!isGameStarted&&!multiplayerRoom.worldReady));
         await host.locator('#enter-room-btn').click();
         await host.waitForFunction(()=>isGameStarted&&multiplayerRoom?.entered);
-        await guest.waitForFunction(()=>multiplayerRoom?.worldReady,{},{timeout:60000});
+        try{await guest.waitForFunction(()=>multiplayerRoom?.worldReady,{},{timeout:90000});}
+        catch(error){for(const page of [host,guest])console.log(await page.evaluate(()=>({status:document.getElementById('multiplayer-status').textContent,phase:multiplayerRoom?.phase,worldReady:multiplayerRoom?.worldReady,applying:multiplayerRoom?.applying,transfer:multiplayerRoom?.transfer,loading:worldLoading,started:isGameStarted})));console.log('PAGE ERRORS',errors);throw error;}
         const world=await host.evaluate(()=>({seed,terrain:selectedTerrain,mode:gameMode,spawn:worldSpawnPoint,position:camera.position.toArray()}));
         const joined=await guest.evaluate(()=>({seed,terrain:selectedTerrain,mode:gameMode,spawn:worldSpawnPoint,position:camera.position.toArray()}));
         assert.equal(joined.seed,world.seed);assert.equal(joined.terrain,'moon');assert.equal(joined.mode,'creative');assert.deepEqual(joined.spawn,world.spawn);
@@ -51,6 +55,12 @@ async function assertScenePixels(page) {
         await guest.locator('#enter-room-btn').click();await guest.waitForFunction(()=>multiplayerRoom?.entered&&controls.isLocked);
         await host.waitForFunction(()=>Object.keys(remotePlayers).length===1);
         await guest.waitForFunction(()=>Object.keys(remotePlayers).length===1);
+        await host.waitForFunction(pixels=>Object.values(remotePlayers)[0]?.userData.skinPixels===pixels,guestSkin);
+        await guest.waitForFunction(pixels=>Object.values(remotePlayers)[0]?.userData.skinPixels===pixels,hostSkin);
+        assert.equal(await guest.evaluate(()=>localSkinPacket),guestSkin,'Host skin never overwrites guest personal skin');
+        const changedSkin=await skinFor(host,'#e6bc39');
+        await guest.waitForFunction(pixels=>Object.values(remotePlayers)[0]?.userData.skinPixels===pixels,changedSkin);
+        console.log('PASS: Different player skins synchronize over real WebRTC and later changes refresh the remote avatar.');
         console.log('PASS: Actual public signaling + WebRTC; Create Room, waiting guest, Enter Room, shared seed/terrain/mode/spawn and two visible players.');
 
         assert.equal(await guest.evaluate(()=>gameDifficulty),'peaceful');

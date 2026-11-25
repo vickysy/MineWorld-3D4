@@ -101,7 +101,7 @@ function newRoomSession(role,code) {
         setMultiplayerStatus('Multiplayer is unavailable in this browser.');return null;
     }
     const r={role,code,phase:'connecting',entered:false,worldReady:false,peer:null,connections:new Map(),
-        timers:new Set(),dirty:new Map(),positions:new Map(),applying:false,seq:0,nextTick:0,transfer:null};
+        timers:new Set(),dirty:new Map(),positions:new Map(),skins:new Map(),applying:false,seq:0,nextTick:0,transfer:null};
     multiplayerRoom=r;updateRoomButtons();
     r.deadline=roomTimer(r,()=>roomFailure(r,'Connection timed out. Check your network and try again.'));
     return r;
@@ -192,10 +192,10 @@ function attachRoomConnection(r,conn) {
             else receiveRoomHost(r,entry,packet);
         } catch {if(r.role==='guest')roomFailure(r,'World sync failed. Please rejoin the room.');else conn.close();}
     });
-    conn.on('error',()=>{if(r.role==='guest')roomFailure(r,'Could not connect to the host. Check the code and your network.');else conn.close();});
+    conn.on('error',error=>{console.warn('Room data connection error:',error);if(r.role==='guest')roomFailure(r,'Could not connect to the host. Check the code and your network.');else conn.close();});
     conn.on('close',()=>{
         if(multiplayerRoom!==r)return;
-        r.connections.delete(conn.peer);r.positions.delete(conn.peer);
+        r.connections.delete(conn.peer);r.positions.delete(conn.peer);r.skins.delete(conn.peer);r.skinTransfers?.delete(conn.peer);
         disposeModModel(remotePlayers[conn.peer]);delete remotePlayers[conn.peer];
         if(r.role==='guest')roomFailure(r,'Host disconnected. Your current world is still available in single player.');
         else {for(const e of r.connections.values())if(e.ready)sendRoomPacket(e.conn,{type:'leave',id:conn.peer});showToast('A player left.');}
@@ -227,6 +227,8 @@ function validateRoomPosition(p) {
 function displayRoomPlayer(id,p) {
     if(id===multiplayerRoom?.peer.id||!validateRoomPosition(p))return;
     const model=remotePlayers[id]||(remotePlayers[id]=createRemotePlayer());
+    const skin=multiplayerRoom?.skins?.get(id);
+    if(skin&&model.userData.skinPixels!==skin){applyAvatarSkin(model,decodeSkinPixels(skin));model.userData.skinPixels=skin;}
     const target=new THREE.Vector3(p.x,p.y-0.75*p.scale,p.z),last=model.userData.pose;
     if(!last||last.dimension!==p.dimension||model.position.distanceToSquared(target)>64*p.scale*p.scale){
         model.position.copy(target);model.rotation.y=p.ry;
@@ -277,9 +279,16 @@ function receiveRoomGuest(r,entry,p) {
         entry.ready=true;entry.sending=false;
         for(const patch of entry.pending)sendRoomPacket(entry.conn,patch);entry.pending=[];
         for(const [id,pos] of r.positions)sendRoomPacket(entry.conn,{type:'pos',id,...pos});
+        sendLocalRoomSkin(r,entry);
+        for(const [id,pixels] of r.skins)sendSkinPackets(entry.conn,id,pixels);
         showToast('A player joined.');return;
     }
     if(!entry.ready||!r.worldReady)return;
+    if(p.type==='skin'){
+        if(p.part===0){const now=performance.now();if(now-(entry.skinTime??-2000)<1000)return;entry.skinTime=now;}
+        if(receiveRoomSkinPart(r,entry.conn.peer,p))for(const other of r.connections.values())if(other!==entry&&other.ready)sendSkinPackets(other.conn,entry.conn.peer,r.skins.get(entry.conn.peer));
+        return;
+    }
     if(p.type==='chest-request'){receiveChestRequest(r,entry,p);return;}
     if(p.type==='ecology-request'){
         const player=r.positions.get(entry.conn.peer),now=performance.now();
@@ -329,6 +338,7 @@ function receiveRoomGuest(r,entry,p) {
 }
 
 function receiveRoomHost(r,entry,p) {
+    if(p.type==='skin'&&r.worldReady){receiveRoomSkinPart(r,p.id,p);return;}
     if(p.type==='chest-reply'&&r.worldReady){receiveChestReply(p);return;}
     if(p.type==='weather'&&r.worldReady&&Number.isFinite(p.time)&&p.time>=0){weatherClock=p.time;restoreWeatherOverride(p.override);return;}
     if(p.type==='lock-auth-ok'){r.lockAuthenticated=true;return;}
@@ -393,7 +403,7 @@ function receiveRoomHost(r,entry,p) {
             startBurning(...p.at,true);
         }
     } else if(p.type==='pos'&&typeof p.id==='string')displayRoomPlayer(p.id,p);
-    else if(p.type==='leave'&&typeof p.id==='string'){disposeModModel(remotePlayers[p.id]);delete remotePlayers[p.id];}
+    else if(p.type==='leave'&&typeof p.id==='string'){r.skins.delete(p.id);disposeModModel(remotePlayers[p.id]);delete remotePlayers[p.id];}
 }
 
 function queueRoomBlockChange(x,y,z) {
@@ -406,6 +416,7 @@ function updateMultiplayer(now=performance.now()) {
     retryChestTransfers(r);
     interpolateRoomPlayers(now);
     if(now<r.nextTick)return;r.nextTick=now+100;
+    for(const entry of r.connections.values())if((entry.ready||r.role==='guest')&&poseQueueFree(entry.conn))sendLocalRoomSkin(r,entry);
     if(r.role==='host'&&now>=(r.nextWeather||0)){
         r.nextWeather=now+5000;for(const entry of r.connections.values())if(entry.ready)sendRoomPacket(entry.conn,{type:'weather',time:weatherClock,override:weatherOverride});
     }

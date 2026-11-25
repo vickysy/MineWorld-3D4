@@ -129,19 +129,7 @@ function buildVillager(){
     rememberOriginalMaterials(group);return group;
 }
 function buildPlayerAvatar(){
-    const group=new THREE.Group(),skin=skinMaterial('player-skin',['#cb9a77','#d0a07e','#c99775']);
-    const face=skinMaterial('player-face',['#ce9d79','#d3a27e'],r=>{r(0,0,16,4,'#49382b');r(0,4,3,3,'#49382b');r(12,4,4,1,'#49382b');r(3,7,4,2,'#f5f1e5');r(9,7,4,2,'#f5f1e5');r(5,7,2,2,'#395b60');r(9,7,2,2,'#395b60');r(7,10,2,2,'#b27c5e');r(5,13,6,1,'#8c5c49');});
-    const hair=skinMaterial('player-hair',['#47372a','#4f3e30','#554232']);
-    const shirt=skinMaterial('player-jacket',['#397d86','#3d838b','#438a92'],r=>{r(7,0,2,16,'#264e58');r(3,7,3,3,'#2d6671');r(11,8,1,1,'#dfc58b');r(1,14,14,2,'#2b5c64');});
-    skinnedPart(group,.5,.5,.5,[skin,skin,hair,skin,hair,face],0,.6,0,'head');
-    skinnedPart(group,.5,.7,.29,shirt,0,0,0,'body');
-    for(const [x,name] of [[.38,'leftArm'],[-.38,'rightArm']]){
-        const joint=new THREE.Group();joint.position.set(x,.32,0);group.add(joint);group.userData[name]=joint;
-        skinnedPart(joint,.23,.48,.25,shirt.clone(),0,-.24,0);skinnedPart(joint,.23,.22,.25,skin.clone(),0,-.59,0);
-    }
-    const pants=skinMaterial('player-pants',['#414e67','#45536d','#3c4962']);
-    jointLeg(group,.135,-.35,0,.24,.65,pants,'leftLeg',0x303737);jointLeg(group,-.135,-.35,0,.24,.65,pants,'rightLeg',0x303737);
-    rememberOriginalMaterials(group);return group;
+    return buildSkinAvatar();
 }
 function buildSpikeTrap(){
     const group=new THREE.Group();addModelBox(group,.98,.12,.98,0x596064,0,-.44,0);

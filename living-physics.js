@@ -1,9 +1,13 @@
 // Mob coordinates use feet at y - 0.5. Test full volumes, including ceilings.
 function mobBodyBlocked(pos,height=1.8,radius=.35){
     const lo=new THREE.Vector3(pos.x-radius,pos.y-.5+1e-5,pos.z-radius),hi=new THREE.Vector3(pos.x+radius,pos.y-.5+height,pos.z+radius);
-    for(let x=Math.floor(lo.x+.5);x<=Math.floor(hi.x+.5-1e-5);x++)for(let y=Math.floor(lo.y+.5);y<=Math.floor(hi.y+.5-1e-5);y++)for(let z=Math.floor(lo.z+.5);z<=Math.floor(hi.z+.5-1e-5);z++){
+    const bottom=Math.floor(lo.y+.5);
+    for(let x=Math.floor(lo.x+.5);x<=Math.floor(hi.x+.5-1e-5);x++)for(let y=bottom-1;y<=Math.floor(hi.y+.5-1e-5);y++)for(let z=Math.floor(lo.z+.5);z<=Math.floor(hi.z+.5-1e-5);z++){
         if(!isSolid(x,y,z))continue;const id=getBlock(x,y,z);
-        const box=isTrapdoor(id)?trapBounds(x-.5,y-.5,z-.5,id):id===SNOW_LAYER_ID?new THREE.Box3(new THREE.Vector3(x-.5,y-.5,z-.5),new THREE.Vector3(x+.5,y-.5+SNOW_LAYER_HEIGHT,z+.5)):null;
+        // Railings are 1.5 blocks high for mobs, so a one-block step cannot escape a pen.
+        if(y<bottom&&id!==98)continue;
+        const box=id===98?new THREE.Box3(new THREE.Vector3(x-.5,y-.5,z-.5),new THREE.Vector3(x+.5,y+1,z+.5)):
+            isTrapdoor(id)?trapBounds(x-.5,y-.5,z-.5,id):id===SNOW_LAYER_ID?new THREE.Box3(new THREE.Vector3(x-.5,y-.5,z-.5),new THREE.Vector3(x+.5,y-.5+SNOW_LAYER_HEIGHT,z+.5)):null;
         if(!box||lo.x<box.max.x&&hi.x>box.min.x&&lo.y<box.max.y&&hi.y>box.min.y&&lo.z<box.max.z&&hi.z>box.min.z)return true;
     }return false;
 }

@@ -10,10 +10,10 @@ let handSwing=0,handCooldown=0,handSwingItem=0,handSwingAction='melee';
 const handRest=[0,0,0,0,0,0,0],handReturn=[1,0,0,0,0,0,0];
 // Time, grip translation (x/y/z), then wrist pitch/yaw/roll in camera space.
 const HAND_SWING_POSES={
-    sword:[handRest,[.16,.03,.12,0,.055,0,.02],[.44,-.23,-.04,-.15,-1.25,.16,.95],[.64,-.29,-.12,-.07,-1.1,.08,1.15],handReturn],
-    pickaxe:[handRest,[.17,.02,.09,0,.07,0,.02],[.43,-.16,-.02,-.16,-1.45,.12,.6],[.62,-.2,-.09,-.08,-1.3,.08,.72],handReturn],
-    axe:[handRest,[.2,.04,.14,0,.075,0,.02],[.46,-.21,-.09,-.15,-1.5,.14,.85],[.65,-.25,-.15,-.06,-1.25,.08,1],handReturn],
-    mace:[handRest,[.22,.01,.17,0,.0875,0,.02],[.47,-.1,-.14,-.15,-1.6,.04,.35],[.66,-.13,-.18,-.04,-1.3,0,.4],handReturn],
+    sword:[handRest,[.16,0,.12,0,.07,0,0],[.44,0,-.08,0,-1.15,0,0],[.64,0,-.1,0,-1.4,0,0],handReturn],
+    pickaxe:[handRest,[.17,0,.09,0,.07,0,0],[.43,0,-.07,0,-1.25,0,0],[.62,0,-.1,0,-1.35,0,0],handReturn],
+    axe:[handRest,[.2,0,.14,0,.075,0,0],[.46,0,-.1,0,-1.25,0,0],[.65,0,-.11,0,-1.45,0,0],handReturn],
+    mace:[handRest,[.22,0,.17,0,.08,0,0],[.47,0,-.12,0,-1.3,0,0],[.66,0,-.11,0,-1.45,0,0],handReturn],
     punch:[handRest,[.12,.02,-.015,.035,.12,-.04,-.08],[.42,-.19,.14,-.28,-.8,.12,.3],[.58,-.21,.1,-.24,-.7,.1,.28],handReturn],
     thrust:[handRest,[.18,.02,.04,.05,.1,0,-.05],[.43,-.15,.07,-.34,-1.2,.06,.16],[.6,-.16,.02,-.28,-1.1,.04,.18],handReturn],
     tap:[handRest,[.16,.02,.05,.02,.1,-.04,-.06],[.44,-.13,.02,-.16,-.5,.08,.25],[.62,-.16,-.04,-.1,-.4,.04,.3],handReturn],
@@ -69,22 +69,23 @@ function weaponGeometry(id){
 function buildWeaponModel(id){
     const mesh=new THREE.Mesh(weaponGeometry(id).clone(),new THREE.MeshLambertMaterial({vertexColors:true}));mesh.userData.modItem=true;mesh.userData.weaponId=id;return mesh;
 }
-function buildFirstPersonWeapon(id){
+function buildGrippedWeapon(id){
     const mesh=buildWeaponModel(id);
     const diagonal=!!SWORD_DAMAGE[id]||id===34||id===54;
     const grip=diagonal?[3,13]:id===35?[4,11]:id===55?[10,10]:id===57||id===58?[7.5,14]:[7.5,12];
-    const size=id===35?.55:.68;
-    mesh.scale.setScalar(size);mesh.rotation.set(.08,.2,diagonal?.28:-.12);
+    const size=id===35?.52:SWORD_DAMAGE[id]?.62:.68;
+    mesh.scale.setScalar(size);mesh.rotation.set(0,0,diagonal?Math.PI/4:0);
     // Place the handle at the animation origin, not the middle of the blade.
     mesh.position.set((grip[0]-7.5)*.065,(7.5-grip[1])*.065,0)
         .multiplyScalar(-size).applyEuler(mesh.rotation);
     return mesh;
 }
+function buildFirstPersonWeapon(id){
+    const group=buildFirstPersonRig(false),weapon=buildGrippedWeapon(id);
+    group.userData.weaponId=id;group.userData.weapon=weapon;group.add(weapon);return group;
+}
 function buildFirstPersonHand(){
-    const hand=new THREE.Group();hand.userData.modItem=true;hand.userData.emptyHand=true;
-    skinnedPart(hand,.19,.32,.22,skinMaterial('player-jacket',['#397d86','#3d838b']),0,-.16,0);
-    skinnedPart(hand,.19,.25,.22,skinMaterial('player-skin',['#cb9a77','#d0a07e']),0,.12,0);
-    hand.rotation.set(-.42,0,-.15);hand.position.set(.02,-.1,.08);return hand;
+    return buildFirstPersonRig();
 }
 function handSwingProfile(id,action){
     if(action==='use')return id===57?'thrust':id===35||id===56?'recoil':'release';
@@ -101,10 +102,16 @@ function sampleHandPose(profile,progress,out=handPose){
 }
 function applyHandPose(pose){
     const viewScale=Math.min(1,Math.max(.3,camera.aspect/1.1));
+    const x=Math.min(.4,camera.aspect*.4)-(1-viewScale)*.23;
+    const id=heldItemGroup.userData.itemId,vertical=!!SWORD_DAMAGE[id]||[34,54,58].includes(id);
     heldItemGroup.scale.setScalar(playerScale*viewScale);
-    heldItemGroup.position.set((Math.min(.4,camera.aspect*.4)-(1-viewScale)*.23+pose[0]*viewScale)*playerScale,
+    heldItemGroup.position.set((x+pose[0]*viewScale)*playerScale,
         (-.4+pose[1]*viewScale)*playerScale,(-.8+pose[2]*viewScale)*playerScale);
-    heldItemGroup.rotation.set(pose[3],pose[4],pose[5]);
+    // Align the vertical swing plane with the eye so perspective does not turn it into a diagonal slash.
+    heldItemGroup.rotation.order=vertical?'YXZ':'XYZ';
+    heldItemGroup.rotation.set(pose[3],pose[4]+(vertical?Math.atan2(-x,.8):0),pose[5]);
+    const arm=heldItemGroup.children[0]?.userData.gripArm;
+    if(arm)arm.rotation.x=-pose[3]-.32;
 }
 function resetHandAnimation(){handSwing=0;handPose.fill(0);applyHandPose(handPose);}
 function startHandAnimation(action='melee'){handSwing=HAND_SWING_SECONDS;handSwingItem=currentBlock;handSwingAction=action;}

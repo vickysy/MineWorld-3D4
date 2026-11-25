@@ -1,0 +1,48 @@
+#skin-menu-button { display:inline-flex; align-items:center; gap:8px; min-height:38px; padding:7px 14px; margin-top:14px; background:#34473e; }
+#skin-editor { box-sizing:border-box; width:min(920px,calc(100vw - 24px)); max-height:calc(100dvh - 24px); padding:0; border:1px solid #657d72; border-radius:6px; background:#f3f5f2; color:#20362c; font:14px Arial,sans-serif; overflow:auto; letter-spacing:0; }
+#skin-editor::backdrop { background:rgba(12,25,20,.68); }
+#skin-editor header,#skin-editor footer { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 20px; background:#f3f5f2; }
+#skin-editor header { border-bottom:1px solid #cad6cd; }
+#skin-editor h2 { margin:0; font-size:22px; }
+#skin-editor footer { position:sticky; bottom:0; border-top:1px solid #cad6cd; }
+#skin-editor button,#skin-editor select,#skin-editor input { font:inherit; box-sizing:border-box; border-radius:4px; }
+#skin-editor button { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:36px; padding:7px 10px; border:1px solid #9aada0; background:#fff; color:#20362c; cursor:pointer; }
+#skin-editor button:hover { background:#e5ece6; }
+#skin-editor button:focus-visible,#skin-editor select:focus-visible,#skin-editor canvas:focus-visible { outline:3px solid #c47446; outline-offset:2px; }
+#skin-editor button[aria-pressed=true] { background:#d2e3d3; border-color:#426b4f; }
+#skin-editor button:disabled { opacity:.4; cursor:default; }
+#skin-editor img { width:18px; height:18px; }
+#skin-editor .skin-icon-button { width:36px; height:36px; padding:7px; flex:none; }
+#skin-save { background:#346d47!important; color:#fff!important; flex:none; min-width:108px; }
+#skin-status { font-size:12px; line-height:1.5; color:#93472f; overflow-wrap:anywhere; }
+.skin-workspace { display:grid; grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr); }
+.skin-model-section { min-width:0; background:#c5d1ca; display:flex; flex-direction:column; }
+#skin-preview { flex:1; min-height:360px; width:100%; }
+#skin-preview canvas { width:100%; height:100%; display:block; touch-action:none; }
+.skin-rotation { display:flex; align-items:center; gap:12px; padding:16px 20px; }
+.skin-rotation input { min-width:0; width:100%; accent-color:#427c53; }
+.skin-edit-section { padding:18px; min-width:0; }
+.skin-file-actions { display:flex; align-items:center; flex-wrap:wrap; gap:7px; margin-bottom:14px; }
+.skin-selectors { display:grid; grid-template-columns:1.2fr 1fr 1fr; gap:8px; margin-bottom:12px; }
+.skin-selectors label { display:flex; flex-direction:column; gap:5px; min-width:0; font-size:12px; }
+.skin-selectors select { width:100%; min-width:0; height:34px; border:1px solid #a6b6aa; background:#fff; color:#20362c; padding:3px; }
+.skin-paint-tools { display:flex; flex-wrap:wrap; align-items:center; gap:5px; }
+.skin-paint-tools label { font-size:12px; display:flex; align-items:center; gap:4px; }
+#skin-brush { width:42px; height:36px; border:1px solid #a6b6aa; padding:3px; }
+#skin-color { width:38px; height:36px; padding:2px; border:1px solid #a6b6aa; background:white; cursor:pointer; }
+#skin-swatches { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0; }
+#skin-editor .skin-swatch { width:22px; height:22px; min-height:22px; padding:0; border:1px solid #84958a; border-radius:2px; }
+.skin-paint-surface { display:grid; place-items:center; min-height:288px; background:#e2e8e2; }
+#skin-pixels { display:block; image-rendering:pixelated; width:auto; height:auto; max-width:100%; max-height:288px; cursor:crosshair; touch-action:none; }
+.skin-history { display:flex; gap:6px; margin-top:10px; }
+#skin-photo-preview { display:block; width:min(256px,100%); aspect-ratio:1; margin:0 auto 14px; }
+#skin-photo-panel label { display:grid; grid-template-columns:80px 1fr; align-items:center; gap:8px; margin:12px 0; }
+#skin-photo-panel input { width:100%; min-width:0; accent-color:#427c53; }
+#skin-editor [hidden] { display:none!important; }
+@media(max-width:650px) {
+    .skin-workspace { grid-template-columns:minmax(0,1fr); }
+    #skin-preview { min-height:230px; height:230px; flex:none; }
+    .skin-rotation { padding:8px 16px; }
+    .skin-edit-section { padding:14px; }
+    #skin-editor header,#skin-editor footer { padding:10px 14px; }
+}

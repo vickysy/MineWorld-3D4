@@ -96,6 +96,7 @@ function addHorseSaddle(mesh){
 function mountHorse(horse){
     if(ridingHorse||drivingCar||seatedAt||ridingMinecart||activeMech||playerScale!==1||horse.dying)return false;
     if(mobBodyBlocked(horse.mesh.position,3,.95)){showToast('Not enough headroom to ride.');return false;}
+    releaseAnimalLead(horse,true);
     horseReturnPosition=camera.position.clone();ridingHorse=horse;horse.eggId=HORSE_EGG;horse.vx=horse.vz=0;horse.panicTime=0;resetPlayerFlight();velocity.set(0,0,0);
     addHorseSaddle(horse.mesh);
     camera.position.copy(horse.mesh.position).add(new THREE.Vector3(0,2.1,0));showToast('Horse');return true;

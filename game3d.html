@@ -301,6 +301,7 @@
                     <button id="start-game-button" onclick="startGameFromMenu()"><img src="assets/ui/play.svg" alt="">Start Game</button>
                     <button class="load-save-button" onclick="document.getElementById('load-file').click()"><img src="assets/ui/folder-open.svg" alt="">Load Save</button>
                 </div>
+                <button id="skin-menu-button" onclick="openSkinEditor()"><img src="assets/ui/shirt.svg" alt="">Your Skin</button>
             </section>
             <input type="file" id="load-file" accept=".json" onchange="loadSaveFile(event)" style="display:none">
             <footer class="menu-footer"><img src="assets/ui/mountain-snow.svg" alt="">Snowy Highlands</footer>
@@ -381,17 +382,18 @@
     </div>
     <div id="food-progress" hidden role="status"><span>Eating</span><progress max="1" value="0"></progress></div>
     <link rel="stylesheet" href="start-menu.css?v=20261124-menu">
+    <link rel="stylesheet" href="skin-editor.css?v=20261125-skins">
     <script src="three-r128.min.js"></script>
     <script src="three-pointer-lock-r128.js"></script>
     <script src="three-reflector-r128.js"></script>
     <link rel="stylesheet" href="inventory.css?v=20261123-treasure">
-    <script src="world-expansion.js?v=20261124-polish"></script>
+    <script src="world-expansion.js?v=20261125-leads"></script>
     <script src="home-city.js?v=20261124-adventure"></script>
     <script src="kitchen-home.js?v=20261020-connected"></script>
     <script src="city-life.js?v=end-islands-1"></script>
     <script src="surveillance.js?v=20261018-tools"></script>
     <script src="peerjs-1.5.5.min.js"></script>
-    <script src="multiplayer.js?v=20261124-menu"></script>
+    <script src="multiplayer.js?v=20261125-skins"></script>
     <script src="thermal-world.js?v=20261124-adventure"></script>
     <script src="launchers.js?v=20261110-repairs"></script>
     <script src="construction.js?v=20261118-outdoors"></script>
@@ -400,7 +402,7 @@
     <script src="cannons.js?v=20261019-closed-gates"></script>
     <script src="rail-vehicles.js?v=20261020-connected"></script>
     <script src="connected-home.js?v=20261020-connected"></script>
-    <script src="wilderness.js?v=20261124-menu"></script>
+    <script src="wilderness.js?v=20261125-skins"></script>
     <script src="ecology.js?v=20261123-treasure"></script>
     <script src="outdoors.js?v=20261123-snow"></script>
     <script src="mining-cracks.js?v=20261123-cracks"></script>
@@ -408,10 +410,13 @@
     <script src="creative-inventory.js?v=20261124-adventure"></script>
     <script src="world-audio-data.js?v=20261124-menu"></script>
     <script src="world-audio.js?v=20261124-menu"></script>
-    <script src="voxel-style.js?v=20261124-menu"></script>
-    <script src="living-physics.js?v=20261124-adventure"></script>
-    <script src="adventure-items.js?v=20261125-swing"></script>
-    <script src="adventure-mobs.js?v=20261124-menu"></script>
+    <script src="voxel-style.js?v=20261125-skins"></script>
+    <script src="player-skins.js?v=20261125-skins"></script>
+    <script src="skin-editor.js?v=20261125-skins"></script>
+    <script src="living-physics.js?v=20261125-leads"></script>
+    <script src="adventure-items.js?v=20261125-vertical-skins"></script>
+    <script src="adventure-mobs.js?v=20261125-leads"></script>
+    <script src="animal-leads.js?v=20261125-leads"></script>
     <script src="desert-temple.js?v=20261124-polish"></script>
     <script src="village-life.js?v=20261118-outdoors"></script>
     <script src="terrain-horizon.js?v=end-islands-1"></script>
@@ -587,6 +592,7 @@
             }
             if (blockId === 0) {heldItemGroup.add(buildFirstPersonHand());return;}
             if(WEAPON_IDS.has(blockId)){heldItemGroup.add(buildFirstPersonWeapon(blockId));return;}
+            if(blockId===LEAD_ID){heldItemGroup.add(buildHeldLead());return;}
             if(blockId===FISHING_ROD){
                 const rod=new THREE.Mesh(natureGeometry(blockId),materials[blockId]);rod.position.y=.18;rod.rotation.z=-.2;heldItemGroup.add(rod);return;
             }
@@ -1576,7 +1582,8 @@
                 creativeFlying: creativeFlying,
                 expansion: saveWorldExpansion(),
                 activeMech: activeMech,
-                spawnedMobs: [...villagers,...creepers,...zombies,...animals,...adventureMobs].filter(m=>m.eggId && !m.dying).map(m=>({
+                farmAnimals: saveFarmAnimals(),
+                spawnedMobs: [...villagers,...creepers,...zombies,...animals,...adventureMobs].filter(m=>m.eggId && !m.dying && !m.farmAnimal).map(m=>({
                     id:m.eggId,x:m.mesh.position.x,y:m.mesh.position.y,z:m.mesh.position.z,hp:m.hp
                 })),
                 playerInventory: playerInventory,
@@ -1691,6 +1698,7 @@
                             if(entity)entity.hp=Math.max(1,Math.min(entity.hp,Number(mob.hp)||entity.hp));
                         }
                     }
+                    restoreFarmAnimals(data.farmAnimals,!onLoaded);
                     updatePlayerScaleView();
                     resolveTinyOverlap();
                     if (data.modifiedColumns) data.modifiedColumns.forEach(v => modifiedColumns.add(v));
@@ -5156,7 +5164,7 @@
             if (!model) return;
             scene.remove(model);
             model.userData.screen?.texture.dispose();
-            model.traverse(obj=>{if(obj.isMesh) {obj.getRenderTarget?.().dispose();obj.geometry.dispose();for(const mat of (Array.isArray(obj.material)?obj.material:[obj.material]))mat.dispose();}});
+            model.traverse(obj=>{obj.userData.ownedTextures?.forEach(texture=>texture.dispose());if(obj.isMesh) {obj.getRenderTarget?.().dispose();obj.geometry.dispose();for(const mat of (Array.isArray(obj.material)?obj.material:[obj.material]))mat.dispose();}});
         }
 
         function updateMechHUD() {
@@ -5774,6 +5782,7 @@
                 let a = animals[i];
                 if (updateMobDamageState(a, delta)) {
                     if(ridingHorse===a)dismountHorse(true);
+                    releaseAnimalLead(a);
                     dropAnimalMeat(a);
                     disposeModModel(a.mesh);
                     animals.splice(i, 1);
@@ -5784,8 +5793,8 @@
                 if(a.dying||ridingHorse===a)continue;
 
                 a.timer -= delta;
-                const fleeing=updateAnimalPanic(a,delta);
-                if (!fleeing && a.timer <= 0) {
+                const led=updateLedAnimal(a,delta),fleeing=led?false:updateAnimalPanic(a,delta);
+                if (!led && !fleeing && a.timer <= 0) {
                     chooseAnimalDirection(a);
                 }
                 if(animalWouldEnterWater(a.mesh.position.x+a.vx*delta,a.mesh.position.y,a.mesh.position.z+a.vz*delta)){a.vx=0;a.vz=0;a.timer=.2;}
@@ -6083,7 +6092,7 @@
                 const target=e.button===2?expansionRay():null;
                 if(!(currentBlock===39&&target?.type===13&&!isTinyMode())){startEating(currentBlock,e.button);return;}
             }
-            if(isToolItem(currentBlock)&&!hasInventoryItem(currentBlock)){
+            if(isToolItem(currentBlock)&&currentBlock!==LEAD_ID&&!hasInventoryItem(currentBlock)){
                 if(e.button===2&&!e.shiftKey){
                     const hit=expansionRay();
                     if(hit?.type===12){openWorkbench(hit);return;}
@@ -6091,6 +6100,7 @@
                 }
                 showToast('Craft this tool first.');return;
             }
+            if(handleLeadClick(e))return;
             if(handleAdventureClick(e))return;
             if(handleTreasureClick(e))return;
             if(fishingClick(e))return;
@@ -7243,6 +7253,7 @@
             updateDroppedItems(delta);
             updateExplosionParticles(delta);
             updateCombatEffects(delta);
+            updateAnimalLeadVisuals();
             updateWorldExpansion(delta);
             updateWilderness(delta);
             updateEcology(Math.min(frameSeconds,1));
@@ -7273,10 +7284,12 @@
         initTreasureWorld();
         initVoxelStyle();
         initAdventureItems();
+        initAnimalLeads();
         initSoundControls();
         initCreativeInventory();
         initMultiplayer();
         initModIcons();
+        initSkinEditor();
         initStartMenu();
         animate();
     </script>
