@@ -386,7 +386,7 @@
     <script src="three-r128.min.js"></script>
     <script src="three-pointer-lock-r128.js"></script>
     <script src="three-reflector-r128.js"></script>
-    <link rel="stylesheet" href="inventory.css?v=20261123-treasure">
+    <link rel="stylesheet" href="inventory.css?v=20261125-forge">
     <script src="world-expansion.js?v=20261125-leads"></script>
     <script src="home-city.js?v=20261124-adventure"></script>
     <script src="kitchen-home.js?v=20261020-connected"></script>
@@ -402,19 +402,19 @@
     <script src="cannons.js?v=20261019-closed-gates"></script>
     <script src="rail-vehicles.js?v=20261020-connected"></script>
     <script src="connected-home.js?v=20261020-connected"></script>
-    <script src="wilderness.js?v=20261125-skins"></script>
+    <script src="wilderness.js?v=20261125-forge"></script>
     <script src="ecology.js?v=20261123-treasure"></script>
     <script src="outdoors.js?v=20261123-snow"></script>
     <script src="mining-cracks.js?v=20261123-cracks"></script>
-    <script src="treasure-world.js?v=20261124-polish"></script>
-    <script src="creative-inventory.js?v=20261124-adventure"></script>
+    <script src="treasure-world.js?v=20261125-forge"></script>
+    <script src="creative-inventory.js?v=20261125-forge"></script>
     <script src="world-audio-data.js?v=20261124-menu"></script>
     <script src="world-audio.js?v=20261124-menu"></script>
     <script src="voxel-style.js?v=20261125-skins"></script>
-    <script src="player-skins.js?v=20261125-skins"></script>
+    <script src="player-skins.js?v=20261125-forge"></script>
     <script src="skin-editor.js?v=20261125-skins"></script>
     <script src="living-physics.js?v=20261125-leads"></script>
-    <script src="adventure-items.js?v=20261125-vertical-skins"></script>
+    <script src="adventure-items.js?v=20261125-edge"></script>
     <script src="adventure-mobs.js?v=20261125-leads"></script>
     <script src="animal-leads.js?v=20261125-leads"></script>
     <script src="desert-temple.js?v=20261124-polish"></script>
@@ -2654,18 +2654,18 @@
 
         function getOreBlock(x, y, z, surfaceHeight, richMoon = false) {
             const depth = surfaceHeight - y;
-            if (depth < 4) return 0;
-
+            if (depth < 3) return 0;
             const r = hash3(x, y, z, 17.7);
-            const sapphireChance = richMoon ? 0.05 : 0.04;
-            const goldChance = richMoon ? 0.14 : 0.11;
-            const ironChance = richMoon ? 0.23 : 0.18;
-
-            if (depth > 10 && r < sapphireChance) return 38; // 蓝宝石矿
-            if (depth > 8 && r > .3 && r < .315) return EMERALD_ORE;
-            if (depth > 5 && r > .32 && r < .35) return SILVER_ORE;
-            if (depth > 5 && r < goldChance) return 37;     // 金矿
-            if (r < ironChance) return 36;                  // 铁矿
+            // A shared vein seed groups nearby ore; per-cell variation breaks up the edges.
+            const vein = hash3(Math.floor(x / 3), Math.floor(y / 3), Math.floor(z / 3), 59.1);
+            if (vein < (richMoon ? .52 : .44) && r < .82) {
+                if (depth >= 9 && vein < .07) return 38;
+                if (depth >= 8 && vein < .095) return EMERALD_ORE;
+                if (depth >= 5 && vein < .15) return SILVER_ORE;
+                if (depth >= 5 && vein < .25) return 37;
+                return 36;
+            }
+            if (r < .12) return 36;
             return 0;
         }
         
@@ -5859,8 +5859,8 @@
             if (blockType === 6) return 0.35;
             if (blockType === 2 || blockType === 23) return 0.55;
             if (blockType === 4 || blockType === 8 || blockType === 9 || blockType === 14 || blockType === 15) return 0.9;
-            if ([3, 13, 17, 18, 21, 22, 32, 36, 37, 38].includes(blockType)) {
-                return heldItem === 34 ? 0.65 : 1.35;
+            if ([3,13,17,18,21,22,32,36,37,38,SILVER_ORE,EMERALD_ORE,GOLD_BLOCK,SILVER_BLOCK,IRON_BLOCK,EMERALD_BLOCK,SAPPHIRE_BLOCK,SANDSTONE,STONE_BRICKS_ID,QUARTZ_BLOCK_ID,END_STONE_ID,OBSIDIAN_ID,127].includes(blockType)) {
+                return heldItem === 34 ? .28 : 1.35;
             }
             if (heldItem === SCANNER_ID) return 0.45;
             return 0.75;
@@ -6096,6 +6096,7 @@
                 if(e.button===2&&!e.shiftKey){
                     const hit=expansionRay();
                     if(hit?.type===12){openWorkbench(hit);return;}
+                    if(hit?.type===13&&!isTinyMode()){openFurnacePanel([hit.x,hit.y,hit.z]);return;}
                     if(hit?.type===CHEST_ID){openFurniturePanel(furnitureRecord(hit.x,hit.y,hit.z));return;}
                 }
                 showToast('Craft this tool first.');return;

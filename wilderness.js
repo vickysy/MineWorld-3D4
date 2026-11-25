@@ -154,7 +154,7 @@ function wildernessBlock(x,y,z,h){
         return 0;
     }
     if(y===h)return h<=SEA_LEVEL+1||col.biome==='beach'?23:col.biome==='cliffs'?3:1;
-    if(col.cliff&&y>=col.cliff.floor&&y<h-1)return 3;
+    if(col.cliff&&y>=col.cliff.floor&&y<h-1)return getOreBlock(x,y,z,h)||3;
     if(y>h-3)return h<=SEA_LEVEL+1?23:2;
     return getOreBlock(x,y,z,h)||3;
 }

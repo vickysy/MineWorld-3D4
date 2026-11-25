@@ -24,7 +24,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
    blocker.style.display=inventoryUI.style.display='none';document.getElementById('toast-msg').style.visibility='hidden';heldItemGroup.visible=true;
    window.equipHand=id=>{currentBlock=id;updateHeldItem3D(id);cancelMining();handCooldown=0;resetHandAnimation();};
    for(const id of [33,241,242,243,244,34,54]){
-    equipHand(id);const rig=heldItemGroup.children[0],mesh=rig.userData.weapon,grip=new THREE.Vector3((3-7.5)*.065,(7.5-13)*.065,0);
+    equipHand(id);const rig=heldItemGroup.children[0],mesh=rig.userData.weapon,grip=SWORD_DAMAGE[id]?new THREE.Vector3():new THREE.Vector3((3-7.5)*.065,(7.5-13)*.065,0);
     mesh.updateMatrix();grip.applyMatrix4(mesh.matrix);ok(grip.length()<1e-8,'Weapon pivots at its grip: '+id);
     rig.updateMatrixWorld(true);ok(rig.userData.gripArm.children.length===1,'Arm is one continuous mesh: '+id);
     ok(new THREE.Box3().setFromObject(rig.userData.gripArm).containsPoint(rig.localToWorld(new THREE.Vector3())),'Fist encloses weapon grip: '+id);
@@ -41,6 +41,11 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
     ok(heldItemGroup.position.x===raised.x&&heldItemGroup.position.y<raised.y-.08,'Straight downstroke with no sideways translation: '+id);
     ok(heldItemGroup.rotation.z===0&&heldItemGroup.rotation.y===yaw,'No wrist roll or animated yaw: '+id);
     ok(Math.abs(tip.x-strike.x)<1e-7&&strike.y<tip.y-.1,'Projected swing stays vertical on screen: '+id);
+    if(SWORD_DAMAGE[id]){
+     const blade=heldItemGroup.children[0].userData.weapon,edge=blade.localToWorld(new THREE.Vector3(.07,.35,0)),center=blade.localToWorld(new THREE.Vector3(0,.35,0));
+     ok(edge.y<center.y-.02,'Thin cutting edge leads the downward strike: '+id);
+     ok(Math.abs(heldItemGroup.rotation.x)<1,'Blade never flattens into an almost invisible horizontal strip: '+id);
+    }
     updateHandSwing(.25);ok(handSwing===0&&heldItemGroup.rotation.x===0&&heldItemGroup.position.x===.4,'Clean recovery '+id);
    }
    equipHand(0);document.dispatchEvent(new MouseEvent('mousedown',{button:0}));updateHandSwing(.14);
@@ -62,12 +67,12 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
    ok(position.equals(camera.position)&&quaternion.equals(camera.quaternion),'Animation does not change aim or player position');
    for(const scale of [1,.05,.005,2]){
     playerScale=scale;updatePlayerScaleView();equipHand(34);beginHandSwing();updateHandSwing(.15);
-    ok(Math.abs(heldItemGroup.position.z/scale+.8)<1e-8&&heldItemGroup.scale.x===scale,'Motion scales with the player: '+scale);
+    ok(Math.abs(heldItemGroup.position.z/scale+.9)<1e-8&&heldItemGroup.scale.x===scale,'Motion scales with the player: '+scale);
    }
    playerScale=1;updatePlayerScaleView();equipHand(34);gameMode='survival';playerInventory[34]=1;setGenBlock(0,81,1,3);
-   document.dispatchEvent(new MouseEvent('mousedown',{button:0}));ok(miningState?.duration===.65,'Actual pickaxe click starts original mining duration');
+   document.dispatchEvent(new MouseEvent('mousedown',{button:0}));ok(miningState?.duration===.28,'Actual pickaxe click starts faster mining duration');
    let repeats=0,last=handSwing;
-   for(let i=0;i<40;i++){updateMining(1/60);updateHandSwing(1/60);if(handSwing>last)repeats++;last=handSwing;}
+   for(let i=0;i<40;i++){if(i===19){setGenBlock(0,81,1,3);document.dispatchEvent(new MouseEvent('mousedown',{button:0}));}updateMining(1/60);updateHandSwing(1/60);if(handSwing>last)repeats++;last=handSwing;}
    ok(repeats>=1&&getBlock(0,81,1)===0,'Held mining repeats swings and breaks the target once');
    document.dispatchEvent(new MouseEvent('mouseup',{button:0}));updateHandSwing(.4);ok(handSwing===0&&!miningState,'Mouse release ends mining and settles the hand');
    gameMode='creative';equipHand(55);arrowCooldown=0;

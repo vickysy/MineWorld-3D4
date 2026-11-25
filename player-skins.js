@@ -93,9 +93,9 @@ function applyAvatarSkin(model,source){
 function buildFirstPersonRig(emptyHand=true){
     const group=new THREE.Group(),arm=new THREE.Group(),texture=playerSkinTexture(getLocalPlayerSkin());
     group.userData.modItem=true;group.userData.emptyHand=emptyHand;group.userData.gripArm=arm;group.userData.ownedTextures=[texture];
-    const mesh=new THREE.Mesh(skinPartGeometry('rightArm',.2,.62,.22),new THREE.MeshLambertMaterial({map:texture}));
+    const mesh=new THREE.Mesh(skinPartGeometry('rightArm',.2,.84,.22),new THREE.MeshLambertMaterial({map:texture}));
     // One continuous cuboid: the fist encloses the grip, sleeve and forearm cannot separate.
-    mesh.rotation.z=Math.PI;mesh.position.y=-.245;mesh.userData.skinPart='rightArm';arm.add(mesh);arm.rotation.x=-.32;group.add(arm);return group;
+    mesh.rotation.z=Math.PI;mesh.position.y=-.355;mesh.userData.skinPart='rightArm';arm.add(mesh);arm.rotation.x=-.32;group.add(arm);return group;
 }
 function savePlayerSkin(source){
     localPlayerSkin=skinCanvas(source);localSkinPacket=encodeSkinPixels(localPlayerSkin);

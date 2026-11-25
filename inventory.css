@@ -29,3 +29,11 @@
 .world-dialog .chest-cell{width:100%;height:auto;aspect-ratio:1;padding:2px;position:relative;min-width:0;background:#26312e;border-color:#6c7e75}
 .world-dialog .chest-cell:disabled{cursor:default}
 @media(max-width:600px){#inventory-ui{padding:12px}#catalog-footer{bottom:-12px;padding-bottom:12px}.catalog-selection{gap:5px;font-size:12px}#inventory-ui .catalog-item{width:calc((100% - 16px)/3)!important;height:92px!important}#inventory-hotbar,#hotbar{gap:2px}.hotbar-number{font-size:8px}.stack-count{font-size:10px}.chest-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.chest-toolbar{flex-wrap:wrap}.chest-cell .item-short-name{font-size:9px}}
+.furnace-fuel { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; padding:8px 0; }
+.furnace-recipe { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:12px; padding:14px 0; border-top:1px solid #50615f; }
+.furnace-materials { display:flex; align-items:center; flex-wrap:wrap; gap:8px; min-width:0; }
+.furnace-materials span { display:flex; align-items:center; gap:6px; min-width:0; overflow-wrap:anywhere; }
+.furnace-materials img { width:30px; height:30px; flex:none; image-rendering:pixelated; }
+.furnace-actions { display:grid; gap:6px; }
+.furnace-actions button { margin:0; min-width:82px; }
+.furnace-actions button:disabled,.furnace-fuel button:disabled { opacity:.45; cursor:default; }

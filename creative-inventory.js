@@ -64,7 +64,7 @@ function renderRecipeBook(id){
     const area=document.getElementById('catalog-recipes');if(!area)return;area.replaceChildren();
     if(isCreativeMode())return;
     const smelt={ [GOLD_INGOT]:37,[IRON_INGOT]:36,[SILVER_INGOT]:SILVER_ORE }[id];
-    if(smelt){const line=document.createElement('p');line.textContent=`Furnace + Torch: ${getBlockName(smelt)} -> ${getBlockName(id)}`;area.append(line);}
+    if(smelt)appendSmeltingRecipe(area,smelt);
     for(const recipe of recipes.filter(r=>r.out===id)){
         const row=document.createElement('div');row.className='recipe-row';
         const label=document.createElement('span');label.textContent=Object.entries(recipe.ing).map(([item,n])=>`${getBlockName(Number(item))} x${n}`).join(' + ')+` = ${getBlockName(id)} x${recipe.count}`;

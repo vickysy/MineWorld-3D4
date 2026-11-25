@@ -5,6 +5,7 @@ const TREASURE_ITEMS={223:'Gold Ingot',224:'Silver Ingot',225:'Iron Ingot',226:'
 const TREASURE_COLORS={223:0xe9bd41,224:0xd8dfe4,225:0xb8c1ca,226:0x36ae76,227:0xe9bd41,228:0xd8dfe4,229:0xaab6c1,230:0x26a06b,231:0x367bd3,232:0xe9bd41,233:0xd8dfe4,234:0xd4ba80,235:0x8e9399,236:0x8e9399};
 Object.assign(NATURE_ITEMS,TREASURE_ITEMS);HOME_ITEMS[CHEST_ID]='Chest';
 const TREASURE_COMPONENTS=new Set([GOLD_INGOT,SILVER_INGOT,IRON_INGOT,EMERALD]);
+const SMELTING_RECIPES={36:IRON_INGOT,37:GOLD_INGOT,[SILVER_ORE]:SILVER_INGOT};
 const TREASURE_SHAPED=new Set([GOLD_PYRAMID,SILVER_PYRAMID,...TREASURE_COMPONENTS]);
 const treasureShapes=new Map(),chestPending=new Map();let chestRequestNumber=Date.now()*1000+Math.floor(Math.random()*1000);
 
@@ -249,7 +250,7 @@ function initTreasureWorld(){
     for(const [ingot,block] of [[GOLD_INGOT,GOLD_BLOCK],[SILVER_INGOT,SILVER_BLOCK],[IRON_INGOT,IRON_BLOCK],[EMERALD,EMERALD_BLOCK],[38,SAPPHIRE_BLOCK]]){
         recipes.push({ing:{[ingot]:9},out:block,count:1},{ing:{[block]:1},out:ingot,count:9});
     }
-    Object.assign(COMMAND_ITEMS,{'箱子':CHEST_ID,'宝箱':CHEST_ID,'金块':GOLD_BLOCK,'银块':SILVER_BLOCK,'铁块':IRON_BLOCK,'金锭':GOLD_INGOT,'银锭':SILVER_INGOT,'铁锭':IRON_INGOT,'绿宝石':EMERALD,'绿宝石块':EMERALD_BLOCK,'蓝宝石块':SAPPHIRE_BLOCK,'金锥':GOLD_PYRAMID,'银锥':SILVER_PYRAMID});
+    Object.assign(COMMAND_ITEMS,{'箱子':CHEST_ID,'宝箱':CHEST_ID,'金块':GOLD_BLOCK,'银块':SILVER_BLOCK,'铁块':IRON_BLOCK,'金锭':GOLD_INGOT,'银锭':SILVER_INGOT,'铁锭':IRON_INGOT,'铁矿':36,'铁矿石':36,'金矿石':37,'银矿石':SILVER_ORE,'镐子':34,'绿宝石':EMERALD,'绿宝石块':EMERALD_BLOCK,'蓝宝石块':SAPPHIRE_BLOCK,'金锥':GOLD_PYRAMID,'银锥':SILVER_PYRAMID});
     const preview=new THREE.WebGLRenderer({alpha:true,antialias:true});preview.setSize(96,96);
     const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(35,1,.01,10);camera.position.set(1.8,1.4,2.6);camera.lookAt(0,0,0);
     scene.add(new THREE.AmbientLight(0xffffff,.7));const light=new THREE.DirectionalLight(0xffffff,.8);light.position.set(-2,4,3);scene.add(light);
@@ -260,14 +261,67 @@ function initTreasureWorld(){
     }
     cube.dispose();preview.dispose();
 }
+function furnaceInReach(at){return Array.isArray(at)&&at.length===3&&getBlock(...at)===13&&camera.position.distanceTo(new THREE.Vector3(...at))<=6;}
+function furnaceHasHeat(at){return [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]].some(d=>getBlock(at[0]+d[0],at[1]+d[1],at[2]+d[2])===16);}
+function nearbyFurnace(){
+    const p=camera.position;let best=null,distance=36;
+    for(let x=Math.round(p.x)-5;x<=Math.round(p.x)+5;x++)for(let y=Math.round(p.y)-5;y<=Math.round(p.y)+4;y++)for(let z=Math.round(p.z)-5;z<=Math.round(p.z)+5;z++){
+        const d=(x-p.x)**2+(y-p.y)**2+(z-p.z)**2;if(d<=distance&&getBlock(x,y,z)===13){best=[x,y,z];distance=d;}
+    }return best;
+}
+function smeltOreAt(at,ore,quantity=1){
+    const ingot=SMELTING_RECIPES[ore];
+    if(!ingot||!furnaceInReach(at)||!furnaceHasHeat(at)||!Number.isSafeInteger(quantity)||quantity<1)return 0;
+    const count=Math.min(64,quantity,isCreativeMode()?64:playerInventory[ore]||0);if(!count||!consumeInventoryItem(ore,count))return 0;
+    playerInventory[ingot]=(playerInventory[ingot]||0)+count;updateHotbarUI();updateInventoryCounts();playSound('stone');showToast(getBlockName(ingot)+' +'+count);return count;
+}
+function addFurnaceTorch(at){
+    if(!furnaceInReach(at)||!hasInventoryItem(16))return false;
+    for(const d of [[0,1,0],[1,0,0],[-1,0,0],[0,0,1],[0,0,-1]]){
+        const p=at.map((v,i)=>v+d[i]);if(getBlock(...p)!==0||!isSolid(p[0],p[1]-1,p[2]))continue;
+        const radius=getPlayerRadius();if(Math.abs(p[0]-camera.position.x)<.5+radius&&Math.abs(p[2]-camera.position.z)<.5+radius&&p[1]+.5>camera.position.y-getPlayerHeight()&&p[1]-.5<camera.position.y+.15*playerScale)continue;
+        if(setBlock(...p,16)===false)return false;consumeInventoryItem(16);updateHotbarUI();updateInventoryCounts();return true;
+    }return false;
+}
+function appendSmeltingRecipe(parent,ore){
+    const row=document.createElement('div');row.className='recipe-row';const name=document.createElement('span');
+    name.textContent=getBlockName(ore)+' x1 -> '+getBlockName(SMELTING_RECIPES[ore])+' x1';row.append(name);
+    const open=document.createElement('button'),at=nearbyFurnace();open.textContent='Furnace';open.disabled=!at;open.title=at?'Open Furnace':'Furnace required nearby';open.onclick=()=>openFurnacePanel(at);row.append(open);parent.append(row);
+    const heat=document.createElement('div');heat.className='recipe-row';heat.textContent='Furnace + Torch';parent.append(heat);
+}
+function openFurnacePanel(at){
+    if(!furnaceInReach(at))return;
+    stopSurveillance();furnitureFocus=null;isInventoryOpen=false;inventoryUI.style.display='none';
+    const dimension=currentDimension,valid=()=>currentDimension===dimension&&furnaceInReach(at),content=document.getElementById('home-content');content.replaceChildren();
+    document.getElementById('home-panel').hidden=false;document.getElementById('home-title').textContent='Furnace';
+    if(controls.isLocked)controls.unlock();blocker.style.display='none';
+    const button=(label,callback,parent,disabled=false)=>{const b=document.createElement('button');b.textContent=label;b.disabled=disabled;b.onclick=()=>{if(!valid()){closeFurniturePanel(false);showToast('Furnace is no longer available.');return;}callback();openFurnacePanel(at);};parent.append(b);return b;};
+    const fuel=document.createElement('div');fuel.className='furnace-fuel';content.append(fuel);
+    const status=document.createElement('strong');status.textContent=furnaceHasHeat(at)?'Heat: Ready':'Heat: Torch Required';fuel.append(status);
+    button('Add Torch',()=>{if(!addFurnaceTorch(at))showToast('No free space for a torch.');},fuel,furnaceHasHeat(at)||!hasInventoryItem(16));
+    const craft=document.createElement('div');craft.className='furnace-fuel';content.append(craft);
+    const recipe=document.createElement('span');recipe.textContent='Wood x3 -> Torch x10';craft.append(recipe);
+    button('Craft Torches',()=>{if(!consumeInventoryItem(4,3))return;playerInventory[16]=(playerInventory[16]||0)+10;updateHotbarUI();updateInventoryCounts();},craft,!isCreativeMode()&&(playerInventory[4]||0)<3);
+    for(const [text,ingot] of Object.entries(SMELTING_RECIPES)){
+        const ore=Number(text),count=isCreativeMode()?64:playerInventory[ore]||0,row=document.createElement('div');row.className='furnace-recipe';content.append(row);
+        const summary=document.createElement('div');summary.className='furnace-materials';row.append(summary);
+        for(const [id,n] of [[ore,count],[ingot,playerInventory[ingot]||0]]){
+            if(summary.childNodes.length)summary.append(document.createTextNode(' -> '));
+            const item=document.createElement('span');appendItemIcon(item,id);item.append(document.createTextNode(getBlockName(id)+' x'+n));summary.append(item);
+        }
+        const actions=document.createElement('div');actions.className='furnace-actions';row.append(actions);
+        button('Smelt 1',()=>smeltOreAt(at,ore),actions,!count||!furnaceHasHeat(at)).setAttribute('aria-label','Smelt one '+getBlockName(ingot));
+        button('Smelt All',()=>smeltOreAt(at,ore,count),actions,!count||!furnaceHasHeat(at)).setAttribute('aria-label','Smelt all '+getBlockName(ingot));
+    }
+}
 function handleTreasureClick(e){
     if(e.button!==2)return false;
     const hit=expansionRay();if(!hit)return false;
     if(hit.type===CHEST_ID&&currentBlock===CHEST_ID){if(hit.previous)placeFurniture(CHEST_ID,...hit.previous);return true;}
-    const ingot={36:IRON_INGOT,37:GOLD_INGOT,[SILVER_ORE]:SILVER_INGOT}[currentBlock];
-    if(hit.type===13&&ingot){
-        if(![[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]].some(([a,b,c])=>getBlock(hit.x+a,hit.y+b,hit.z+c)===16)){showToast('The furnace needs a torch nearby.');return true;}
-        if(consumeInventoryItem(currentBlock)){playerInventory[ingot]=(playerInventory[ingot]||0)+1;updateHotbarUI();showToast(getBlockName(ingot)+' +1');playSound('stone');}
+    if(hit.type===13&&!e.shiftKey&&!isTinyMode()&&currentBlock!==13&&currentBlock!==39){
+        const at=[hit.x,hit.y,hit.z];
+        if(SMELTING_RECIPES[currentBlock]&&furnaceHasHeat(at)&&hasInventoryItem(currentBlock))smeltOreAt(at,currentBlock);
+        else openFurnacePanel(at);
         return true;
     }
     if(TREASURE_COMPONENTS.has(currentBlock)&&!HOME_ITEMS[hit.type]&&hit.type!==12){showToast('Use this material for crafting.');return true;}

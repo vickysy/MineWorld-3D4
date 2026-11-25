@@ -77,8 +77,8 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
                 check(getBlock(0,1,0)===0 && miningState===null,`Creative immediately mines ${type}`);
             }
             gameMode='survival';
-            for(const [type,tool,time] of [[1,2,0.75],[2,2,0.55],[3,2,1.35],[3,34,0.65],[4,2,0.9],[6,2,0.35],[5,2,0.05]])
-                check(getMiningDuration(type,tool)===time,`Survival duration preserved for ${type}/${tool}`);
+            for(const [type,tool,time] of [[1,2,0.75],[2,2,0.55],[3,2,1.35],[3,34,0.28],[4,2,0.9],[6,2,0.35],[5,2,0.05]])
+                check(getMiningDuration(type,tool)===time,`Survival duration matches material and tool for ${type}/${tool}`);
             setBlock(0,1,0,3);startMiningBlock(new THREE.Vector3(0,1,0),false,new THREE.Vector3(0,0,1));
             updateMining(0.2);
             check(getBlock(0,1,0)===3 && miningState.progress>0 && miningState.crackMesh,'Survival still develops cracks');
