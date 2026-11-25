@@ -410,7 +410,7 @@
     <script src="world-audio.js?v=20261124-menu"></script>
     <script src="voxel-style.js?v=20261124-menu"></script>
     <script src="living-physics.js?v=20261124-adventure"></script>
-    <script src="adventure-items.js?v=20261124-adventure"></script>
+    <script src="adventure-items.js?v=20261125-swing"></script>
     <script src="adventure-mobs.js?v=20261124-menu"></script>
     <script src="desert-temple.js?v=20261124-polish"></script>
     <script src="village-life.js?v=20261118-outdoors"></script>
@@ -578,13 +578,15 @@
         camera.add(heldItemGroup);
         
         function updateHeldItem3D(blockId) {
+            if (heldItemGroup.userData.itemId !== blockId) resetHandAnimation();
+            heldItemGroup.userData.itemId = blockId;
             // 清除旧模型
             while(heldItemGroup.children.length > 0){ 
                 if (heldItemGroup.children[0].userData.modItem) disposeModModel(heldItemGroup.children[0]);
                 heldItemGroup.remove(heldItemGroup.children[0]); 
             }
             if (blockId === 0) {heldItemGroup.add(buildFirstPersonHand());return;}
-            if(WEAPON_IDS.has(blockId)){const item=buildWeaponModel(blockId);item.scale.setScalar(.68);item.rotation.set(.08,-.25,-.2);item.position.set(-.06,.12,0);heldItemGroup.add(item);return;}
+            if(WEAPON_IDS.has(blockId)){heldItemGroup.add(buildFirstPersonWeapon(blockId));return;}
             if(blockId===FISHING_ROD){
                 const rod=new THREE.Mesh(natureGeometry(blockId),materials[blockId]);rod.position.y=.18;rod.rotation.z=-.2;heldItemGroup.add(rod);return;
             }
@@ -6043,7 +6045,10 @@
         }
 
         function shootRangedWeapon(itemId) {
-            if(itemId===BOW_ID||itemId===CROSSBOW_ID)return fireArrow(itemId);
+            if(itemId===BOW_ID||itemId===CROSSBOW_ID){
+                const fired=fireArrow(itemId);if(fired)startHandAnimation('use');return fired;
+            }
+            startHandAnimation('use');
             const gun=itemId===35;
             const damage=gun || itemId===CROSSBOW_ID?3:itemId===TRIDENT_ID?4:2;
             const range=gun?100:itemId===TRIDENT_ID?35:itemId===CROSSBOW_ID?50:38;
