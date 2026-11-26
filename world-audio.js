@@ -26,7 +26,7 @@ function loadWorldAudio(kind){
     worldAudioPending.set(kind,task);return task;
 }
 function warmWorldAudio(){if(!audioCtx||worldAudioReady)return;worldAudioReady=true;for(const kind of Object.keys(WORLD_AUDIO_DATA))loadWorldAudio(kind);}
-function playWorldRecording(kind,{position=null,gain=.22,rate=1,duration=null,ambient=false,lowpass=5200,onStart=null}={}){
+function playWorldRecording(kind,{position=null,gain=.22,rate=1,duration=null,ambient=false,lowpass=5200,offset=0,filterQ=1,onStart=null}={}){
     if(!audioCtx||audioCtx.state==='closed')return false;
     if(audioCtx.state==='suspended')audioCtx.resume();warmWorldAudio();
     const distance=position?position.distanceTo(camera.position):0;
@@ -36,15 +36,16 @@ function playWorldRecording(kind,{position=null,gain=.22,rate=1,duration=null,am
     if(ambient)worldAudioLastAnimal=audioCtx.currentTime;
     const choice=choices[Math.floor(Math.random()*choices.length)],source=audioCtx.createBufferSource(),volume=audioCtx.createGain(),filter=audioCtx.createBiquadFilter();
     source.buffer=choice.buffer;source.playbackRate.value=rate*(.97+Math.random()*.06);
-    filter.type='lowpass';filter.frequency.value=lowpass;
-    const time=audioCtx.currentTime,length=Math.min(duration||choice.buffer.duration,choice.buffer.duration)/source.playbackRate.value;
+    filter.type='lowpass';filter.frequency.value=lowpass;filter.Q.value=filterQ;
+    const start=Math.max(0,Math.min(Number.isFinite(offset)?offset:0,Math.max(0,choice.buffer.duration-.01)));
+    const time=audioCtx.currentTime,length=Math.min(duration||choice.buffer.duration,choice.buffer.duration-start)/source.playbackRate.value;
     const attenuation=distance<=4?1:Math.max(0,1-(distance-4)/28)/(1+(distance-4)*.045),level=gain*choice.normal*attenuation;
     volume.gain.setValueAtTime(0,time);volume.gain.linearRampToValueAtTime(level,time+.008);
     volume.gain.setValueAtTime(level,time+Math.max(.008,length-.04));volume.gain.linearRampToValueAtTime(0,time+length);
     source.connect(filter);filter.connect(volume);
     const pan=audioCtx.createStereoPanner();if(position){const right=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,0);pan.pan.value=THREE.MathUtils.clamp(position.clone().sub(camera.position).dot(right)/12,-.8,.8);}
     volume.connect(pan);pan.connect(getSoundOutput());worldAudioVoices.add(source);
-    source.onended=()=>{worldAudioVoices.delete(source);source.disconnect();filter.disconnect();volume.disconnect();pan.disconnect();};source.start(time);source.stop(time+length+.01);
+    source.onended=()=>{worldAudioVoices.delete(source);source.disconnect();filter.disconnect();volume.disconnect();pan.disconnect();};source.start(time,start);source.stop(time+length+.01);
     if(onStart)onStart(()=>{if(worldAudioVoices.has(source)){volume.gain.cancelScheduledValues(audioCtx.currentTime);volume.gain.setTargetAtTime(0,audioCtx.currentTime,.012);source.stop(audioCtx.currentTime+.06);}});
     return true;
 }
@@ -72,6 +73,12 @@ const BLOCK_SOUND_PROFILES={
 };
 function playBlockSound(action,id,position=null){
     const family=blockSoundFamily(id),p=BLOCK_SOUND_PROFILES[family],quiet=family==='cloth';
+    if(family==='dirt'&&(action==='hit'||action==='break')){
+        // Short grain/scrape excerpts from the existing attributed recordings, without a resonant peak.
+        const hit=action==='hit';
+        return playWorldRecording(hit?'sand':'dirt_break',{position,gain:hit?.085:.17,rate:hit?.74:.78,
+            duration:hit?.09:.18,offset:hit?.02:.012,lowpass:hit?1400:1700,filterQ:.55});
+    }
     return playWorldRecording(p[action]||p.hit,{position,gain:(quiet?.45:1)*({hit:.105,step:.065,place:.19,break:.26}[action]||.1),
         rate:p.rate,duration:action==='hit'?.16:action==='step'?.22:action==='place'?.3:quiet?.24:.65,lowpass:p.lowpass});
 }

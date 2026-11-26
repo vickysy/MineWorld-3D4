@@ -67,6 +67,23 @@ function fireArrow(item){
     playWorldRecording('wood',{gain:.12,rate:1.8,duration:.15});cancelMining();
     while(flyingArrows.length>48){disposeModModel(flyingArrows[0].mesh);flyingArrows.shift();}return true;
 }
+function traceEnemyArrow(origin,direction,range,shooter){
+    const hit=traceCombatRay(origin,direction,range,false);
+    if(gameDifficulty==='peaceful')return hit;
+    const ray=new THREE.Ray(origin,direction),box=new THREE.Box3(),point=new THREE.Vector3();
+    const targets=encounterVictims();if(hostileMobsEnabled())targets.push(camera);
+    for(const target of targets){
+        if(target===shooter||!encounterTargetAlive(target))continue;
+        if(target===camera){
+            const p=camera.position,r=getPlayerRadius();
+            box.set(new THREE.Vector3(p.x-r,p.y-getPlayerHeight(),p.z-r),new THREE.Vector3(p.x+r,p.y+.15*playerScale,p.z+r));
+        }else{target.mesh.updateMatrixWorld(true);box.setFromObject(target.mesh);}
+        if(!ray.intersectBox(box,point))continue;
+        const distance=point.distanceTo(origin);
+        if(distance<hit.distance){hit.distance=distance;hit.entity=target;hit.block=null;hit.point.copy(point);}
+    }
+    return hit;
+}
 function updateFlyingArrows(delta){
     if(!isGameStarted||!controls.isLocked||isSleeping)return;arrowCooldown=Math.max(0,arrowCooldown-delta);
     for(let i=flyingArrows.length-1;i>=0;i--){
@@ -75,16 +92,12 @@ function updateFlyingArrows(delta){
         if(a.stuck){if(!isSolid(...a.stuck)){a.stuck=null;a.velocity.set(0,-1,0);a.life=4;}else continue;}
         const steps=Math.max(1,Math.ceil(delta/.02)),dt=delta/steps;
         for(let j=0;j<steps;j++){
-            a.velocity.y-=9*dt;const distance=a.velocity.length()*dt,dir=a.velocity.clone().normalize();
+            const travel=a.velocity.clone();travel.y-=(a.enemy?4.5:9)*dt;a.velocity.y-=9*dt;
+            const distance=travel.length()*dt,dir=travel.normalize();
             a.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),dir);
-            const hit=traceCombatRay(a.mesh.position,dir,distance,!a.enemy);
-            if(a.enemy&&hostileMobsEnabled()){
-                const p=camera.position,r=getPlayerRadius(),box=new THREE.Box3(new THREE.Vector3(p.x-r,p.y-getPlayerHeight(),p.z-r),new THREE.Vector3(p.x+r,p.y+.15*playerScale,p.z+r));
-                const point=new THREE.Ray(a.mesh.position,dir).intersectBox(box,new THREE.Vector3());
-                if(point&&point.distanceTo(a.mesh.position)<=hit.distance){takeDamage(a.damage);a.life=0;break;}
-            }
+            const hit=a.enemy?traceEnemyArrow(a.mesh.position,dir,distance,a.shooter):traceCombatRay(a.mesh.position,dir,distance);
             a.mesh.position.copy(hit.point);
-            if(hit.entity){damageMob(hit.entity,a.damage);a.life=0;break;}
+            if(hit.entity){if(hit.entity===camera)takeDamage(a.damage);else damageMob(hit.entity,a.damage,a.enemy?'hostile':'player');a.life=0;break;}
             if(hit.block){a.stuck=[hit.block.x,hit.block.y,hit.block.z];a.mesh.position.addScaledVector(dir,.035);a.velocity.set(0,0,0);a.life=25;playBlockSound('hit',hit.block.type,hit.point);break;}
         }
     }

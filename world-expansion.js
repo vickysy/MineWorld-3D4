@@ -178,6 +178,7 @@ function snapshotDimension() {
         microMined:Array.from(microMinedBlocks),microPlaced:Array.from(microPlacedBlocks),fineEdits:Array.from(fineVoxelEdits),
         chunkMaxY:Array.from(chunkMaxY),chunkScanYRanges:Array.from(chunkScanYRanges),waterAmounts:Array.from(waterAmounts),portals:Array.from(activePortals),pistons:Array.from(pistonDirections),
         farmAnimals:saveFarmAnimals(),
+        wildlifeCompanions:saveWildlifeCompanions(),
         companions:[...zombies,...creepers,...villagers,...animals,...adventureMobs].filter(m=>m.eggId&&!m.dying&&!m.farmAnimal).map(m=>({id:m.eggId,pos:m.mesh.position.toArray(),hp:m.hp})),
         residents:villagers.filter(m=>m.cityResident&&!m.dying).map(m=>({pos:m.mesh.position.toArray(),hp:m.hp})),
         endermen:endermen.filter(m=>m.eggId&&!m.dying).map(m=>({pos:m.mesh.position.toArray(),hp:m.hp})),returnPoint:camera.position.toArray()};
@@ -204,6 +205,7 @@ function travelThroughPortal(next) {
     closeFurniturePanel(false);if(!leaveCityCar() || !standFromChair()) return;clearCombatState();resetPlayerFlight();
     releaseCarriedLeads();clearAnimalLeadVisuals();
     dimensionWorlds.set(currentDimension,snapshotDimension());
+    clearWildlifeCompanions();
     clearAdventureMobs();
     currentDimension=next;heightCache.clear();const saved=dimensionWorlds.get(next);
     restoreDimension(saved);
@@ -217,6 +219,7 @@ function travelThroughPortal(next) {
     if(saved?.returnPoint) {
         camera.position.fromArray(saved.returnPoint);
         restoreFarmAnimals(saved.farmAnimals);
+        restoreWildlifeCompanions(saved.wildlifeCompanions);
         for(const m of saved.companions||[]) {if(next!=='overworld'&&m.id===67)continue;const mob=spawnMobFromEgg(m.id,...m.pos,true);if(mob)mob.hp=m.hp;}
         for(const m of saved.endermen||[]) spawnEnderman(...m.pos,true,m.hp);
         if(next==='overworld') for(const m of saved.residents||[]) {spawnVillagerAt(...m.pos);Object.assign(villagers[villagers.length-1],{cityResident:true,hp:m.hp});}
@@ -251,6 +254,7 @@ function saveWorldExpansion() {
 }
 
 function clearExpansionWorld() {
+    clearWildlifeCompanions();
     clearAnimalLeadVisuals();
     clearAdventureMobs();
     closeChestTransfer();

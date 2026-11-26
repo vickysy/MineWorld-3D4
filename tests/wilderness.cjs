@@ -47,7 +47,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
    for(const m of zombies)disposeModModel(m.mesh);zombies=[];
    const mesh=createZombieModel();mesh.position.set(2,40,0);scene.add(mesh);zombies.push({mesh,kind:'zombie',hp:3,hurtTimer:0,deathTimer:0,dying:false,vx:0,vy:0,vz:0,onGround:true,walkTime:0,soundTimer:100});
    camera.position.set(2,40.6,.3);health=maxHealth;setDifficulty('peaceful');updateEntities(.05);check(health===maxHealth&&zombies[0].vx===0&&zombies[0].vz===0,'Peaceful zombie cannot chase or hurt player');
-   setDifficulty('normal');gameMode='creative';updateEntities(.05);check(health===maxHealth&&zombies[0].vx===0,'Creative zombie cannot chase or hurt player');
+   setDifficulty('normal');gameMode='creative';updateEntities(.05);check(health===maxHealth&&zombies[0].encounterTarget!==camera,'Creative zombie can wander but cannot chase or hurt player');
    gameMode='survival';updateEntities(.05);check(health<maxHealth,'Normal Survival zombie still attacks');
    setDifficulty('peaceful');check(getWorldSaveData().gameDifficulty==='peaceful','Difficulty saved with world');
 

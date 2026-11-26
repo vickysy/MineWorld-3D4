@@ -10,7 +10,7 @@ let handSwing=0,handCooldown=0,handSwingItem=0,handSwingAction='melee';
 const handRest=[0,0,0,0,0,0,0],handReturn=[1,0,0,0,0,0,0];
 // Time, grip translation (x/y/z), then wrist pitch/yaw/roll in camera space.
 const HAND_SWING_POSES={
-    sword:[handRest,[.18,0,.14,0,.06,0,0],[.46,0,-.3,0,-.35,0,0],[.64,0,-.32,0,-.4,0,0],handReturn],
+    sword:[handRest,[.2,0,.22,0,.08,0,0],[.5,0,-.36,0,-.6,0,0],[.7,0,-.38,0,-.65,0,0],handReturn],
     pickaxe:[handRest,[.17,0,.09,0,.05,0,0],[.43,0,-.22,0,-.3,0,0],[.62,0,-.26,0,-.34,0,0],handReturn],
     axe:[handRest,[.2,0,.14,0,.06,0,0],[.46,0,-.25,0,-.33,0,0],[.65,0,-.3,0,-.38,0,0],handReturn],
     mace:[handRest,[.22,0,.17,0,.06,0,0],[.47,0,-.28,0,-.34,0,0],[.66,0,-.31,0,-.38,0,0],handReturn],
@@ -74,7 +74,7 @@ function buildGrippedWeapon(id){
     const diagonal=!!SWORD_DAMAGE[id]||id===34||id===54;
     const grip=diagonal?[3,13]:id===35?[4,11]:id===55?[10,10]:id===57||id===58?[7.5,14]:[7.5,12];
     const size=id===35?.52:SWORD_DAMAGE[id]?.62:.68;
-    mesh.scale.setScalar(size);mesh.rotation.set(0,SWORD_DAMAGE[id]?Math.PI/4:0,diagonal?Math.PI/4:0);
+    mesh.scale.setScalar(size);mesh.rotation.set(0,SWORD_DAMAGE[id]?.32:0,diagonal?Math.PI/4:0);
     // Place the handle at the animation origin, not the middle of the blade.
     mesh.position.set((grip[0]-7.5)*.065,(7.5-grip[1])*.065,0)
         .multiplyScalar(-size).applyEuler(mesh.rotation);
@@ -104,15 +104,16 @@ function applyHandPose(pose){
     const viewScale=Math.min(1,Math.max(.3,camera.aspect/1.1));
     const x=Math.min(.4,camera.aspect*.4)-(1-viewScale)*.23;
     const id=heldItemGroup.userData.itemId,vertical=!!SWORD_DAMAGE[id]||[34,54,58].includes(id);
+    const fovScale=vertical?getHandFovScale():1;
     const z=vertical?-1.05:-.8;
     // Keep the forearm entering from below the viewport even when portrait framing scales it down.
     const handY=vertical?-.26-(1-viewScale)*.52:-.4;
-    heldItemGroup.scale.setScalar(playerScale*viewScale);
-    heldItemGroup.position.set((x+pose[0]*viewScale)*playerScale,
-        (handY+pose[1]*viewScale)*playerScale,(z+pose[2]*viewScale)*playerScale);
+    heldItemGroup.scale.setScalar(playerScale*viewScale*fovScale);
+    heldItemGroup.position.set((x+pose[0]*viewScale)*playerScale*fovScale,
+        (handY+pose[1]*viewScale)*playerScale*fovScale,(z+pose[2]*viewScale)*playerScale);
     // Align the vertical swing plane with the eye so perspective does not turn it into a diagonal slash.
     heldItemGroup.rotation.order=vertical?'YXZ':'XYZ';
-    heldItemGroup.rotation.set(pose[3],pose[4]+(vertical?Math.atan2(-x,-z):0),pose[5]);
+    heldItemGroup.rotation.set(pose[3],pose[4]+(vertical?Math.atan2(-x*fovScale,-z):0),pose[5]);
     const arm=heldItemGroup.children[0]?.userData.gripArm;
     if(arm)arm.rotation.x=-pose[3]-(vertical?.08:.32);
 }

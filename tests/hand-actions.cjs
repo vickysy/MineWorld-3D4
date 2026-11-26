@@ -49,11 +49,11 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
     ok(Math.abs(tip.x-strike.x)<1e-7&&strike.y<tip.y-.1,'Projected swing stays vertical on screen: '+id);
     if(SWORD_DAMAGE[id]){
      const blade=heldItemGroup.children[0].userData.weapon,edge=blade.localToWorld(new THREE.Vector3((11-7.5)*.065,(7.5-7)*.065,0)),center=blade.localToWorld(new THREE.Vector3((10-7.5)*.065,(7.5-6)*.065,0));
-     ok(edge.y<center.y-.012,'Original pixel blade edge faces the downstroke: '+id);
-     ok(Math.abs(heldItemGroup.rotation.x)<=.4,'Sword tilts modestly instead of flipping toward the camera: '+id);
-     ok(raised.y-heldItemGroup.position.y>.4&&heldItemGroup.position.z===raised.z,'Clear downstroke without pushing the hand toward the camera: '+id);
+     ok(edge.y<center.y-.007,'Original pixel blade edge faces the downstroke: '+id);
+     ok(Math.abs(heldItemGroup.rotation.x)<=.65,'Sword stays readable during the larger downstroke: '+id);
+     ok((raised.y-heldItemGroup.position.y)/getHandFovScale()>.5&&heldItemGroup.position.z===raised.z,'Larger downstroke without pushing the hand toward the camera: '+id);
     }
-    updateHandSwing(.25);ok(handSwing===0&&heldItemGroup.rotation.x===0&&heldItemGroup.position.x===.4,'Clean recovery '+id);
+    updateHandSwing(.25);ok(handSwing===0&&heldItemGroup.rotation.x===0&&Math.abs(heldItemGroup.position.x/getHandFovScale()-.4)<1e-8,'Clean recovery '+id);
    }
    equipHand(0);document.dispatchEvent(new MouseEvent('mousedown',{button:0}));updateHandSwing(.14);
    ok(heldItemGroup.position.z< -1&&heldItemGroup.position.x<.25,'Bare fist reaches forward and inward');
@@ -74,7 +74,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
    ok(position.equals(camera.position)&&quaternion.equals(camera.quaternion),'Animation does not change aim or player position');
    for(const scale of [1,.05,.005,2]){
     playerScale=scale;updatePlayerScaleView();equipHand(34);beginHandSwing();updateHandSwing(.15);
-    ok(Math.abs(heldItemGroup.position.z/scale+1.05)<1e-8&&heldItemGroup.scale.x===scale,'Motion scales with the player: '+scale);
+    ok(Math.abs(heldItemGroup.position.z/scale+1.05)<1e-8&&Math.abs(heldItemGroup.scale.x/getHandFovScale()-scale)<1e-8,'Motion scales with the player: '+scale);
    }
    playerScale=1;updatePlayerScaleView();equipHand(34);gameMode='survival';playerInventory[34]=1;setGenBlock(0,81,1,3);
    document.dispatchEvent(new MouseEvent('mousedown',{button:0}));ok(miningState?.duration===.28,'Actual pickaxe click starts faster mining duration');
@@ -89,13 +89,14 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
    clearFlyingArrows();equipHand(35);document.dispatchEvent(new MouseEvent('mousedown',{button:2}));updateHandSwing(.06);
    ok(heldItemGroup.position.z>-.73&&heldItemGroup.rotation.x>0,'Gun recoils back, not a sword slash');
    equipHand(0);currentBlock=39;playerInventory[39]=2;updateHeldItem3D(39);startEating(39);updateHandSwing(.1);updateEating(.1);
-   ok(eatingState&&heldItemGroup.position.z===-.48,'Eating keeps its separate pose');cancelEating();equipHand(0);
+   ok(eatingState&&heldItemGroup.position.z<-.5&&heldItemGroup.position.z>-.8&&heldItemGroup.children[0].userData.foodId===39,'Eating keeps its separate held-food pose');cancelEating();equipHand(0);
    return {checks:checks.length,summary:'Continuous arms holding weapons; straight vertical sword/pickaxe paths; aim/cooldowns preserved; mining, scale, pause and food.'};
   }));
   const allScreens=[];
   for(const viewport of [{width:1200,height:800},{width:390,height:844},{width:320,height:740}]){
    await page.setViewportSize(viewport);await page.waitForFunction(w=>renderer.domElement.clientWidth===w,viewport.width,{polling:50});
-   await page.evaluate(()=>{
+   for(const fov of [75,90,105])await page.evaluate(fov=>{
+    setViewFov(fov,false);
     const point=new THREE.Vector3();
     for(const id of [33,241,242,243,244,34,54,58,57,35,55,56]){
      for(const action of [35,55,56,57].includes(id)?['melee','use']:['melee']){
@@ -118,8 +119,9 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
       handCheck(maxX<1&&maxY<1,'Full weapon trajectory framed '+id+'/'+action+'/'+innerWidth+': '+maxX+','+maxY);
      }
     }
-   });
+   },fov);
   }
+  await page.evaluate(()=>setViewFov(90,false));
   for(const viewport of [{width:1200,height:800},{width:390,height:844}]){
    await page.setViewportSize(viewport);await page.waitForFunction(w=>renderer.domElement.clientWidth===w,viewport.width,{polling:50});
    const results=[];

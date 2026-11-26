@@ -60,14 +60,14 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
   console.log(await page.evaluate(()=>{
    for(const difficulty of ['easy','normal','hard']){
     resetPolish();setDifficulty(difficulty);dayTime=Math.PI*1.5;spawnVillagerAt(0,80,0);adventureSpawnTime=20;updateAdventureMobs(.01);
-    ok(adventureMobs.length===2&&adventureMobs.every(m=>m.raid),'Creative village visitors at '+difficulty);
-    for(let i=0;i<60;i++)updateAdventureMobs(1/60);ok(health===maxHealth&&!flyingArrows.length,'Creative player stays protected at '+difficulty);
+    ok(adventureMobs.length>=3&&adventureMobs.length<=5&&adventureMobs.every(m=>m.raid),'Creative village party at '+difficulty);
+    for(let i=0;i<60;i++)updateAdventureMobs(1/60);ok(health===maxHealth&&adventureMobs.every(m=>m.encounterTarget!==camera),'Creative player stays protected at '+difficulty);
    }
    resetPolish();dayTime=Math.PI*1.5;spawnVillagerAt(0,80,0);adventureSpawnTime=20;updateAdventureMobs(.01);
-   ok(adventureMobs.length===2&&adventureMobs.every(m=>m.raid),'Night visitors spawn in Creative');
+   ok(adventureMobs.length>=3&&adventureMobs.length<=5&&adventureMobs.every(m=>m.raid),'Night party spawns in Creative');
    const home=adventureMobs[0].raid.home;ok(!startVillageRaid(home),'One bounded visit per village per night');
    villagers[0].mesh.position.x+=2;ok(!startVillageRaid(nearbyPillagerVillage()),'Walking villagers do not trigger another raid');
-   for(let i=0;i<90;i++)updateAdventureMobs(1/60);ok(health===maxHealth&&!flyingArrows.length,'Creative visitors do not attack');
+   for(let i=0;i<90;i++)updateAdventureMobs(1/60);ok(health===maxHealth&&adventureMobs.every(m=>m.encounterTarget!==camera),'Creative visitors never target the player');
    gameDifficulty='peaceful';clearAdventureMobs();adventureSpawnTime=20;updateAdventureMobs(.01);ok(!adventureMobs.length,'Peaceful disables natural raids');
    gameDifficulty='normal';dayTime=Math.PI/2;ok(!startVillageRaid(home),'No daytime village raids');
    resetPolish();dayTime=Math.PI*1.5;setGenBlock(6,80,-10,WHEAT_RIPE);

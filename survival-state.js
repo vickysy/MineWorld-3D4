@@ -12,16 +12,17 @@ function resetFallTracking(armed=false){
 }
 function resetSurvivalState(){
     resetFallTracking();cancelEating();regenerationTimer=recoveryDelay=hurtFeedbackTimer=hurtViewTime=0;
-    foodProtectionTimer=0;resetFoodTimers();
+    foodProtectionTimer=0;resetFoodTimers();resetGoldenFoodEffects();
 }
 function playerIsActive(){return isGameStarted&&controls.isLocked&&!isSleeping&&!isRespawning&&!worldLoading;}
 function updateSurvival(delta){
-    if(!playerIsActive())return;
+    if(!playerIsActive()||!Number.isFinite(delta)||delta<=0)return;
     recoveryDelay=Math.max(0,recoveryDelay-delta);hurtFeedbackTimer=Math.max(0,hurtFeedbackTimer-delta);hurtViewTime=Math.max(0,hurtViewTime-delta);
     if(isCreativeMode()){
         const changed=health!==maxHealth||hunger!==maxHunger;health=maxHealth;hunger=maxHunger;foodProtectionTimer=0;resetFoodTimers();
-        if(changed)updateHUD();return;
+        resetGoldenFoodEffects();if(changed)updateHUD();return;
     }
+    updateGoldenFoodEffects(delta);
     const rules=SURVIVAL_RULES[gameDifficulty];
     if(gameDifficulty==='peaceful'){if(hunger!==maxHunger){hunger=maxHunger;updateHUD();}}
     else if(foodProtectionTimer>0)foodProtectionTimer=Math.max(0,foodProtectionTimer-delta);
@@ -73,7 +74,8 @@ function updateFallDamage(before,environment,groundedBefore){
     fallState.lastPosition=camera.position.clone();
 }
 function startEating(id,button=2,automatic=false){
-    if(eatingState||![39,40].includes(id)||!hasInventoryItem(id)||!isGameStarted||isRespawning)return false;
+    if(eatingState||!isAnimatedFood(id)||!hasInventoryItem(id)||!isGameStarted||isRespawning||isSleeping||worldLoading||
+        !automatic&&(!controls.isLocked||!(button===2||button===0&&[39,40].includes(id))||currentBlock!==id))return false;
     cancelMining();handSwing=0;
     eatingState={id,button,automatic,elapsed:0,soundAt:0,slot:activeHotbarSlot,originalItem:currentBlock};
     if(automatic&&currentBlock!==id)updateHeldItem3D(id);
@@ -81,26 +83,33 @@ function startEating(id,button=2,automatic=false){
     return true;
 }
 function cancelEating(){
-    if(eatingState?.automatic)updateHeldItem3D(currentBlock);
+    const state=eatingState;
     eatingState=null;
+    if(state?.automatic)updateHeldItem3D(currentBlock);
+    if(state)resetHandAnimation();
+    clearEatingCrumbs();
     const el=document.getElementById('food-progress');if(el){el.hidden=true;el.querySelector('progress').value=0;}
 }
 function updateEating(delta){
     if(!eatingState)return;
     const state=eatingState;
-    if(!playerIsActive()||!hasInventoryItem(state.id)||!state.automatic&&(currentBlock!==state.id||activeHotbarSlot!==state.slot)){cancelEating();return;}
+    if(!playerIsActive()||!hasInventoryItem(state.id)||activeHotbarSlot!==state.slot||currentBlock!==state.originalItem){cancelEating();return;}
+    if(!Number.isFinite(delta)||delta<=0)return;
     state.elapsed+=delta;
-    document.getElementById('food-progress').querySelector('progress').value=Math.min(1,state.elapsed/1.6);
-    if(state.elapsed>=state.soundAt){state.soundAt+=.28;playWorldRecording('dirt_break',{gain:.1,rate:1.15,duration:.12,lowpass:2600});}
-    const reach=Math.min(1,state.elapsed/.2),chew=Math.sin(state.elapsed*24);
-    if(currentBlock===state.id||state.automatic){
-        heldItemGroup.position.set((.18+chew*.018)*playerScale,(-.35+reach*.24+Math.abs(chew)*.018)*playerScale,-.48*playerScale);
-        heldItemGroup.rotation.set(-.6+chew*.05,.2,-.45);
+    document.getElementById('food-progress').querySelector('progress').value=Math.min(1,state.elapsed/FOOD_EAT_SECONDS);
+    if(state.elapsed>=state.soundAt){
+        state.soundAt=state.elapsed+.28;
+        playWorldRecording('dirt_break',{gain:.075,rate:.95,duration:.09,lowpass:1800});emitEatingCrumbs(state.id);
     }
-    if(state.elapsed<1.6)return;
-    consumeInventoryItem(state.id);hunger=maxHunger;foodProtectionTimer=DAY_SECONDS;resetFoodTimers();
-    // Food replenishes hunger; health comes back gradually, including while walking.
-    updateHUD();updateHotbarUI();updateInventoryCounts();cancelEating();showToast(state.id===40?'Cooked meat eaten.':'Raw meat eaten.');
+    animateHeldFood(state);
+    if(state.elapsed+1e-9<FOOD_EAT_SECONDS)return;
+    const eaten=consumeAnimatedFood(state.id);
+    cancelEating();updateHotbarUI();
+    if(eaten)showToast(getBlockName(state.id)+' eaten.');
 }
 document.addEventListener('mouseup',event=>{if(eatingState&&!eatingState.automatic&&event.button===eatingState.button)cancelEating();});
 document.addEventListener('visibilitychange',()=>{if(document.hidden)cancelEating();});
+document.addEventListener('pointercancel',cancelEating);
+document.addEventListener('wheel',()=>{if(eatingState)cancelEating();},{passive:true});
+document.addEventListener('keydown',event=>{if(eatingState&&(/^Digit[1-9]$/.test(event.code)&&Number(event.code.slice(-1))-1!==eatingState.slot||['Escape','KeyE'].includes(event.code)))cancelEating();});
+window.addEventListener('blur',cancelEating);

@@ -19,6 +19,10 @@ body.menu-open #crosshair, body.menu-open #info-panel, body.menu-open #command-b
 #start-menu .play-mode img { width: 27px; height: 27px; }
 .world-options { display: grid; grid-template-columns: auto minmax(0,1fr); align-items: center; gap: 10px 16px; margin-top: 22px; }
 .world-options label { font-size: 15px; font-weight: 700; text-shadow: 0 2px 3px #172b22; }
+.view-setting { display:flex; align-items:center; gap:10px; margin:14px 0; font-size:14px; color:#fff; }
+.view-setting input { flex:1; min-width:50px; accent-color:#8fcb80; }
+.view-setting output { width:55px; flex:none; text-align:right; font-variant-numeric:tabular-nums; }
+#pause-menu .view-setting { width:90%; margin:12px auto; }
 #start-menu .world-options select { min-width: 0; width: 100%; height: 42px; padding: 0 12px; background: #253a32; }
 .terrain-shortcuts { display: flex; flex-wrap: wrap; gap: 5px; margin: 12px 0 20px; }
 #start-menu .terrain-btn { font-size: 12px; min-height: 30px; flex: 1 1 70px; padding: 5px; background: #253a32 !important; border-color: #97ada0; }

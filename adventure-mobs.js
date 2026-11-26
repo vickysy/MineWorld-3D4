@@ -1,5 +1,7 @@
 const adventureMobs=[];
 const villageRaidVisits=new Set();
+const PILLAGER_PARTY_MIN=3,PILLAGER_PARTY_MAX=5,NATURAL_ADVENTURE_LIMIT=8;
+let nextPillagerPartyId=1;
 let ridingHorse=null,horseReturnPosition=null,adventureSpawnTime=0;
 const adventurePlayerLast=new THREE.Vector3();
 function buildPillager(){
@@ -147,12 +149,20 @@ function handleAdventureClick(e){
     beginHandSwing();
     return false;
 }
-function firePillagerArrow(mob){
-    const origin=mob.mesh.position.clone().add(new THREE.Vector3(0,.8,0)),target=camera.position.clone();
-    target.y+=.5*9*Math.pow(origin.distanceTo(target)/22,2);const direction=target.sub(origin).normalize(),mesh=createFlyingArrow(CROSSBOW_ID);
-    mesh.position.copy(origin);mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),direction);scene.add(mesh);
-    flyingArrows.push({mesh,velocity:direction.multiplyScalar(22),life:6,damage:2,enemy:true,dimension:currentDimension,stuck:null});
-    while(flyingArrows.length>48){disposeModModel(flyingArrows.shift().mesh);}
+function firePillagerArrow(mob,target=mob.encounterTarget){
+    if(!target||!encounterTargetVisible(mob,target,{range:24,originHeight:.8}))return false;
+    const origin=mob.mesh.position.clone().add(new THREE.Vector3(0,.8,0)),aim=encounterTargetPosition(target).sub(origin),range=Math.hypot(aim.x,aim.z);
+    const speed=22,gravity=9,discriminant=speed**4-gravity*(gravity*range*range+2*aim.y*speed*speed);
+    if(discriminant<0)return false;
+    const velocity=new THREE.Vector3();
+    if(range<.01)velocity.set(0,Math.sign(aim.y||1)*speed,0);
+    else{
+        const slope=(speed*speed-Math.sqrt(discriminant))/(gravity*range),horizontal=speed/Math.sqrt(1+slope*slope);
+        velocity.set(aim.x/range*horizontal,horizontal*slope,aim.z/range*horizontal);
+    }
+    const mesh=createFlyingArrow(CROSSBOW_ID);mesh.position.copy(origin);mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),velocity.clone().normalize());scene.add(mesh);
+    flyingArrows.push({mesh,velocity,life:6,damage:2,enemy:true,shooter:mob,target,dimension:currentDimension,stuck:null});
+    while(flyingArrows.length>48){disposeModModel(flyingArrows.shift().mesh);}return true;
 }
 function nearbyPillagerVillage(){
     if(selectedTerrain==='random'&&wildernessVersion>=4){
@@ -172,25 +182,73 @@ function villageRaidCrop(home){
     }
     return null;
 }
+function spawnPillagerParty(destination,{home=null,radius=22}={}){
+    const room=Math.min(NATURAL_ADVENTURE_LIMIT-adventureMobs.filter(m=>!m.eggId).length,20-adventureMobs.length);
+    if(room<PILLAGER_PARTY_MIN||gameDifficulty==='peaceful'||currentDimension!=='overworld'||!thermalAuthority())return null;
+    const size=Math.min(room,PILLAGER_PARTY_MIN+Math.floor(Math.random()*(PILLAGER_PARTY_MAX-PILLAGER_PARTY_MIN+1)));
+    const startAngle=Math.random()*Math.PI*2,formation=[[0,0],[-1.8,1.8],[1.8,1.8],[-.9,3.6],[.9,3.6]];
+    const occupied=[...zombies,...creepers,...villagers,...animals,...endermen,...adventureMobs].filter(m=>!m.dying);
+    for(let attempt=0;attempt<8;attempt++){
+        const angle=startAngle+attempt*Math.PI/4,rx=Math.cos(angle),rz=Math.sin(angle),sx=-rz,sz=rx;
+        const anchor=[destination[0]+rx*radius,destination[1],destination[2]+rz*radius],positions=[],offsets=[];
+        for(const [side,back] of formation.slice(0,size)){
+            const offset=[sx*side+rx*back,sz*side+rz*back],x=Math.round(anchor[0]+offset[0]),z=Math.round(anchor[2]+offset[1]),y=getSurfaceHeight(x,z)+1;
+            const floor=getBlock(x,y-1,z),p=new THREE.Vector3(x,y,z);
+            if(!isSolid(x,y-1,z)||isWaterType(floor)||floor===LAVA_ID||mobBodyBlocked(p,1.98,.42))continue;
+            if(positions.length&&Math.abs(y-positions[0][1])>2)continue;
+            if(p.distanceTo(camera.position)<2||occupied.some(m=>m.mesh.position.distanceToSquared(p)<2.25)||positions.some(v=>p.distanceToSquared(new THREE.Vector3(...v))<2.25))continue;
+            positions.push([x,y,z]);offsets.push(offset);
+        }
+        if(positions.length<PILLAGER_PARTY_MIN)continue;
+        const party={id:nextPillagerPartyId++,destination:home?(villageRaidCrop(home)||destination.slice()):destination.slice(),home:home?{...home}:null,time:home?75:100,leaving:false,members:[]};
+        for(let i=0;i<positions.length;i++){
+            const m=spawnAdventureMob(PILLAGER_EGG,...positions[i]);if(!m)continue;
+            m.eggId=null;m.party=party;m.partyOffset=[offsets[i][0]-offsets[0][0],offsets[i][1]-offsets[0][1]];m.partyExit=positions[i];m.attackTimer=.8+i*.3;party.members.push(m);
+            if(home)m.raid={home:party.home,exit:m.partyExit,time:party.time,target:party.destination,loot:null,leaving:false};
+        }
+        if(party.members.length>=PILLAGER_PARTY_MIN)return party;
+        for(const m of party.members){disposeModModel(m.mesh);adventureMobs.splice(adventureMobs.indexOf(m),1);}
+    }
+    return null;
+}
+function updatePillagerParties(delta){
+    const parties=new Set(adventureMobs.map(m=>m.party).filter(Boolean));
+    for(const party of parties){
+        party.time-=delta;
+        if(party.time<10||gameDifficulty==='peaceful'||party.home&&!isNightTime())party.leaving=true;
+        for(const m of party.members)if(m.raid){m.raid.time=party.time;m.raid.leaving=party.leaving;}
+    }
+}
+function guidePillagerParty(mob){
+    const party=mob.party,p=mob.mesh.position;
+    if(!party.leaving&&party.home&&p.distanceTo(new THREE.Vector3(...party.destination))<1.5&&thermalAuthority()){
+        if([WHEAT_RIPE,RICE_RIPE].includes(getBlock(...party.destination))){
+            mob.raid.loot=harvestPlant(...party.destination);
+            if(mob.raid.loot)rememberOriginalMaterials(addModelBox(mob.mesh,.35,.48,.22,0xb99557,0,.52,-.31));
+        }
+        party.leaving=true;
+    }
+    if(mob.raid)mob.raid.leaving=party.leaving;
+    const target=party.leaving?mob.partyExit:[party.destination[0]+mob.partyOffset[0],party.destination[1],party.destination[2]+mob.partyOffset[1]];
+    const dx=target[0]-p.x,dz=target[2]-p.z,d=Math.hypot(dx,dz);
+    if(party.time< -30||party.leaving&&d<1.3&&Math.abs(target[1]-p.y)<1.5){dropRaidLoot(mob);mob.partyDone=true;return true;}
+    if(d>.65)steerEncounterMob(mob,dx,dz,1.3,1.98,.42);
+    return true;
+}
 function startVillageRaid(home){
     // Creative protects the player, not village crops. Only Peaceful disables visits.
     if(!isNightTime()||gameDifficulty==='peaceful'||currentDimension!=='overworld'||!thermalAuthority())return false;
     const key=home.farm?`farm:${home.x},${home.z}`:`village:${Math.round(home.x/128)},${Math.round(home.z/128)}`;
-    if(villageRaidVisits.has(key)||adventureMobs.filter(m=>!m.eggId).length>=3)return false;
-    let count=0;
-    for(let i=0;i<16&&count<2&&adventureMobs.filter(m=>!m.eggId).length<3;i++){
-        const angle=i*Math.PI/8,x=Math.round(home.x+Math.cos(angle)*22),z=Math.round(home.z+Math.sin(angle)*22),y=getSurfaceHeight(x,z)+1;
-        if(!isSolid(x,y-1,z)||isWaterType(getBlock(x,y-1,z))||getBlock(x,y-1,z)===LAVA_ID)continue;
-        const m=spawnAdventureMob(PILLAGER_EGG,x,y,z);if(!m)continue;
-        m.eggId=null;m.raid={home:{...home},exit:[x,y,z],time:75,target:null,loot:null,leaving:false};count++;
-    }
-    if(count){villageRaidVisits.add(key);showToast('Pillagers are approaching the village.');}return count>0;
+    if(villageRaidVisits.has(key))return false;
+    const party=spawnPillagerParty([home.x,home.y+1,home.z],{home});
+    if(party){villageRaidVisits.add(key);showToast('Pillagers are approaching the village.');}return !!party;
 }
 function dropRaidLoot(mob){
     const loot=mob.raid?.loot;if(!loot)return;
     spawnDroppedItem(...mob.mesh.position.toArray(),loot.id,loot.count);mob.raid.loot=null;
 }
 function guidePillagerVisit(mob,delta){
+    if(mob.party)return guidePillagerParty(mob);
     const raid=mob.raid;if(!raid)return false;
     raid.time-=delta;if(!isNightTime()||gameDifficulty==='peaceful'||raid.time<10)raid.leaving=true;
     if(!raid.target&&!raid.leaving)raid.target=villageRaidCrop(raid.home)||[raid.home.x,raid.home.y+1,raid.home.z];
@@ -216,6 +274,7 @@ function guidePillagerVisit(mob,delta){
 function updateAdventureMobs(delta){
     if(!controls.isLocked||!isGameStarted||isSleeping)return;
     if(!isNightTime())villageRaidVisits.clear();
+    updatePillagerParties(delta);
     const noisy=camera.position.distanceToSquared(adventurePlayerLast)>.0004||handSwing>0;adventurePlayerLast.copy(camera.position);
     for(let i=adventureMobs.length-1;i>=0;i--){
         const m=adventureMobs[i],warden=m.kind==='warden';
@@ -224,34 +283,43 @@ function updateAdventureMobs(delta){
         if(!warden)updateHostileVoice(m,delta);
         const p=m.mesh.position,dx=camera.position.x-p.x,dz=camera.position.z-p.z,d=Math.hypot(dx,dz);
         if(warden&&hostileMobsEnabled()&&((noisy&&d<14)||d<3))m.heard=5;
-        const chase=hostileMobsEnabled()&&d<(m.raid?12:24)&&Math.abs(camera.position.y-p.y)<10&&(!warden||m.heard>0);
         m.vx=m.vz=0;
-        if(m.raid){
-            guidePillagerVisit(m,delta);
-            if(m.raid.done){disposeModModel(m.mesh);adventureMobs.splice(i,1);continue;}
-        }
-        if(chase){
+        if(warden&&hostileMobsEnabled()&&d<24&&Math.abs(camera.position.y-p.y)<10&&m.heard>0){
             m.mesh.rotation.y=Math.atan2(dx,dz);
-            const origin=p.clone().add(new THREE.Vector3(0,warden?1.7:.8,0)),clear=hasClearLineBetween(origin,camera.position);
-            if(d>(warden?1.8:9)||!clear){m.vx=dx/Math.max(.1,d)*(warden?2.1:1.3);m.vz=dz/Math.max(.1,d)*(warden?2.1:1.3);}
-            if(clear&&!m.attackTimer){if(warden&&d<2.3){takeDamage(4);m.attackTimer=1.5;}else if(!warden&&d<18){firePillagerArrow(m);m.attackTimer=2.3;}}
+            const origin=p.clone().add(new THREE.Vector3(0,1.7,0)),clear=hasClearLineBetween(origin,camera.position);
+            if(d>1.8||!clear){m.vx=dx/Math.max(.1,d)*2.1;m.vz=dz/Math.max(.1,d)*2.1;}
+            if(clear&&!m.attackTimer&&d<2.3){takeDamage(4);m.attackTimer=1.5;}
+        }else if(!warden){
+            if(m.raid)guidePillagerVisit(m,delta);else if(m.party)guidePillagerParty(m);
+            if(m.raid?.done||m.partyDone){disposeModModel(m.mesh);adventureMobs.splice(i,1);continue;}
+            const leaving=m.party?.leaving||m.raid?.leaving;
+            const target=leaving?(m.encounterTarget=null):selectHostileTarget(m,{range:m.raid?18:24,originHeight:.8});
+            if(target){
+                m.vx=m.vz=0;const point=encounterTargetPosition(target),tx=point.x-p.x,tz=point.z-p.z,distance=Math.hypot(tx,tz);
+                m.mesh.rotation.y=Math.atan2(tx,tz);
+                if(distance>9)steerEncounterMob(m,tx,tz,1.3,1.98,.42);
+                if(distance<18&&!m.attackTimer&&firePillagerArrow(m,target))m.attackTimer=2.3;
+            }else if(!m.raid&&!m.party&&gameDifficulty!=='peaceful')wanderEncounterMob(m,delta,.45);
+            if(!target&&Math.hypot(m.vx,m.vz)>.05)m.mesh.rotation.y=Math.atan2(m.vx,m.vz);
         }
         const moving=moveWalkingMob(m,delta,warden?3.05:1.98,warden?.95:.42);m.walkTime+=delta*(moving?6:1);
         const step=moving?Math.sin(m.walkTime)*.3:0;m.mesh.userData.leftLeg.rotation.x=step;m.mesh.userData.rightLeg.rotation.x=-step;
         if(warden){m.mesh.userData.heart.material.emissiveIntensity=.7+Math.sin(m.walkTime*3)*.25;for(const arm of ['leftArm','rightArm'])m.mesh.userData[arm].rotation.x=m.attackTimer>1.1?-.8:step*.5;}
     }
     adventureSpawnTime+=delta;
-    if(adventureSpawnTime<20||gameDifficulty==='peaceful'||!thermalAuthority()||currentDimension!=='overworld'||selectedTerrain==='moon')return;adventureSpawnTime=0;
+    if(adventureSpawnTime<20)return;adventureSpawnTime=0;
+    if(gameDifficulty==='peaceful'||!thermalAuthority()||currentDimension!=='overworld'||selectedTerrain==='moon')return;
     const village=isNightTime()?nearbyPillagerVillage():null;
     if(village){startVillageRaid(village);return;}
     if(!hostileMobsEnabled())return;
-    if(adventureMobs.filter(m=>!m.eggId).length>=3)return;
     const deep=camera.position.y<getSurfaceHeight(camera.position.x,camera.position.z)-12;
     if(!deep&&selectedTerrain!=='desert')return;
+    if(!deep){spawnPillagerParty([camera.position.x,camera.position.y-getPlayerHeight()+.5,camera.position.z],{radius:22});return;}
+    if(adventureMobs.filter(m=>!m.eggId).length>=3)return;
     for(let i=0;i<12;i++){
         const a=Math.random()*Math.PI*2,x=Math.round(camera.position.x+Math.cos(a)*18),z=Math.round(camera.position.z+Math.sin(a)*18);
         const y=deep?Math.round(camera.position.y-getPlayerHeight()+.5):getSurfaceHeight(x,z)+1;
         if(!isSolid(x,y-1,z))continue;const m=spawnAdventureMob(deep?WARDEN_EGG:PILLAGER_EGG,x,y,z);if(m){m.eggId=null;break;}
     }
 }
-function clearAdventureMobs(){dismountHorse(true);for(const m of adventureMobs)disposeModModel(m.mesh);adventureMobs.length=0;villageRaidVisits.clear();adventureSpawnTime=0;handSwing=handCooldown=0;}
+function clearAdventureMobs(){dismountHorse(true);for(const m of adventureMobs)disposeModModel(m.mesh);adventureMobs.length=0;villageRaidVisits.clear();adventureSpawnTime=0;nextPillagerPartyId=1;handSwing=handCooldown=0;}
