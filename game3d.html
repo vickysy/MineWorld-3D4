@@ -4312,6 +4312,8 @@
             let ui4 = document.getElementById('multiplayer-menu');
             
 	            if (!isInventoryOpen && (ui1 && ui1.style.display === 'none') && (ui2 && ui2.style.display === 'none') && (ui3 && ui3.style.display === 'none') && (ui4 && ui4.style.display === 'none')) {
+                clearTimeout(toastTimeout);
+                document.getElementById('toast-msg').style.display='none';
                 blocker.style.display = 'flex';
                 setTerrainChoice(selectedTerrain);
                 document.getElementById('start-menu').style.display = 'none';

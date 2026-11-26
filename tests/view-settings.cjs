@@ -22,7 +22,10 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
    setViewFov(900,false);if(camera.fov!==105)throw Error('Maximum FOV');setViewFov(-20,false);if(camera.fov!==75)throw Error('Minimum FOV');
    return values;
   });assert(projections[0]>1&&projections[1]<1&&projections[2]<projections[1],'Wider FOV reveals more of the same world');
-  await page.evaluate(()=>controls.unlock());await page.locator('#pause-view-fov').focus();await page.keyboard.press('Home');
+  await page.evaluate(()=>{showToast('Current terrain: Plains');controls.unlock();});
+  await page.locator('#pause-menu').waitFor({state:'visible'});
+  assert(!(await page.locator('#toast-msg').isVisible()),'Gameplay toast never covers pause controls');
+  await page.locator('#pause-view-fov').focus();await page.keyboard.press('Home');
   assert.equal(await page.evaluate(()=>camera.fov),75);await page.keyboard.press('End');assert.equal(await page.evaluate(()=>camera.fov),105);
   for(const viewport of [{width:1200,height:800},{width:390,height:844}]){
    await page.setViewportSize(viewport);await page.waitForTimeout(100);
