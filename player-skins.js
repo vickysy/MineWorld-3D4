@@ -65,11 +65,13 @@ function flattenedPlayerSkin(source){
 function playerSkinTexture(source){
     const map=new THREE.CanvasTexture(flattenedPlayerSkin(source));map.magFilter=THREE.NearestFilter;map.minFilter=THREE.NearestMipmapLinearFilter;return map;
 }
-function skinPartGeometry(part,w,h,d){
-    const geometry=new THREE.BoxGeometry(w,h,d),uv=geometry.attributes.uv;
+function skinPartGeometry(part,w,h,d,heightSegments=1){
+    const geometry=new THREE.BoxGeometry(w,h,d,1,heightSegments,1),uv=geometry.attributes.uv;
     ['left','right','top','bottom','back','front'].forEach((face,index)=>{
         const [x,y,width,height]=skinFaceRect(part,face);
-        for(let i=0;i<4;i++){const n=index*4+i;uv.setXY(n,(x+uv.getX(n)*width)/64,1-(y+(1-uv.getY(n))*height)/64);}
+        const group=geometry.groups[index],vertices=new Set();
+        for(let i=group.start;i<group.start+group.count;i++)vertices.add(geometry.index.getX(i));
+        for(const n of vertices)uv.setXY(n,(x+uv.getX(n)*width)/64,1-(y+(1-uv.getY(n))*height)/64);
     });return geometry;
 }
 function buildSkinAvatar(source=defaultPlayerSkin()){
@@ -93,9 +95,27 @@ function applyAvatarSkin(model,source){
 function buildFirstPersonRig(emptyHand=true){
     const group=new THREE.Group(),arm=new THREE.Group(),texture=playerSkinTexture(getLocalPlayerSkin());
     group.userData.modItem=true;group.userData.emptyHand=emptyHand;group.userData.gripArm=arm;group.userData.ownedTextures=[texture];
-    const mesh=new THREE.Mesh(skinPartGeometry('rightArm',.2,.84,.22),new THREE.MeshLambertMaterial({map:texture}));
+    const mesh=new THREE.Mesh(skinPartGeometry('rightArm',.2,.84,.22,3),new THREE.MeshLambertMaterial({map:texture}));
+    mesh.userData.armBindPositions=mesh.geometry.attributes.position.array.slice();mesh.userData.armLength=.84;mesh.frustumCulled=false;
     // One continuous cuboid: the fist encloses the grip, sleeve and forearm cannot separate.
     mesh.rotation.z=Math.PI;mesh.position.y=-.355;mesh.userData.skinPart='rightArm';arm.add(mesh);arm.rotation.x=-.32;group.add(arm);return group;
+}
+const firstPersonArmMatrix=new THREE.Matrix4(),firstPersonArmBottom=new THREE.Vector3();
+function anchorFirstPersonArm(){
+    const rig=heldItemGroup.children[0],arm=rig?.userData.gripArm,mesh=arm?.children[0];
+    if(!mesh?.userData.armBindPositions)return;
+    heldItemGroup.updateMatrix();rig.updateMatrix();arm.updateMatrix();
+    firstPersonArmMatrix.multiplyMatrices(heldItemGroup.matrix,rig.matrix).multiply(arm.matrix);
+    const bottom=firstPersonArmBottom.set(0,-.775,0).applyMatrix4(firstPersonArmMatrix),m=firstPersonArmMatrix.elements;
+    const edge=1.12*Math.tan(camera.fov*Math.PI/360),gap=bottom.y-edge*bottom.z,slope=-m[5]+edge*m[6];
+    const length=.84+(gap>0&&slope<-.000001?Math.min(4,gap/-slope):0);
+    if(Math.abs(length-mesh.userData.armLength)<.00001)return;
+    // Extend only the sleeve vertices; fist size, skin pixels and the grip stay fixed.
+    const position=mesh.geometry.attributes.position,base=mesh.userData.armBindPositions;
+    for(let i=0;i<position.count;i++){
+        const y=base[i*3+1];position.setY(i,y+Math.max(0,(y+.14)/.56)*(length-.84));
+    }
+    position.needsUpdate=true;mesh.geometry.computeBoundingBox();mesh.geometry.computeBoundingSphere();mesh.userData.armLength=length;
 }
 function savePlayerSkin(source){
     localPlayerSkin=skinCanvas(source);localSkinPacket=encodeSkinPixels(localPlayerSkin);

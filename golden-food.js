@@ -123,6 +123,7 @@ function animateHeldFood(state){
     heldItemGroup.position.set((x*(1-reach)+(.10+chew*.012)*reach*viewScale)*playerScale,
         (-.4+reach*.23+Math.abs(chew)*.012)*playerScale,(-.8+reach*.25)*playerScale);
     heldItemGroup.rotation.set(-.25+chew*.035,.12,-.3);
+    anchorFirstPersonArm();
 }
 function emitEatingCrumbs(id){
     if(menuReducedMotion.matches)return;

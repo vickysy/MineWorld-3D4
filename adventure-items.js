@@ -116,6 +116,7 @@ function applyHandPose(pose){
     heldItemGroup.rotation.set(pose[3],pose[4]+(vertical?Math.atan2(-x*fovScale,-z):0),pose[5]);
     const arm=heldItemGroup.children[0]?.userData.gripArm;
     if(arm)arm.rotation.x=-pose[3]-(vertical?.08:.32);
+    anchorFirstPersonArm();
 }
 function resetHandAnimation(){handSwing=0;handPose.fill(0);applyHandPose(handPose);}
 function startHandAnimation(action='melee'){handSwing=HAND_SWING_SECONDS;handSwingItem=currentBlock;handSwingAction=action;}

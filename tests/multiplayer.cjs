@@ -349,7 +349,11 @@ async function assertScenePixels(page) {
         await host.waitForFunction(()=>Object.keys(remotePlayers).length===0);
         assert(await guest.evaluate(()=>isGameStarted&&!multiplayerRoom));
         await guest.locator('#guest-mode-btn').click();await guest.locator('#room-code-input').fill(code);await guest.locator('#join-room-btn').click();
-        await guest.waitForFunction(()=>multiplayerRoom?.worldReady,{},{timeout:60000});
+        try{await guest.waitForFunction(()=>multiplayerRoom?.worldReady,{},{timeout:60000});}
+        catch(error){
+            for(const page of [host,guest])console.log('Rejoin state',await page.evaluate(()=>({status:document.getElementById('multiplayer-status').textContent,phase:multiplayerRoom?.phase,worldReady:multiplayerRoom?.worldReady,applying:multiplayerRoom?.applying,loading:worldLoading,started:isGameStarted})));
+            console.log('PAGE ERRORS',errors);throw error;
+        }
         assert.equal(await guest.evaluate(p=>getBlock(...p),guestCell),60);
         assert.equal(await guest.evaluate(p=>passwordLocks.get(p.join(','))?.owner,keypad),guestOwner);
         assert.equal(await guest.evaluate(()=>passwordLockSecrets.size),0,'Rejoin snapshot also excludes private verifiers');

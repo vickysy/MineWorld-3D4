@@ -35,7 +35,7 @@ function updateSurvival(delta){
         starvationTimer+=delta;
         if(starvationTimer>=2400&&health>rules.starvationFloor){starvationTimer-=600;takeDamage(Math.min(.5,health-rules.starvationFloor),'starvation');}
     }else starvationTimer=0;
-    if(hunger>=maxHunger-1&&health<maxHealth&&recoveryDelay===0){
+    if(hunger>0&&health>0&&health<maxHealth&&recoveryDelay===0){
         regenerationTimer+=delta;
         if(regenerationTimer>=rules.regenSeconds){regenerationTimer-=rules.regenSeconds;health=Math.min(maxHealth,health+.5);updateHUD();}
     }else regenerationTimer=0;
@@ -52,18 +52,38 @@ function renderPlayerView(view){
         const phase=1-hurtViewTime/.42;
         view.rotateZ(Math.sin(phase*Math.PI*2)*Math.pow(1-phase,2)*.075*hurtViewSide);
     }
-    try{renderer.render(scene,view);}finally{view.quaternion.copy(original);view.updateMatrixWorld(true);}
+    const overlay=view===camera&&heldItemGroup.visible&&!photoMode&&!isThirdPerson;
+    const crumbs=foodCrumbRoot,crumbsVisible=crumbs?.visible;
+    const mask=view.layers.mask,background=scene.background,fog=scene.fog,autoClear=renderer.autoClear,autoReset=renderer.info.autoReset;
+    const lights=[ambientLight,dirLight,heldTorchLight],lightMasks=lights.map(light=>light.layers.mask);
+    try{
+        if(overlay){heldItemGroup.visible=false;if(crumbs)crumbs.visible=false;}
+        renderer.render(scene,view);
+        if(overlay){
+            heldItemGroup.visible=true;if(crumbs)crumbs.visible=crumbsVisible;
+            heldItemGroup.traverse(part=>part.layers.enable(31));if(crumbs)crumbs.traverse(part=>part.layers.enable(31));
+            for(const light of lights)light.layers.enable(31);
+            // The viewmodel has its own depth pass, so a nearby wall cannot cut off the wrist.
+            view.layers.set(31);scene.background=null;scene.fog=null;renderer.autoClear=false;renderer.info.autoReset=false;
+            renderer.clearDepth();renderer.render(scene,view);
+        }
+    }finally{
+        if(overlay)heldItemGroup.visible=true;if(crumbs)crumbs.visible=crumbsVisible;
+        view.layers.mask=mask;scene.background=background;scene.fog=fog;renderer.autoClear=autoClear;renderer.info.autoReset=autoReset;
+        lights.forEach((light,i)=>light.layers.mask=lightMasks[i]);view.quaternion.copy(original);view.updateMatrixWorld(true);
+    }
 }
 function updateFallDamage(before,environment,groundedBefore){
     const scale=playerScale;
     if(isCreativeMode()||creativeFlying||ridingHorse||ridingMinecart||drivingCar||seatedAt||activeMech||isRespawning||environment.onLadder||environment.waterFraction>.05||environment.lavaFraction>.05||
-        fallState.scale!==scale||fallState.dimension!==currentDimension||before.distanceTo(camera.position)>4*Math.max(scale,.01)||
+        fallState.scale!==scale||fallState.dimension!==currentDimension||
         fallState.lastPosition&&before.distanceTo(fallState.lastPosition)>4*Math.max(scale,.01)){
         resetFallTracking();return;
     }
     const feet=camera.position.y-getPlayerHeight(),previousFeet=before.y-getPlayerHeight();
     const onGround=velocity.y<=0&&checkScaledCollision(camera.position.clone().add(new THREE.Vector3(0,-.004*Math.min(scale,1),0)));
-    if(groundedBefore)fallState.armed=true;
+    // Starting in midair (or leaving a ladder) is still a fall. Teleports rebase above, not the whole descent.
+    fallState.armed=true;
     if(fallState.peak===null)fallState.peak=previousFeet;
     fallState.peak=Math.max(fallState.peak,feet,previousFeet);
     if(onGround){

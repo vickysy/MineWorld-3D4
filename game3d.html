@@ -410,9 +410,11 @@
     <script src="cannons.js?v=20261019-closed-gates"></script>
     <script src="rail-vehicles.js?v=20261020-connected"></script>
     <script src="connected-home.js?v=20261020-connected"></script>
-    <script src="wilderness.js?v=20261125-forge"></script>
+    <script src="wilderness.js?v=20261127-caves"></script>
+    <script src="cave-networks.js?v=20261127-caves"></script>
+    <script src="ladders.js?v=20261127-thin"></script>
     <script src="ecology.js?v=20261123-treasure"></script>
-    <script src="golden-food.js?v=20261126-food"></script>
+    <script src="golden-food.js?v=20261127-hand"></script>
     <script src="celestial-sky.js?v=20261126-sky"></script>
     <script src="outdoors.js?v=20261123-snow"></script>
     <script src="mining-cracks.js?v=20261123-cracks"></script>
@@ -421,12 +423,12 @@
     <script src="world-audio-data.js?v=20261124-menu"></script>
     <script src="world-audio.js?v=20261126-earth"></script>
     <script src="voxel-style.js?v=20261125-skins"></script>
-    <script src="player-skins.js?v=20261125-forge"></script>
+    <script src="player-skins.js?v=20261127-hand"></script>
     <script src="skin-editor.js?v=20261125-skins"></script>
     <script src="living-physics.js?v=20261126-encounters"></script>
     <script src="encounter-rules.js?v=20261126-encounters"></script>
     <script src="view-settings.js?v=20261126-view"></script>
-    <script src="adventure-items.js?v=20261126-downstroke"></script>
+    <script src="adventure-items.js?v=20261127-hand"></script>
     <script src="adventure-mobs.js?v=20261126-patrols"></script>
     <script src="animal-leads.js?v=20261125-leads"></script>
     <script src="wildlife-companions.js?v=20261126-wolves"></script>
@@ -434,7 +436,7 @@
     <script src="village-life.js?v=20261118-outdoors"></script>
     <script src="terrain-horizon.js?v=end-islands-1"></script>
     <script src="village-houses.js?v=20261104-ecology"></script>
-    <script src="survival-state.js?v=20261126-food"></script>
+    <script src="survival-state.js?v=20261127-fall"></script>
     <script src="start-menu.js?v=20261124-menu"></script>
 
     <script>
@@ -1261,7 +1263,7 @@
         const matGlassSensorDoor = new THREE.MeshLambertMaterial({ map: createTexture('glass_sensor_door'), transparent: true, opacity: 0.78, depthWrite: false, side: THREE.DoubleSide });
         const matGlassSensorDoorOpen = new THREE.MeshLambertMaterial({ map: createTexture('glass_sensor_open'), transparent: true, opacity: 0.62, alphaTest: 0.05, depthWrite: false, side: THREE.DoubleSide });
         const matWhiteCobblestone = new THREE.MeshLambertMaterial({ map: createTexture('white_cobblestone') });
-        const matLadder = new THREE.MeshLambertMaterial({ map: createTexture('ladder'), transparent: true });
+        const matLadder = new THREE.MeshLambertMaterial({ map: createTexture('ladder'), alphaTest: .5 });
         const matDoorB = new THREE.MeshLambertMaterial({ map: createTexture('door_bottom'), transparent: true });
         const matDoorT = new THREE.MeshLambertMaterial({ map: createTexture('door_top'), transparent: true });
         const matDoorO = new THREE.MeshLambertMaterial({ map: createTexture('door_open'), transparent: true });
@@ -2818,6 +2820,8 @@
                 return hash3(x,y,z,32)<0.08?61:127;
             }
 
+            if(naturalCavesEnabled()&&naturalCaveAt(x,y,z,h))return floodBlockType(x,y,z,0);
+
             if (y > h) {
                 if(currentDimension==='overworld' && worldFloodHeight!==null && y<=worldFloodHeight) return 24;
                 if (selectedTerrain !== 'moon' && y <= SEA_LEVEL) {
@@ -3000,13 +3004,14 @@
                     const override=fineVoxelEdits.get(detailKey(microAncestor(c,level)));
                     if (override!==undefined) type=override;
                 }
-                return type===SNOW_LAYER_ID && microSnowFill(c)<=0 || isTrapdoor(type)&&!trapHasVolume(trapMicroBounds(c,type)) ? 0 : type;
+                return type===SNOW_LAYER_ID && microSnowFill(c)<=0 || isTrapdoor(type)&&!trapHasVolume(trapMicroBounds(c,type)) || type===7&&!trapHasVolume(ladderMicroBounds(c)) ? 0 : type;
             }
             const placed = microPlacements.get(microParentKey(c.x,c.y,c.z))?.get(microIndex(c.mx,c.my,c.mz));
-            if (placed !== undefined) return isTrapdoor(placed)&&!trapHasVolume(trapMicroBounds(c,placed))?0:placed;
+            if (placed !== undefined) return isTrapdoor(placed)&&!trapHasVolume(trapMicroBounds(c,placed))||placed===7&&!trapHasVolume(ladderMicroBounds(c))?0:placed;
             if (isMicroMined(c.x,c.y,c.z,c.mx,c.my,c.mz)) return 0;
             const type=getBlock(c.x,c.y,c.z);
             if(isTrapdoor(type)&&!trapHasVolume(trapMicroBounds(c,type)))return 0;
+            if(type===7&&!trapHasVolume(ladderMicroBounds(c)))return 0;
             if (type===SNOW_LAYER_ID && c.my/MICRO_BLOCK_DIVISIONS>=SNOW_LAYER_HEIGHT) return 0;
             // Dirt retains a one-micro-block shell. Explicit placements still fill its cavity.
             if ([1,2].includes(type) && [c.mx,c.my,c.mz].every(v=>v>0 && v<MICRO_BLOCK_DIVISIONS-1)) return 0;
@@ -3183,8 +3188,8 @@
                 const c = microCell(...cell,level);
                 const type = getMicroType(c);
                 if (type && type !== 24 && type !== 25 && type !== LAVA_ID && type !== 42) {
-                    if(isTrapdoor(type)) {
-                        const box=trapMicroBounds(c,type),point=new THREE.Ray(origin,direction).intersectBox(box,new THREE.Vector3());
+                    if(isTrapdoor(type)||type===7) {
+                        const box=type===7?ladderMicroBounds(c):trapMicroBounds(c,type),point=new THREE.Ray(origin,direction).intersectBox(box,new THREE.Vector3());
                         if(point&&point.distanceTo(origin)<=maxDistance){
                             for(const axis of axes){if(Math.abs(point[axis]-box.min[axis])<1e-7){norm.set(0,0,0);norm[axis]=-1;break;}if(Math.abs(point[axis]-box.max[axis])<1e-7){norm.set(0,0,0);norm[axis]=1;break;}}
                             return {...c,type,norm,distance:point.distanceTo(origin)};
@@ -3421,8 +3426,8 @@
                         const bottom=-.5+c.my/divs;
                         p[1]=bottom+(p[1]-bottom)*microSnowFill(c);
                     }
-                    if(isTrapdoor(type)){
-                        const bounds=trapMicroBounds(c,type);
+                    if(isTrapdoor(type)||type===7){
+                        const bounds=type===7?ladderMicroBounds(c):trapMicroBounds(c,type);
                         for(let axis=0;axis<3;axis++){const a=['x','y','z'][axis],base=[x,y,z][axis];p[axis]=THREE.MathUtils.clamp(p[axis],bounds.min[a]-base,bounds.max[a]-base);}
                     }
                     data.positions.push(...p);
@@ -3969,7 +3974,9 @@
                     }
 
                     if(currentDimension==='end'&&h!==END_VOID_Y)scanBottom=Math.min(scanBottom,endIslandBottom(h));
-                    if(selectedTerrain==='random'&&currentDimension==='overworld'){
+                    const surfaceBottom=scanBottom,caveRanges=naturalCavesEnabled()?naturalCaveScanRanges(x,z):[];
+                    if(caveRanges.length)scanBottom=Math.min(scanBottom,caveRanges[0][0]);
+                    if(wildernessVersion<5&&selectedTerrain==='random'&&currentDimension==='overworld'){
                         // Only cliff columns (and their immediate walls) can border a natural cave.
                         for(const [dx,dz] of [[0,0],[1,0],[-1,0],[0,1],[0,-1]]){
                             const c=biomeColumn(x+dx,z+dz).cliff;
@@ -3979,6 +3986,13 @@
 
 	                    // 从最高点一直往下检查到扫描底线
                     for (let y = yStart; y >= scanBottom; y--) {
+                        // Skip buried solid bands, but never skip edited columns or the shell around a cave.
+                        if(y<surfaceBottom&&caveRanges.length){
+                            let next=null;
+                            for(let i=caveRanges.length-1;i>=0;i--)if(y>=caveRanges[i][0]){next=caveRanges[i];break;}
+                            if(!next)break;
+                            y=Math.min(y,next[1]);
+                        }
                         let type = getBlock(x, y, z);
                         if(HOME_ITEMS[type]&&!(type===98&&constructionTypeAt(x,y,z)===98) || MACHINE_ITEMS[type] || type===FRIDGE_TOP_ID || type===FURNITURE_PART_ID || type===FIRE_ID || type===PISTON_HEAD_ID) continue;
                         if (type !== 0) {
@@ -4024,7 +4038,7 @@
                 let geo = boxGeo;
                 let material=materials[typeInt];
                 if(treasureGeometry(typeInt))geo=treasureGeometry(typeInt).clone();
-                if(NATURE_PLANTS.has(typeInt)||typeInt===SNOW_LAYER_ID||isTrapdoor(typeInt)||typeInt===42||typeInt===98)geo=natureGeometry(typeInt).clone();
+                if(NATURE_PLANTS.has(typeInt)||typeInt===7||typeInt===SNOW_LAYER_ID||isTrapdoor(typeInt)||typeInt===42||typeInt===98)geo=natureGeometry(typeInt).clone();
                 if (typeInt === 16 || typeInt === 25 || typeInt === 30) geo = torchGeo;
                 else if (typeInt === 26 || typeInt === 27 || typeInt === 28 || typeInt === PRESSURE_PLATE_ID) geo = flatGeo; // 铁轨、红石、压力板
                 if(typeInt===26||typeInt===27) {
@@ -4049,6 +4063,7 @@
                 if(b.type===24)continue;
                 matrix.identity();
                 matrix.setPosition(b.x, b.y, b.z);
+                if(b.type===7)matrix.makeRotationY(-ladderFacing(b.x,b.y,b.z)*Math.PI/2).setPosition(b.x,b.y,b.z);
                 if(b.type===98){
                     const r=constructionIndex.get(cx+','+cz)?.find(r=>r.kind==='prison'&&insideConstruction(r,b.x,b.y,b.z));
                     if(r&&b.y===r.y+r.height)matrix.makeRotationX(Math.PI/2).setPosition(b.x,b.y,b.z);
@@ -4400,7 +4415,10 @@
             for (let x=lo[0]; x<=hi[0]; x++) for (let y=lo[1]; y<=hi[1]; y++) for (let z=lo[2]; z<=hi[2]; z++) {
                 const raw = level ? getMicroType(microCell(x,y,z,level)) : getBlock(x,y,z);
                 const type = isWaterType(raw)?24:raw;
-                if (type === 7) onLadder = true;
+                if(type===7){
+                    const bounds=level?ladderMicroBounds(microCell(x,y,z,level)):ladderBounds(x-.5,y-.5,z-.5,ladderFacing(x,y,z));
+                    if(trapIntersects(bounds.expandByScalar(.08*playerScale),min,max))onLadder=true;
+                }
                 if (type !== 24 && type !== LAVA_ID) continue;
                 const corner = [x/n-0.5, y/n-0.5, z/n-0.5];
                 const [bx,by,bz]=corner.map(v=>Math.floor(v+size/2+0.5));
@@ -4752,7 +4770,7 @@
             
             // 更换种子并随机化出生点，避免每次出生在同一个地方
             seed = Math.random() * 1000;
-            setWildernessVersion(4);
+            setWildernessVersion(5);
             dayTime = Math.PI / 2;
             oxygen = 20;
             currentDimension = 'overworld';
@@ -5929,8 +5947,8 @@
                 if(type&&accept(type,...cell)){
                     const [x,y,z]=cell;
                     let d=distance,n=normal.clone(),hit=true;
-                    if(isTrapdoor(type)||type===SNOW_LAYER_ID){
-                        const bounds=isTrapdoor(type)?trapBounds(x-.5,y-.5,z-.5,type):
+                    if(isTrapdoor(type)||type===SNOW_LAYER_ID||type===7){
+                        const bounds=type===7?ladderBounds(x-.5,y-.5,z-.5,ladderFacing(x,y,z)):isTrapdoor(type)?trapBounds(x-.5,y-.5,z-.5,type):
                             new THREE.Box3(new THREE.Vector3(x-.5,y-.5,z-.5),new THREE.Vector3(x+.5,y-.5+SNOW_LAYER_HEIGHT,z+.5));
                         const p=new THREE.Ray(origin,dir).intersectBox(bounds,new THREE.Vector3());
                         hit=p!==null&&(d=p.distanceTo(origin))<=range;
@@ -7172,12 +7190,12 @@
                 } else {
                     dirLight.intensity = 0.1; // 微弱月光
                     
-                    if (!isCreativeMode() && Math.random() < 0.02 && zombies.length < 10) spawnZombie();
+                    if (Math.random() < 0.02 && zombies.length < 10) spawnZombie();
                     if (!isCreativeMode() && Math.random() < 0.01 && creepers.length < 5) spawnCreeper();
                 }
             } else {
                 // 月球上一直刷怪，没有动物和村民
-                if (!isCreativeMode() && Math.random() < 0.02 && zombies.length < 10) spawnZombie();
+                if (Math.random() < 0.02 && zombies.length < 10) spawnZombie();
                 if (!isCreativeMode() && Math.random() < 0.01 && creepers.length < 5) spawnCreeper();
             }
 

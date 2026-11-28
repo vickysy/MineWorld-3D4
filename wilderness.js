@@ -9,7 +9,7 @@ const NATURE_PLANTS=new Set([158,159,160,161,...WATER_PLANTS]);
 const hiddenByBase=new Map([[1,132],[2,133],[3,134]]);
 const NATURE_COLORS={};
 const biomeCache=new Map(),cliffCache=new Map(),natureGeometries=new Map();
-let biomeCacheSeed=null,wildernessVersion=4,gameDifficulty='normal',itchTimer=0,natureTick=0,natureTime=0;
+let biomeCacheSeed=null,wildernessVersion=5,gameDifficulty='normal',itchTimer=0,natureTick=0,natureTime=0;
 let natureFish=[],caveVisits=new Set();
 
 function isWaterType(id){return id===24||WATER_PLANTS.has(id);}
@@ -21,8 +21,9 @@ function setDifficulty(value){
 }
 
 function setWildernessVersion(version){
-    wildernessVersion=[1,2,3,4].includes(version)?version:4;
+    wildernessVersion=[1,2,3,4,5].includes(version)?version:5;
     biomeCacheSeed=null;biomeCache.clear();cliffCache.clear();heightCache.clear();
+    clearCaveNetworks();
 }
 
 // Interpolated samples of the world's seeded hash keep adjacent regions continuous.
@@ -107,6 +108,7 @@ function biomeColumn(x,z){
 }
 
 function wildernessCave(x,y,z,h){
+    if(wildernessVersion>=5)return naturalCaveAt(x,y,z,h);
     if(y<5||y>h)return false;
     if(wildernessVersion>=3&&biomeColumn(x,z).village)return false;
     const c=biomeColumn(x,z).cliff;if(!c)return false;
@@ -242,6 +244,7 @@ function natureTexture(id,color,brick=false){
 }
 
 function natureGeometry(id){
+    if(id===7)return ladderGeometry();
     if(TREASURE_SHAPED.has(id))return treasureGeometry(id);
     const custom=ecologyGeometry(id);if(custom)return custom;
     if(!NATURE_PLANTS.has(id)&&id!==SNOW_LAYER_ID)return null;
@@ -308,7 +311,7 @@ function initWilderness(){
 }
 
 function clearWilderness(){
-    for(const fish of natureFish)disposeModModel(fish.mesh);natureFish=[];caveVisits.clear();biomeCache.clear();cliffCache.clear();itchTimer=0;natureTick=0;
+    for(const fish of natureFish)disposeModModel(fish.mesh);natureFish=[];caveVisits.clear();biomeCache.clear();cliffCache.clear();clearCaveNetworks();itchTimer=0;natureTick=0;
 }
 
 function fishModel(index){
@@ -349,7 +352,8 @@ function updateWilderness(delta){
     for(let i=0;i<16;i++){
         const x=px+Math.floor(Math.random()*32)-16,z=pz+Math.floor(Math.random()*32)-16,h=getSurfaceHeight(x,z);
         const region=biomeColumn(x,z).cliff;if(!region)continue;
-        for(let y=region.floor;y<Math.min(h-2,region.floor+5);y++)if(wildernessCave(x,y,z,h)&&getBlock(x,y,z)===0&&getBlock(x,y+1,z)===0&&isSolid(x,y-1,z)){
+        const floors=wildernessVersion>=5?naturalCaveColumn(x,z,h):[[region.floor,Math.min(h-2,region.floor+5)]];
+        for(const [low,high] of floors)for(let y=low;y<=Math.min(high-1,h-3);y++)if(wildernessCave(x,y,z,h)&&getBlock(x,y,z)===0&&getBlock(x,y+1,z)===0&&isSolid(x,y-1,z)){
             const key=Math.floor(x/32)+','+Math.floor(z/32);if(caveVisits.has(key))break;
             caveVisits.add(key);const mesh=createZombieModel();mesh.position.set(x,y,z);scene.add(mesh);
             zombies.push({mesh,kind:'zombie',caveResident:true,vx:0,vy:0,vz:0,onGround:true,soundTimer:8,hp:3,hurtTimer:0,dying:false,deathTimer:0,walkTime:0});return;
